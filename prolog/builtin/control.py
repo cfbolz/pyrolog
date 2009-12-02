@@ -1,7 +1,7 @@
 import py
-from pypy.lang.prolog.interpreter.parsing import parse_file, TermBuilder
-from pypy.lang.prolog.interpreter import engine, helper, term, error
-from pypy.lang.prolog.builtin.register import expose_builtin
+from prolog.interpreter.parsing import parse_file, TermBuilder
+from prolog.interpreter import engine, helper, term, error
+from prolog.builtin.register import expose_builtin
 
 # ___________________________________________________________________
 # control predicates

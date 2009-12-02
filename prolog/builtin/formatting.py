@@ -1,9 +1,9 @@
 import os
 import string
 
-from pypy.lang.prolog.interpreter.term import Term, Float, Number, Var, Atom
-from pypy.lang.prolog.interpreter import error, helper, parsing
-from pypy.lang.prolog.builtin.register import expose_builtin
+from prolog.interpreter.term import Term, Float, Number, Var, Atom
+from prolog.interpreter import error, helper, parsing
+from prolog.builtin.register import expose_builtin
 
 class TermFormatter(object):
     def __init__(self, engine, quoted=False, max_depth=0,

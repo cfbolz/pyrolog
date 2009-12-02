@@ -3,15 +3,15 @@ builtins = {}
 builtins_list = []
 
 # imports to register builtins
-import pypy.lang.prolog.builtin.allsolution
-import pypy.lang.prolog.builtin.arithmeticbuiltin
-import pypy.lang.prolog.builtin.atomconstruction
-import pypy.lang.prolog.builtin.control
-import pypy.lang.prolog.builtin.database
-import pypy.lang.prolog.builtin.exception
-import pypy.lang.prolog.builtin.formatting
-import pypy.lang.prolog.builtin.metacall
-import pypy.lang.prolog.builtin.parseraccess
-import pypy.lang.prolog.builtin.source
-import pypy.lang.prolog.builtin.termconstruction
-import pypy.lang.prolog.builtin.unify
+import prolog.builtin.allsolution
+import prolog.builtin.arithmeticbuiltin
+import prolog.builtin.atomconstruction
+import prolog.builtin.control
+import prolog.builtin.database
+import prolog.builtin.exception
+import prolog.builtin.formatting
+import prolog.builtin.metacall
+import prolog.builtin.parseraccess
+import prolog.builtin.source
+import prolog.builtin.termconstruction
+import prolog.builtin.unify

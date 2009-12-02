@@ -1,8 +1,8 @@
-from pypy.lang.prolog.interpreter.term import Var, Term, Rule, Atom, debug_print, \
+from prolog.interpreter.term import Var, Term, Rule, Atom, debug_print, \
     Callable
-from pypy.lang.prolog.interpreter.error import UnificationFailed, FunctionNotFound, \
+from prolog.interpreter.error import UnificationFailed, FunctionNotFound, \
     CutException
-from pypy.lang.prolog.interpreter import error
+from prolog.interpreter import error
 from pypy.rlib.jit import purefunction
 
 DEBUG = False
@@ -136,7 +136,7 @@ class Engine(object):
         self.operations = None
 
     def add_rule(self, rule, end=True):
-        from pypy.lang.prolog import builtin
+        from prolog import builtin
         if DEBUG:
             debug_print("add_rule", rule)
         if isinstance(rule, Term):
@@ -166,7 +166,7 @@ class Engine(object):
             return self.continue_after_cut(e.continuation)
 
     def _build_and_run(self, tree):
-        from pypy.lang.prolog.interpreter.parsing import TermBuilder
+        from prolog.interpreter.parsing import TermBuilder
         builder = TermBuilder()
         term = builder.build_query(tree)
         if isinstance(term, Term) and term.name == ":-" and len(term.args) == 1:
@@ -176,7 +176,7 @@ class Engine(object):
         return self.parser
 
     def runstring(self, s):
-        from pypy.lang.prolog.interpreter.parsing import parse_file
+        from prolog.interpreter.parsing import parse_file
         trees = parse_file(s, self.parser, Engine._build_and_run, self)
 
     def call(self, query, continuation=DONOTHING, choice_point=True):
@@ -186,7 +186,7 @@ class Engine(object):
         return self.main_loop(CALL, query, continuation)
 
     def _call(self, query, continuation):
-        from pypy.lang.prolog.builtin import builtins
+        from prolog.builtin import builtins
         signature = query.signature
         builtin = builtins.get(signature, None)
         if builtin is not None:
@@ -300,14 +300,14 @@ class Engine(object):
                 continuation = e.continuation
 
     def parse(self, s):
-        from pypy.lang.prolog.interpreter.parsing import parse_file, TermBuilder, lexer
+        from prolog.interpreter.parsing import parse_file, TermBuilder, lexer
         builder = TermBuilder()
         trees = parse_file(s, self.parser)
         terms = builder.build_many(trees)
         return terms, builder.varname_to_var
 
     def getoperations(self):
-        from pypy.lang.prolog.interpreter.parsing import default_operations
+        from prolog.interpreter.parsing import default_operations
         if self.operations is None:
             return default_operations
         return self.operations

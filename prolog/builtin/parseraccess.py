@@ -1,6 +1,6 @@
 import py
-from pypy.lang.prolog.interpreter import engine, helper, term, error
-from pypy.lang.prolog.builtin.register import expose_builtin
+from prolog.interpreter import engine, helper, term, error
+from prolog.builtin.register import expose_builtin
 
 # ___________________________________________________________________
 # operators
@@ -22,7 +22,7 @@ expose_builtin(impl_current_op, "current_op", unwrap_spec=["obj", "obj", "obj"],
                handles_continuation=True)
 
 def impl_op(engine, precedence, typ, name):
-    from pypy.lang.prolog.interpreter import parsing
+    from prolog.interpreter import parsing
     if engine.operations is None:
         engine.operations = parsing.make_default_operations()
     operations = engine.operations

@@ -1,7 +1,7 @@
 """ Helper functions for dealing with prolog terms"""
 
-from pypy.lang.prolog.interpreter import term
-from pypy.lang.prolog.interpreter import error
+from prolog.interpreter import term
+from prolog.interpreter import error
 
 emptylist = term.Atom.newatom("[]")
 

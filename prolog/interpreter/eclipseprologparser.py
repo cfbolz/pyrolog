@@ -1,5 +1,5 @@
 import autopath
-from pypy.lang.prolog.interpreter.parsing import OrderTransformer, make_default_operations, unescape
+from prolog.interpreter.parsing import OrderTransformer, make_default_operations, unescape
 from pypy.rlib.parsing.tree import Nonterminal, Symbol, RPythonVisitor
 
 class ASTTermBuilder(RPythonVisitor):

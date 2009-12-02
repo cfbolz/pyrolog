@@ -1,7 +1,7 @@
 import py
-from pypy.lang.prolog.interpreter import engine as enginemod, helper, term, error
-from pypy.lang.prolog.builtin.register import expose_builtin
-from pypy.lang.prolog.builtin.type import impl_ground
+from prolog.interpreter import engine as enginemod, helper, term, error
+from prolog.builtin.register import expose_builtin
+from prolog.builtin.type import impl_ground
 
 # ___________________________________________________________________
 # exception handling

@@ -1,12 +1,12 @@
 import py
-from pypy.lang.prolog.interpreter import engine, helper, term, error
-from pypy.lang.prolog.builtin.register import expose_builtin
+from prolog.interpreter import engine, helper, term, error
+from prolog.builtin.register import expose_builtin
 
 # ___________________________________________________________________
 # database
 
 def impl_abolish(engine, predicate):
-    from pypy.lang.prolog.builtin import builtins
+    from prolog.builtin import builtins
     name, arity = helper.unwrap_predicate_indicator(predicate)
     if arity < 0:
         error.throw_domain_error("not_less_than_zero", term.Number(arity))
@@ -28,7 +28,7 @@ expose_builtin(impl_asserta, "asserta", unwrap_spec=["callable"])
 
 
 def impl_retract(engine, pattern):
-    from pypy.lang.prolog.builtin import builtins
+    from prolog.builtin import builtins
     if isinstance(pattern, term.Term) and pattern.name == ":-":
         head = helper.ensure_callable(pattern.args[0])
         body = helper.ensure_callable(pattern.args[1])
