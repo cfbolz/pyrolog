@@ -8,8 +8,8 @@ from prolog.builtin.register import expose_builtin
 
 
 class AtomConcatContinuation(continuation.ChoiceContinuation):
-    def __init__(self, engine, scont, fcont, heap, var1, var2, result):
-        continuation.ChoiceContinuation.__init__(self, engine, scont)
+    def __init__(self, scont, fcont, heap, var1, var2, result):
+        continuation.ChoiceContinuation.__init__(self, scont)
         self.undoheap = heap
         self.orig_fcont = fcont
         self.var1 = var1
@@ -17,7 +17,7 @@ class AtomConcatContinuation(continuation.ChoiceContinuation):
         self.r = helper.convert_to_str(result)
         self.i = 0
     
-    def activate(self, fcont, heap):
+    def activate(self, fcont, heap, engine):
         # nondeterministic splitting of result
         if self.i < len(self.r)+1:
             fcont, heap = self.prepare_more_solutions(fcont, heap)
@@ -31,7 +31,7 @@ class AtomConcatContinuation(continuation.ChoiceContinuation):
 def impl_atom_concat(engine, heap, a1, a2, result, scont, fcont):
     if isinstance(a1, term.Var):
         if isinstance(a2, term.Var):
-            atom_concat_cont = AtomConcatContinuation(engine, scont, fcont, heap, a1, a2, result)
+            atom_concat_cont = AtomConcatContinuation(scont, fcont, heap, a1, a2, result)
             return atom_concat_cont, fcont, heap
         else:
             s2 = helper.convert_to_str(a2)
@@ -64,8 +64,8 @@ def impl_atom_length(engine, heap, s, length):
 
 
 class SubAtomContinuation(continuation.ChoiceContinuation):
-    def __init__(self, engine, scont, fcont, heap, atom, before, length, after, sub):
-        continuation.ChoiceContinuation.__init__(self, engine, scont)
+    def __init__(self, scont, fcont, heap, atom, before, length, after, sub):
+        continuation.ChoiceContinuation.__init__(self, scont)
         self.undoheap = heap
         self.orig_fcont = fcont
         self.atom = atom
@@ -98,14 +98,14 @@ class SubAtomContinuation(continuation.ChoiceContinuation):
 
 
 class SubAtomNonVarSubContinuation(SubAtomContinuation):
-    def __init__(self, engine, scont, fcont, heap, atom, before, length, after, sub):
-        SubAtomContinuation.__init__(self, engine, scont, fcont, heap,
+    def __init__(self, scont, fcont, heap, atom, before, length, after, sub):
+        SubAtomContinuation.__init__(self, scont, fcont, heap,
                                             atom, before, length, after, sub)
         self.s1 = helper.unwrap_atom(sub)
         if len(self.s1) >= self.stoplength or len(self.s1) < self.startlength:
             raise error.UnificationFailed()
         self.start = self.startbefore
-    def activate(self, fcont, heap):
+    def activate(self, fcont, heap, engine):
         start = self.start
         assert start >= 0
         end = self.stopbefore + len(self.s1)
@@ -127,14 +127,14 @@ class SubAtomNonVarSubContinuation(SubAtomContinuation):
         return "<SubAtomNonVarSubContinuation(%r)>" % self.__dict__
 
 class SubAtomVarAfterContinuation(SubAtomContinuation):
-    def __init__(self, engine, scont, fcont, heap, atom,
+    def __init__(self, scont, fcont, heap, atom,
                                                 before, length, after, sub):
-        SubAtomContinuation.__init__(self, engine, scont, fcont, heap, atom,
+        SubAtomContinuation.__init__(self, scont, fcont, heap, atom,
                                                     before, length, after, sub)
         self.b = self.startbefore
         self.l = self.startlength
         print 'foo'
-    def activate(self, fcont, heap):
+    def activate(self, fcont, heap, engine):
         if self.b < self.stopbefore:
             if self.l < self.stoplength:
                 if self.l + self.b > len(self.atom):
@@ -158,17 +158,17 @@ class SubAtomVarAfterContinuation(SubAtomContinuation):
             else:
                 self.b += 1
                 self.l = self.startlength
-                return self.activate(fcont, heap)
+                return self.activate(fcont, heap, engine)
         raise error.UnificationFailed()
 
 class SubAtomElseContinuation(SubAtomContinuation):
-    def __init__(self, engine, scont, fcont, heap, atom,
+    def __init__(self, scont, fcont, heap, atom,
                                                 before, length, after, sub):
-        SubAtomContinuation.__init__(self, engine, scont, fcont, heap, atom,
-                                                    before, length, after, sub)
+        SubAtomContinuation.__init__(self, scont, fcont, heap, atom,
+                                     before, length, after, sub)
         self.a = helper.unwrap_int(after)
         self.l = self.startlength
-    def activate(self, fcont, heap):
+    def activate(self, fcont, heap, engine):
         if self.l < self.stoplength:
             b = len(self.atom) - self.l - self.a
             assert b >= 0
@@ -195,6 +195,6 @@ def impl_sub_atom(engine, heap, s, before, length, after, sub, scont, fcont):
         cls = SubAtomVarAfterContinuation
     else:
         cls = SubAtomElseContinuation
-    cont =  cls(engine, scont, fcont, heap, s, before, length, after, sub)
+    cont =  cls(scont, fcont, heap, s, before, length, after, sub)
     return cont, fcont, heap
 

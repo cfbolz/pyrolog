@@ -9,7 +9,7 @@ from prolog.interpreter.test.tool import collect_all, assert_true, assert_false
 
 def test_driver():
     order = []
-    done = DoneContinuation(None)
+    done = DoneContinuation()
     class FakeC(object):
         rule = None
         def __init__(self, next, val):
@@ -20,31 +20,31 @@ def test_driver():
         def is_done(self):
             return False
         
-        def activate(self, fcont, heap):
+        def activate(self, fcont, heap, engine):
             if self.val == -1:
                 raise error.UnificationFailed
             order.append(self.val)
             return self.next, fcont, heap
 
-        def fail(self, heap):
+        def fail(self, heap, engine):
             order.append("fail")
             return self, done, heap
         def discard(self):
             pass
 
     c5 = FakeC(FakeC(FakeC(FakeC(FakeC(done, 1), 2), 3), 4), 5)
-    driver(c5, done, None)
+    driver(c5, done, None, None)
     assert order == [5, 4, 3, 2, 1]
 
     order = []
     ca = FakeC(FakeC(FakeC(FakeC(FakeC(done, -1), 2), 3), 4), 5)
-    driver(ca, c5, None)
+    driver(ca, c5, None, None)
     assert order == [5, 4, 3, 2, "fail", 5, 4, 3, 2, 1]
 
 def test_failure_continuation():
     order = []
     h = Heap()
-    done = DoneContinuation(None)
+    done = DoneContinuation()
     class FakeC(object):
         rule = None
         def __init__(self, next, val):
@@ -56,13 +56,13 @@ def test_failure_continuation():
             return False
         def discard(self):
             pass
-        def activate(self, fcont, heap):
+        def activate(self, fcont, heap, engine):
             if self.val == -1:
                 raise error.UnificationFailed
             order.append(self.val)
             return self.next, fcont, heap
 
-        def fail(self, heap):
+        def fail(self, heap, engine):
             order.append("fail")
             return self, None, heap
 
@@ -70,9 +70,8 @@ def test_failure_continuation():
         def __init__(self, next, count):
             self.next = next
             self.count = count
-            self.engine = FakeE()
 
-        def activate(self, fcont, heap):
+        def activate(self, fcont, heap, engine):
             if self.count:
                 fcont, heap = self.prepare_more_solutions(fcont, heap)
             res = self.count
@@ -86,7 +85,7 @@ def test_failure_continuation():
             return args
 
     ca = FakeF(FakeC(FakeC(done, -1), 'c'), 10)
-    driver(ca, FakeC(done, "done"), h)
+    driver(ca, FakeC(done, "done"), h, FakeE())
     assert order == [10, 'c', 9, 'c', 8, 'c', 7, 'c', 6, 'c', 5, 'c', 4, 'c',
                      3, 'c', 2, 'c', 1, 'c', 0, 'c', "fail", "done"]
 
@@ -100,7 +99,7 @@ def test_full():
             return False
         def discard(self):
             pass
-        def activate(self, fcont, heap):
+        def activate(self, fcont, heap, engine):
             all.append(query.getvalue(heap))
             raise error.UnificationFailed
     e = Engine()
@@ -122,19 +121,19 @@ def test_full():
     assert all[3].argument_at(1).argument_at(0).name()== "b"
 
 def test_cut_can_be_discarded():
-    cont = DoneContinuation(None)
+    cont = DoneContinuation()
     assert not cont.candiscard()
-    cont = RuleContinuation(None, cont, None, None)
+    cont = RuleContinuation(cont, None, None)
     assert not cont.candiscard()
-    cont = CutScopeNotifier(None, None)
+    cont = CutScopeNotifier(None)
     assert cont.candiscard()
-    cont = RuleContinuation(None, cont, None, None)
+    cont = RuleContinuation(cont, None, None)
     assert cont.candiscard()
 
-    cont = CutScopeNotifier(None, None)
+    cont = CutScopeNotifier(None)
     cont.discard()
     assert not cont.candiscard()
-    cont = RuleContinuation(None, cont, None, None)
+    cont = RuleContinuation(cont, None, None)
     assert not cont.candiscard()
 
 
@@ -145,9 +144,9 @@ def test_cut_not_reached():
             self._candiscard = True
         def is_done(self):
             return False
-        def activate(self, fcont, heap):
+        def activate(self, fcont, heap, engine):
             assert fcont.nextcont.is_done()
-            return DoneContinuation(e), DoneContinuation(e), heap
+            return DoneContinuation(), DoneContinuation(), heap
     e = get_engine("""
         g(X, Y) :- X > 0, !, Y = a.
         g(_, b).

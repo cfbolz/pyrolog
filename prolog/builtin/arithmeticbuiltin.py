@@ -6,8 +6,8 @@ from prolog.builtin.register import expose_builtin
 
 
 class BetweenContinuation(continuation.ChoiceContinuation):
-    def __init__(self, engine, scont, fcont, heap, lower, upper, varorint):
-        continuation.ChoiceContinuation.__init__(self, engine, scont)
+    def __init__(self, scont, fcont, heap, lower, upper, varorint):
+        continuation.ChoiceContinuation.__init__(self, scont)
         self.undoheap = heap
         self.orig_fcont = fcont
         self.lower = lower
@@ -15,7 +15,7 @@ class BetweenContinuation(continuation.ChoiceContinuation):
         self.varorint = varorint
         self.i = lower
         
-    def activate(self, fcont, heap):
+    def activate(self, fcont, heap, engine):
         if self.i <= self.upper:
             fcont, heap = self.prepare_more_solutions(fcont, heap)
             try:
@@ -31,8 +31,8 @@ class BetweenContinuation(continuation.ChoiceContinuation):
                handles_continuation=True)
 def impl_between(engine, heap, lower, upper, varorint, scont, fcont):
     if isinstance(varorint, term.Var):
-        bc = BetweenContinuation(engine, scont, fcont, heap, 
-                                                        lower, upper, varorint)
+        bc = BetweenContinuation(scont, fcont, heap, 
+                                 lower, upper, varorint)
         return bc, fcont, heap
     else:
         integer = helper.unwrap_int(varorint)

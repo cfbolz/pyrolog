@@ -8,20 +8,20 @@ from prolog.builtin.register import expose_builtin
 @expose_builtin("call", unwrap_spec=["callable"],
                 handles_continuation=True)
 def impl_call(engine, heap, call, scont, fcont):
-    scont, fcont = continuation.CutDelimiter.insert_cut_delimiter(engine, scont, fcont)
+    scont, fcont = continuation.CutDelimiter.insert_cut_delimiter(scont, fcont)
     return engine.call(call, scont, fcont, heap)
 
 class OnceContinuation(continuation.Continuation):
-    def __init__(self, engine, nextcont, fcont):
-        continuation.Continuation.__init__(self, engine, nextcont)
+    def __init__(self, nextcont, fcont):
+        continuation.Continuation.__init__(self, nextcont)
         self.fcont = fcont
 
-    def activate(self, fcont, heap):
+    def activate(self, fcont, heap, engine):
         return self.nextcont, self.fcont, heap
 
 @expose_builtin("once", unwrap_spec=["callable"],
                 handles_continuation=True)
 def impl_once(engine, heap, clause, scont, fcont):
-    scont = OnceContinuation(engine, scont, fcont)
+    scont = OnceContinuation(scont, fcont)
     return engine.call(clause, scont, fcont, heap)
 

@@ -6,13 +6,13 @@ from prolog.builtin.register import expose_builtin
 # finding all solutions to a goal
 
 class FindallContinuation(continuation.Continuation):
-    def __init__(self, engine, template, heap):
-        continuation.Continuation.__init__(self, engine, None)
+    def __init__(self, template, heap):
+        continuation.Continuation.__init__(self, None)
         self.resultvar = self.fullsolution = heap.newvar()
         self.template = template
         self.heap = heap
 
-    def activate(self, fcont, _):
+    def activate(self, fcont, _, engine):
         m = memo.CopyMemo()
         clone = self.template.copy(self.heap, m)
         newresultvar = self.heap.newvar()
@@ -22,17 +22,17 @@ class FindallContinuation(continuation.Continuation):
         raise error.UnificationFailed()
 
 class DoneWithFindallContinuation(continuation.FailureContinuation):
-    def __init__(self, engine, heap, collector, scont, fcont, bag):
-        continuation.Continuation.__init__(self, engine, scont)
+    def __init__(self, heap, collector, scont, fcont, bag):
+        continuation.Continuation.__init__(self, scont)
         self.collector = collector
         self.orig_fcont = fcont
         self.undoheap = heap
         self.bag = bag
 
-    def activate(self, fcont, heap):
+    def activate(self, fcont, heap, engine):
         raise NotImplementedError
 
-    def fail(self, heap):
+    def fail(self, heap, engine):
         heap = heap.revert_upto(self.undoheap)
         result = term.Callable.build("[]")
         resultvar = self.collector.resultvar
@@ -46,7 +46,7 @@ class DoneWithFindallContinuation(continuation.FailureContinuation):
                 handles_continuation=True)
 def impl_findall(engine, heap, template, goal, bag, scont, fcont):
     newheap = heap.branch()
-    collector = FindallContinuation(engine, template, heap)
-    newscont = continuation.BodyContinuation(engine, collector, goal)
-    fcont = DoneWithFindallContinuation(engine, heap, collector, scont, fcont, bag)
+    collector = FindallContinuation(template, heap)
+    newscont = continuation.BodyContinuation(collector, goal)
+    fcont = DoneWithFindallContinuation(heap, collector, scont, fcont, bag)
     return newscont, fcont, newheap

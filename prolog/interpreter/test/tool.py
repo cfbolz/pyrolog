@@ -28,7 +28,7 @@ class CollectAllContinuation(Continuation):
         self.vars = vars
         self._candiscard = True
 
-    def activate(self, fcont, heap):
+    def activate(self, fcont, heap, engine):
         self.heaps.append(dict([(name, var.dereference(heap))
                                     for name, var in self.vars.iteritems()]))
         print "restarting computation"
