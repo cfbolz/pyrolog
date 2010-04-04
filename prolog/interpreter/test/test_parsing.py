@@ -31,7 +31,7 @@ greater_than(succ(X), succ(Y)) :- greater_than(X, Y).
     for fact in facts:
         print fact
         e.add_rule(fact)
-    assert e.get_function(Signature.getsignature("add_numeral", 3)).rulechain.head.argument_at(1).name()== "null"
+    assert e.get_function(Signature.getsignature("add_numeral", 3)).rulechain.rule.head.argument_at(1).name() == "null"
     four = Callable.build("succ", [Callable.build("succ", [Callable.build("succ",
                 [Callable.build("succ", [Callable.build("null")])])])])
     e.run(parse_query_term("numeral(succ(succ(null)))."))
@@ -61,7 +61,8 @@ def test_quoted_atoms():
     """)
     builder = TermBuilder()
     fact1, fact2, = builder.build(t)
-    assert fact1.name()== fact2.name()
+    assert fact1.name() == fact2.name()
+
 def test_parenthesis():
     t = parse_file("""
         g(X, Y) :- (g(x, y); g(a, b)), /* this too is a comment
@@ -94,6 +95,19 @@ def test_list():
     """)
     builder = TermBuilder()
     facts = builder.build(t)
+    
+def test_curly():
+    t = parse_file("""
+        {a}.
+        {a, b, c}.
+        {}.
+    """)
+    builder = TermBuilder()
+    facts = builder.build(t)
+    assert facts[0].signature().string() == "{}/1"
+    assert facts[1].signature().string() == "{}/3"
+    assert facts[2].signature().string() == "{}/0"
+
 
 def test_number():
     t = parse_file("""
@@ -118,3 +132,11 @@ def test_chaining():
     t = parse_file("f(X) = X + X * 1 + 23 / 13.")
     facts = builder.build(t)
     t = parse_file("-X + 1.")
+
+def test_atoms():
+    for atom in "abc # + - &".split():
+        t = parse_file("%s." % (atom, ))
+        builder = TermBuilder()
+        fact, = builder.build(t)
+        assert fact.signature().string() == "%s/0" % (atom, )
+
