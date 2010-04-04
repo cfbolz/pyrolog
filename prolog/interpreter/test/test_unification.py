@@ -159,4 +159,13 @@ def test_callable_build_removes_unneeded_vars():
     assert t.argument_at(0) is v1
     assert t.argument_at(1) == 2
 
+def test_find_indexable_arg():
+    a = Callable.build("hallo", [Callable.build("a"), Number(10),
+                                 Callable.build("c"), Number(11)])
+    assert a.find_indexable_arg() == 0
+    assert a.find_indexable_arg(0) == 2
+    assert a.find_indexable_arg(2) == -1
+    b = Callable.build("hallo", [Var(), Number(10), Callable.build("b")])
+    assert b.find_indexable_arg() == 2
+    assert b.find_indexable_arg(2) == -1
 

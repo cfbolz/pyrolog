@@ -175,7 +175,10 @@ class Engine(object):
         if startrulechain is None:
             return error.throw_existence_error(
                 "procedure", query.get_prolog_signature())
-        rulechain = startrulechain.find_applicable_rule(query)
+        rulechain = startrulechain.find_rulechain(query)
+        if rulechain is None:
+            raise error.UnificationFailed
+        rulechain = rulechain.find_applicable_rule(query)
         if rulechain is None:
             raise error.UnificationFailed
         scont = UserCallContinuation(scont, query,
@@ -404,7 +407,7 @@ class UserCallContinuation(ChoiceContinuation):
 
     def activate(self, fcont, heap, engine):
         rulechain = jit.hint(self.rulechain, promote=True)
-        rule = rulechain
+        rule = rulechain.rule
         nextcont = self.nextcont
         if rule.contains_cut:
             nextcont, fcont = CutDelimiter.insert_cut_delimiter(nextcont, fcont)

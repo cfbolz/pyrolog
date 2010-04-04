@@ -388,6 +388,18 @@ class Callable(NonVar):
                 return False
         return True
 
+    def arg_signature(self, i):
+        arg = self.argument_at(i).dereference(None)
+        if isinstance(arg, Callable):
+            return arg.signature()
+        return None
+
+    def find_indexable_arg(self, startat=-1):
+        for i in range(startat+1, self.argument_count()):
+            if self.arg_signature(i) is not None:
+                return i
+        return -1
+
 
 class Atom(Callable):
     TYPE_STANDARD_ORDER = 1
