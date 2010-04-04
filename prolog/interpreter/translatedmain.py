@@ -11,14 +11,14 @@ import prolog.interpreter.term
 prolog.interpreter.term.DEBUG = False
 
 class ContinueContinuation(Continuation):
-    def __init__(self, engine, var_to_pos, write):
-        Continuation.__init__(self, engine, DoneContinuation(engine))
+    def __init__(self, var_to_pos, write):
+        Continuation.__init__(self, DoneContinuation())
         self.var_to_pos = var_to_pos
         self.write = write
 
-    def activate(self, fcont, heap):
+    def activate(self, fcont, heap, engine):
         self.write("yes\n")
-        var_representation(self.var_to_pos, self.engine, self.write)
+        var_representation(self.var_to_pos, engine, self.write)
         while 1:
             res = getch()
             #self.write(repr(res)+"\n")
@@ -30,7 +30,7 @@ class ContinueContinuation(Continuation):
             elif res in "h?":
                 self.write(helptext)
             elif res in "p":
-                var_representation(self.var_to_pos, self.engine, self.write)
+                var_representation(self.var_to_pos, engine, self.write)
             else:
                 self.write('unknown action. press "h" for help\n')
                 
@@ -72,7 +72,7 @@ def run(query, var_to_pos, engine):
     try:
         if query is None:
             return
-        engine.run(query, ContinueContinuation(engine, var_to_pos, printmessage))
+        engine.run(query, ContinueContinuation(var_to_pos, printmessage))
     except error.UnificationFailed:
         printmessage("no\n")
     except error.UncaughtError, e:
