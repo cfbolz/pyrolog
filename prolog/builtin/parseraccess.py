@@ -1,5 +1,5 @@
 import py
-from prolog.interpreter import helper, term, error
+from prolog.interpreter import helper, term, error, continuation
 from prolog.builtin.register import expose_builtin
 
 # ___________________________________________________________________
@@ -7,20 +7,42 @@ from prolog.builtin.register import expose_builtin
 
 @expose_builtin("current_op", unwrap_spec=["obj", "obj", "obj"],
                 handles_continuation=True)
-def impl_current_op(engine, heap, precedence, typ, name, continuation):
-    oldstate = heap.branch()
+def impl_current_op(engine, heap, precedence, typ, name, scont, fcont):
+    results = []
     for prec, allops in engine.getoperations():
         for form, ops in allops:
             for op in ops:
-                try:
-                    precedence.unify(term.Number(prec), heap)
-                    typ.unify(term.Callable.build(form), heap)
-                    name.unify(term.Callable.build(op), heap)
-                    return continuation.call(engine, choice_point=True)
-                except error.UnificationFailed:
-                    heap.revert(oldstate)
-    heap.discard(oldstate)
-    raise error.UnificationFailed()
+                results.append((term.Number(prec),
+                                term.Callable.build(form),
+                                term.Callable.build(op)))
+    results.reverse()
+    scont = CurrentOpContinuation(scont, fcont, heap, results,
+                                  precedence, typ, name)
+    return engine.continue_(scont, fcont, heap.branch())
+
+
+class CurrentOpContinuation(continuation.ChoiceContinuation):
+    def __init__(self, scont, fcont, heap, results, precedence, typ, name):
+        continuation.ChoiceContinuation.__init__(self, scont)
+        self.undoheap = heap
+        self.orig_fcont = fcont
+        self.results = results
+        self.precedence = precedence
+        self.typ = typ
+        self.name = name
+        
+    def activate(self, fcont, heap, engine):
+        precedence, typ, name = self.results.pop()
+        if self.results:
+            fcont, heap = self.prepare_more_solutions(fcont, heap)
+        try:
+            self.precedence.unify(precedence, heap)
+            self.typ.unify(typ, heap)
+            self.name.unify(name, heap)
+        except error.UnificationFailed:
+            return fcont.fail(heap, engine)
+        return self.nextcont, fcont, heap
+
 
 @expose_builtin("op", unwrap_spec=["int", "atom", "atom"])
 def impl_op(engine, heap, precedence, typ, name):

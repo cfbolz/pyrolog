@@ -409,7 +409,6 @@ def test_between():
 def test_is():
     assert_true("5 is 1 + 1 + 1 + 1 + 1.")
 
-@py.test.mark.xfail
 def test_parser_access():
     assert_true("current_op(200, xfx, **).")
     f = collect_all(Engine(), "current_op(200, Form, X).")
@@ -418,6 +417,7 @@ def test_parser_access():
         foo(a, b).
     """)
     assert_true("op(450, xfy, foo).", e)
+    assert_true("current_op(450, xfy, foo).", e)
     assert_true("a foo b.", e)
     assert_true("op(0, xfy, foo).", e)
     # XXX really a ParseError
