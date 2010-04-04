@@ -140,7 +140,7 @@ class SubAtomVarAfterContinuation(SubAtomContinuation):
                 if self.l + self.b > len(self.atom):
                     self.b += 1
                     self.l = self.startlength
-                    return self.activate(fcont, heap)
+                    return self.activate(fcont, heap, engine)
                 fcont, heap = self.prepare_more_solutions(fcont, heap)
                 
                 self.before.unify(term.Number(self.b), heap)
@@ -174,7 +174,7 @@ class SubAtomElseContinuation(SubAtomContinuation):
             assert b >= 0
             if self.l + b > len(self.atom):
                 self.l += 1
-                return self.activate(fcont, heap)
+                return self.activate(fcont, heap, engine)
             fcont, heap = self.prepare_more_solutions(fcont, heap)
             self.before.unify(term.Number(b), heap)
             self.after.unify(term.Number(self.a), heap)

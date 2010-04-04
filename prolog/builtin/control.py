@@ -27,10 +27,10 @@ class RepeatContinuation(continuation.FailureContinuation):
         self.fcont = fcont
         self.undoheap = heap
         
-    def activate(self, fcont, heap):
+    def activate(self, fcont, heap, engine):
         assert 0, "Unreachable"
         
-    def fail(self, heap):
+    def fail(self, heap, engine):
         heap = heap.revert_upto(self.undoheap)
         return self.nextcont, self, heap
     
