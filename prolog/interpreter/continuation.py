@@ -99,12 +99,11 @@ class Engine(object):
         else:
             error.throw_type_error("callable", rule)
             assert 0, "unreachable" # make annotator happy
-        signature = rule.signature        
+        signature = rule.signature
         if self.get_builtin(signature):
             error.throw_permission_error(
                 "modify", "static_procedure", rule.head.get_prolog_signature())
         function = self._lookup(signature)
-        
         function.add_rule(rule, end)
 
     @jit.purefunction_promote("0")
@@ -248,8 +247,8 @@ class Continuation(object):
         """ Follow the continuation. heap is the heap that should be used while
         doing so, fcont the failure continuation that should be activated in
         case this continuation fails. This method can only be called once, i.e.
-        it can destruct this object. 
-        
+        it can destruct this object.
+
         The method should return a triple (next cont, failure cont, heap)"""
         raise NotImplementedError("abstract base class")
 
@@ -287,7 +286,7 @@ def view(*objects):
 class FailureContinuation(Continuation):
     """ A continuation that can represent failures. It has a .fail method that
     is called to prepare it for being used as a failure continuation.
-    
+
     NB: a Continuation can be used both as a failure continuation and as a
     success continuation."""
 
@@ -368,7 +367,7 @@ class ChoiceContinuation(FailureContinuation):
         self.orig_fcont = fcont
         fcont = self
         return fcont, heap
-    
+
     def fail(self, heap, engine):
         assert self.undoheap is not None
         heap = heap.revert_upto(self.undoheap, discard_choicepoint=True)
@@ -402,7 +401,7 @@ class UserCallContinuation(ChoiceContinuation):
     def __init__(self, nextcont, query, rulechain):
         ChoiceContinuation.__init__(self, nextcont)
         self.query = query
-        signature = query.signature()        
+        signature = query.signature()
         self.rulechain = rulechain
 
     def activate(self, fcont, heap, engine):
@@ -423,7 +422,7 @@ class UserCallContinuation(ChoiceContinuation):
     def __repr__(self):
         return "<UserCallContinuation query=%r rule=%r>" % (
                 self.query, self.rulechain)
-    
+
 
 class RuleContinuation(Continuation):
     """ A Continuation that represents the application of a rule, i.e.:
