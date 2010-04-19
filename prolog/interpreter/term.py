@@ -241,8 +241,9 @@ class Callable(NonVar):
         raise NotImplementedError("abstract base")
 
     def get_prolog_signature(self):
-        return Callable.build("/", [Callable.build(self.name()),
-                                    Number(self.argument_count())])
+        from prolog.interpreter import helper
+        return helper.prolog_signature(self.name(), self.argument_count())
+
     def arguments(self):
         raise NotImplementedError("abstract base")
 

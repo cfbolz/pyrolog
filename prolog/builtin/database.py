@@ -70,3 +70,6 @@ def impl_dynamic(engine, heap, signature):
     else:
         if function.dynamic:
             return
+    error.throw_permission_error(
+        "modify", "static_procedure",
+        helper.prolog_signature(signature.name, signature.numargs))

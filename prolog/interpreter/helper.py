@@ -101,3 +101,6 @@ def convert_to_str(obj):
         return str(obj.floatval)
     error.throw_type_error("atomic", obj)
 
+def prolog_signature(name, numargs):
+    return term.Callable.build("/", [term.Callable.build(name),
+                               term.Number(numargs)])
