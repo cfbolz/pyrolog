@@ -1,7 +1,7 @@
 from prolog.interpreter.function import Rule, Function, Rulechain
 from prolog.interpreter.term import Callable, Var
 from prolog.interpreter.signature import Signature
-from prolog.interpreter.parsing import get_engine
+from prolog.interpreter.test.tool import get_engine
 
 class C(Callable):
     def __init__(self, name):

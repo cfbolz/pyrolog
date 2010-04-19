@@ -7,7 +7,7 @@ sys.path.append(str(py.path.local(__file__).dirpath().dirpath().dirpath()))
 from pypy.rlib.parsing.parsing import ParseError
 from pypy.rlib.parsing.deterministic import LexerError
 from prolog.interpreter.parsing import parse_file, get_query_and_vars
-from prolog.interpreter.parsing import get_engine
+from prolog.interpreter. import get_engine
 from prolog.interpreter.continuation import Engine
 from prolog.interpreter.continuation import Continuation, DoneContinuation
 from prolog.interpreter import error
@@ -171,12 +171,11 @@ def main():
     try:
         sys.ps1 = ">?- "
         sys.ps2 = "... "
-        if not len(sys.argv) == 2:
-            e = Engine()
-        else:
+        e = Engine()
+        if len(sys.argv) == 2:
+            source = py.path.local(sys.argv[1]).read()
             try:
-                source = py.path.local(sys.argv[1]).read()
-                e = get_engine(source)
+                e.runstring(source)
             except ParseError, exc:
                 print exc.nice_error_message("<stdin>", source) + "\n"
                 sys.exit(1)

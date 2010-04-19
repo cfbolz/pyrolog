@@ -1,10 +1,11 @@
 import py
 from prolog.interpreter.parsing import parse_file, TermBuilder
-from prolog.interpreter.parsing import parse_query_term, get_engine
+from prolog.interpreter.parsing import parse_query_term
 from prolog.interpreter.error import UnificationFailed
 from prolog.interpreter.continuation import Heap, Engine
 from prolog.interpreter import error
 from prolog.interpreter.test.tool import collect_all, assert_false, assert_true
+from prolog.interpreter.test.tool import get_engine
 
 def test_simple():
     assert_true("X is 1 + 2, X = 3.")

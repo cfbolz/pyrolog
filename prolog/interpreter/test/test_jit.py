@@ -2,9 +2,10 @@ import sys
 from pypy.jit.metainterp.test.test_basic import LLJitMixin
 from pypy.rlib.jit import OPTIMIZER_FULL, OPTIMIZER_SIMPLE
 
-from prolog.interpreter.parsing import parse_query_term, get_engine
+from prolog.interpreter.parsing import parse_query_term
 from prolog.interpreter.parsing import get_query_and_vars
 from prolog.interpreter.continuation import jitdriver
+from prolog.interpreter.test.tool import get_engine
 
 class TestLLtype(LLJitMixin):
     def test_append(self):

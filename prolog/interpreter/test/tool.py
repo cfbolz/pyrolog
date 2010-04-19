@@ -1,8 +1,15 @@
 import py
 from prolog.interpreter.error import UnificationFailed
-from prolog.interpreter.parsing import parse_query_term, get_engine
+from prolog.interpreter.parsing import parse_query_term
 from prolog.interpreter.continuation import Continuation, Heap, Engine
 from prolog.interpreter.parsing import parse_file, TermBuilder
+
+def get_engine(source):
+    from prolog.interpreter.continuation import Engine
+    e = Engine()
+    e.runstring(source)
+    return e
+
 def assert_true(query, e=None):
     if e is None:
         e = Engine()

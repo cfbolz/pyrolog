@@ -453,14 +453,6 @@ def unescape(s):
         i += 1
     return "".join(result)
 
-def get_engine(source):
-    from prolog.interpreter.continuation import Engine
-    trees = parse_file(source)
-    builder = TermBuilder()
-    e = Engine()
-    for fact in builder.build_many(trees):
-        e.add_rule(fact)
-    return e
 
 # generated code between this line and its other occurence
 

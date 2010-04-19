@@ -1,9 +1,10 @@
 import py
 from prolog.interpreter.continuation import *
-from prolog.interpreter.parsing import parse_query_term, get_engine
+from prolog.interpreter.parsing import parse_query_term
 from prolog.interpreter.parsing import get_query_and_vars
 from prolog.interpreter.error import UnificationFailed
 from prolog.interpreter.test.tool import collect_all, assert_true, assert_false
+from prolog.interpreter.test.tool import get_engine
 from prolog.interpreter.term import Number
 
 class CheckContinuation(Continuation):
