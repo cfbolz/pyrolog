@@ -6,8 +6,9 @@ from prolog.builtin.register import expose_builtin
 # ___________________________________________________________________
 # database
 
-@expose_builtin("abolish", unwrap_spec=["predicate_indicator"])
-def impl_abolish(engine, heap, signature):
+@expose_builtin("abolish", unwrap_spec=["callable"])
+def impl_abolish(engine, heap, predicate):
+    signature = helper.unwrap_predicate_indicator(predicate)
     if signature.get_extra("builtin"):
         error.throw_permission_error("modify", "static_procedure",
                                      predicate)
@@ -61,8 +62,9 @@ def impl_retract(engine, heap, pattern):
         raise error.UnificationFailed()
     # heap.discard(oldstate)
 
-@expose_builtin("dynamic", unwrap_spec=["predicate_indicator"])
-def impl_dynamic(engine, heap, signature):
+@expose_builtin("dynamic", unwrap_spec=["callable"])
+def impl_dynamic(engine, heap, predicate):
+    signature = helper.unwrap_predicate_indicator(predicate)
     function = engine.get_function(signature)
     if function is None:
         function = engine.lookup_function(signature, new_is_dynamic=True)
