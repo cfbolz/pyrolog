@@ -164,7 +164,7 @@ class Engine(object):
     def call(self, query, scont, fcont, heap):
         if not isinstance(query, Callable):
             raise error.throw_type_error('callable', query)
-        signature = query.signature()        
+        signature = query.signature()
         builtin = self.get_builtin(signature)
         if builtin is not None:
             return self.continue_(BuiltinContinuation(scont, builtin, query), fcont, heap)

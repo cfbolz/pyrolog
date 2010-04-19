@@ -11,7 +11,7 @@ class Rule(object):
     _immutable_fields_ = ["headargs[*]"]
     _attrs_ = ['head', 'headargs', 'contains_cut', 'body', 'size_env', 'signature']
     unrolling_attrs = unroll.unrolling_iterable(_attrs_)
-    
+
     def __init__(self, head, body):
         from prolog.interpreter import helper
         assert isinstance(head, Callable)
@@ -27,7 +27,7 @@ class Rule(object):
         else:
             self.body = None
         self.size_env = memo.size()
-        self.signature = head.signature()        
+        self.signature = head.signature()
         self._does_contain_cut()
 
 
@@ -102,7 +102,7 @@ class Rulechain(object):
                 return 0
             self._depth = self.next.depth() + 1
         return self._depth
-        
+
     def instance_copy(self):
         return Rulechain(self.rule, self.next, self.index)
 
@@ -118,7 +118,7 @@ class Rulechain(object):
             copy = new
             curr = curr.next
         return first, copy
-        
+
     def all_rules(self):
         res = []
         while self:
@@ -148,7 +148,6 @@ class Rulechain(object):
                 else:
                     slice.append(rule)
                     rest.append(rule)
-                    
             if signature:
                 result.append((signature, slice))
                 rules = rest
@@ -210,7 +209,7 @@ class Rulechain(object):
         if self.next is None:
             return None
         return self.next.find_applicable_rule(query)
-    
+
     def __repr__(self):
         return "Rulechain(%r, %r)" % (self.rule, self.next)
     def __eq__(self, other):
