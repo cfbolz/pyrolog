@@ -45,7 +45,7 @@ def make_wrapper(func, name, unwrap_spec=None, handles_continuation=False,
     for i, spec in enumerate(unwrap_spec):
         varname = "var%s" % (i, )
         subargs.append(varname)
-        if spec in ("obj", "callable", "int", "atom", "arithmetic"):
+        if spec in ("obj", "callable", "int", "atom", "arithmetic", "predicate_indicator"):
             code.append("    %s = query.argument_at(%s).dereference(heap)" %
                         (varname, i))
         elif spec in ("concrete", "list"):
@@ -76,6 +76,8 @@ def make_wrapper(func, name, unwrap_spec=None, handles_continuation=False,
                         (varname, varname))
         elif spec == "list":
             code.append("    %s = helper.unwrap_list(%s)" % (varname, varname))
+        elif spec == "predicate_indicator":
+            code.append("    %s = helper.unwrap_predicate_indicator(%s)" % (varname, varname))
         else:
             assert 0, "not implemented " + spec
     if handles_continuation:

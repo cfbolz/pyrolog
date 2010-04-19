@@ -6,9 +6,8 @@ from prolog.builtin.register import expose_builtin
 # ___________________________________________________________________
 # database
 
-@expose_builtin("abolish", unwrap_spec=["obj"])
-def impl_abolish(engine, heap, predicate):
-    signature = helper.unwrap_predicate_indicator(predicate)
+@expose_builtin("abolish", unwrap_spec=["predicate_indicator"])
+def impl_abolish(engine, heap, signature):
     if signature.get_extra("builtin"):
         error.throw_permission_error("modify", "static_procedure",
                                      predicate)
