@@ -78,7 +78,7 @@ def test_cut():
     """)
     builder = TermBuilder()
     facts = builder.build(t)
-  
+
 def test_noparam():
     t = parse_file("""
         test.
@@ -95,7 +95,7 @@ def test_list():
     """)
     builder = TermBuilder()
     facts = builder.build(t)
-    
+
 def test_curly():
     t = parse_file("""
         {a}.
