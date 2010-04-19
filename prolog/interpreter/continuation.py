@@ -37,7 +37,7 @@ callsig = Signature.getsignature(":-", 1)
 
 jitdriver = jit.JitDriver(
         greens=["rule"],
-        reds=["scont", "fcont", "heap"],
+        reds=["scont", "fcont", "heap", "engine"],
         can_inline=can_inline,
         get_printable_location=get_printable_location,
         #get_jitcell_at=get_jitcell_at,
@@ -55,10 +55,10 @@ def driver(scont, fcont, heap, engine):
         if isinstance(scont, RuleContinuation) and scont._rule.body is not None:
             rule = scont._rule
             jitdriver.can_enter_jit(rule=rule, scont=scont, fcont=fcont,
-                                    heap=heap)
+                                    heap=heap, engine=engine)
         try:
             jitdriver.jit_merge_point(rule=rule, scont=scont, fcont=fcont,
-                                      heap=heap)
+                                      heap=heap, engine=engine)
             scont, fcont, heap  = scont.activate(fcont, heap, engine)
         except error.UnificationFailed:
             if not we_are_translated():

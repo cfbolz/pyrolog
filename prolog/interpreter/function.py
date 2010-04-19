@@ -61,6 +61,7 @@ class Rule(object):
         return body.copy_standardize_apart(heap, env)
 
 
+    @jit.unroll_safe
     def can_match(self, query):
         if self.headargs is not None:
             assert isinstance(query, Callable)
