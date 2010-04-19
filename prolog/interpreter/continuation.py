@@ -177,7 +177,7 @@ class Engine(object):
 
         # do a real call
         function = self.lookup_function(signature)
-        startrulechain = jit.hint(function.rulechain, promote=True)
+        startrulechain = jit.hint(function.get_rulechain(), promote=True)
         if startrulechain is None:
             return error.throw_existence_error(
                 "procedure", query.get_prolog_signature())

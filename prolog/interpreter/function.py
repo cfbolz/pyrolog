@@ -220,9 +220,20 @@ class Rulechain(object):
 
 
 class Function(object):
+    _immutable_fields_ = ["dynamic"]
     def __init__(self, firstrule=None):
         self.rulechain = self.last = None
         self.dynamic = False
+
+    def get_rulechain(self):
+        if not jit.we_are_jitted() or self.dynamic:
+            return self.rulechain
+        # if a function is not dynamic, the rulechain cannot change
+        return self._pure_get_rulechain()
+
+    @jit.purefunction
+    def _pure_get_rulechain(self):
+        return self.rulechain
 
     def add_rule(self, rule, atend, fromassert):
         if not self.dynamic:
