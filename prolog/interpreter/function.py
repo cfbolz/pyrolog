@@ -1,5 +1,6 @@
 from prolog.interpreter.term import Callable
 from prolog.interpreter.memo import EnumerationMemo
+from prolog.interpreter import error
 from prolog.interpreter.signature import Signature
 from pypy.rlib import jit, objectmodel, unroll
 # XXX needs tests
@@ -221,8 +222,14 @@ class Rulechain(object):
 class Function(object):
     def __init__(self, firstrule=None):
         self.rulechain = self.last = None
+        self.dynamic = False
 
-    def add_rule(self, rule, atend):
+    def add_rule(self, rule, atend, fromassert):
+        if not self.dynamic:
+            if fromassert:
+                error.throw_permission_error(
+                    "modify", "static_procedure",
+                    rule.head.get_prolog_signature())
         rulechain = Rulechain(rule)
         if self.rulechain is None:
             self.rulechain = self.last = rulechain

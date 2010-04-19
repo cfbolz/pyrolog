@@ -60,3 +60,13 @@ def impl_retract(engine, heap, pattern):
     else:
         raise error.UnificationFailed()
     # heap.discard(oldstate)
+
+@expose_builtin("dynamic", unwrap_spec=["predicate_indicator"])
+def impl_dynamic(engine, heap, signature):
+    function = engine.get_function(signature)
+    if function is None:
+        function = engine.lookup_function(signature, new_is_dynamic=True)
+        return
+    else:
+        if function.dynamic:
+            return

@@ -87,7 +87,8 @@ class Engine(object):
     def get_function(self, signature):
         return signature.get_extra_engine_local("function", self)
 
-    def add_rule(self, rule, end=True):
+    def add_rule(self, rule, end=True, fromassert=True):
+        #import pdb; pdb.set_trace()
         if helper.is_term(rule):
             assert isinstance(rule, Callable)
             if rule.signature().eq(predsig):
@@ -103,20 +104,26 @@ class Engine(object):
         if self.get_builtin(signature):
             error.throw_permission_error(
                 "modify", "static_procedure", rule.head.get_prolog_signature())
-        function = self.lookup_function(signature)
-        function.add_rule(rule, end)
+        function = self.lookup_function(signature, new_is_dynamic=fromassert)
+        function.add_rule(rule, end, fromassert)
 
     @jit.purefunction_promote("0")
     def get_builtin(self, signature):
         from prolog import builtin # for the side-effects
         return signature.get_extra("builtin")
 
+    def lookup_function(self, signature, new_is_dynamic=False):
+        # redirection needed because purefunction_promote does not support
+        # default args
+        return self._lookup_function(signature, new_is_dynamic)
+
     @jit.purefunction_promote("0")
-    def lookup_function(self, signature):
+    def _lookup_function(self, signature, new_is_dynamic):
         assert signature.cached
         function = self.get_function(signature)
         if function is None:
             function = Function()
+            function.dynamic = new_is_dynamic
             signature.set_extra_engine_local("function", function, self)
         return function
 
@@ -130,7 +137,7 @@ class Engine(object):
         if isinstance(term, Callable) and term.signature().eq(callsig):
             self.run(term.argument_at(0))
         else:
-            self.add_rule(term)
+            self.add_rule(term, fromassert=False)
         return self.parser
 
     def runstring(self, s):
