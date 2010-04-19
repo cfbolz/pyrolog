@@ -140,3 +140,10 @@ def test_atoms():
         fact, = builder.build(t)
         assert fact.signature().string() == "%s/0" % (atom, )
 
+def test_dynamic():
+    t = parse_file("""
+        :- dynamic f/2.
+    """)
+    builder = TermBuilder()
+    facts = builder.build(t)
+    assert len(facts) == 1
