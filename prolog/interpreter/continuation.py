@@ -103,7 +103,7 @@ class Engine(object):
         if self.get_builtin(signature):
             error.throw_permission_error(
                 "modify", "static_procedure", rule.head.get_prolog_signature())
-        function = self._lookup(signature)
+        function = self.lookup_function(signature)
         function.add_rule(rule, end)
 
     @jit.purefunction_promote("0")
@@ -112,7 +112,7 @@ class Engine(object):
         return signature.get_extra("builtin")
 
     @jit.purefunction_promote("0")
-    def _lookup(self, signature):
+    def lookup_function(self, signature):
         assert signature.cached
         function = self.get_function(signature)
         if function is None:
@@ -169,7 +169,7 @@ class Engine(object):
             return self.continue_(BuiltinContinuation(scont, builtin, query), fcont, heap)
 
         # do a real call
-        function = self._lookup(signature)
+        function = self.lookup_function(signature)
         startrulechain = jit.hint(function.rulechain, promote=True)
         if startrulechain is None:
             return error.throw_existence_error(
