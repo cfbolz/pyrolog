@@ -72,9 +72,11 @@ def unwrap_predicate_indicator(predicate):
         assert 0, "unreachable"
     if not predicate.signature().eq(slashsig):
         error.throw_type_error("predicate_indicator", predicate)
-    name = unwrap_atom(predicate.argument_at(0))
-    arity = unwrap_int(predicate.argument_at(1))
-    return name, arity
+    name = unwrap_atom(predicate.argument_at(0).dereference(None))
+    arity = unwrap_int(predicate.argument_at(1).dereference(None))
+    if arity < 0:
+        error.throw_domain_error("not_less_than_zero", term.Number(arity))
+    return Signature.getsignature(name, arity)
 
 def ensure_atomic(obj):
     if not is_atomic(obj):

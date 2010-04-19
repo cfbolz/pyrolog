@@ -8,10 +8,7 @@ from prolog.builtin.register import expose_builtin
 
 @expose_builtin("abolish", unwrap_spec=["obj"])
 def impl_abolish(engine, heap, predicate):
-    name, arity = helper.unwrap_predicate_indicator(predicate)
-    if arity < 0:
-        error.throw_domain_error("not_less_than_zero", term.Number(arity))
-    signature = Signature.getsignature(name, arity)
+    signature = helper.unwrap_predicate_indicator(predicate)
     if signature.get_extra("builtin"):
         error.throw_permission_error("modify", "static_procedure",
                                      predicate)
@@ -38,7 +35,7 @@ def impl_retract(engine, heap, pattern):
         body = None
     if head.signature().get_extra("builtin"):
         assert isinstance(head, term.Callable)
-        error.throw_permission_error("modify", "static_procedure", 
+        error.throw_permission_error("modify", "static_procedure",
                                      head.get_prolog_signature())
     function = engine.get_function(head.signature())
     if function is None:
@@ -64,6 +61,3 @@ def impl_retract(engine, heap, pattern):
     else:
         raise error.UnificationFailed()
     # heap.discard(oldstate)
-
-
-
