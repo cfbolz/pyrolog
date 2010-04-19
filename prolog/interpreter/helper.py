@@ -63,7 +63,7 @@ def unwrap_int(obj):
 
 def unwrap_atom(obj):
     if isinstance(obj, term.Atom):
-        return obj.name()    
+        return obj.name()
     error.throw_type_error('atom', obj)
 
 def unwrap_predicate_indicator(predicate):
@@ -84,7 +84,7 @@ def ensure_atomic(obj):
     return obj
 
 def is_atomic(obj):
-    return (isinstance(obj, term.Atom) or isinstance(obj, term.Float) or 
+    return (isinstance(obj, term.Atom) or isinstance(obj, term.Float) or
             isinstance(obj, term.Number))
 
 def is_term(obj):
@@ -94,7 +94,7 @@ def convert_to_str(obj):
     if isinstance(obj, term.Var):
         error.throw_instantiation_error()
     if isinstance(obj, term.Atom):
-        return obj.name()    
+        return obj.name()
     elif isinstance(obj, term.Number):
         return str(obj.num)
     elif isinstance(obj, term.Float):
