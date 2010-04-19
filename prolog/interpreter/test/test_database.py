@@ -36,3 +36,12 @@ def test_asserting_nonexisting_works():
 
     heaps = collect_all(e, "f(X).")
     assert len(heaps) == 2
+
+def test_dynamic_after_rule():
+    excinfo = py.test.raises(CatchableError, get_engine, """
+        f(x).
+        dynamic f/1.
+        """)
+    assert excinfo.value.term.name() == "error"
+    eterm = excinfo.value.term.argument_at(0)
+    assert eterm.name() == "permission_error"
