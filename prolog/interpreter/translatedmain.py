@@ -4,7 +4,6 @@ from pypy.rlib.parsing.deterministic import LexerError
 from prolog.interpreter.interactive import helptext, StopItNow, \
 ContinueContinuation
 from prolog.interpreter.parsing import parse_file, get_query_and_vars
-from prolog.interpreter.parsing import get_engine
 from prolog.interpreter.continuation import Continuation, Engine, DoneContinuation
 from prolog.interpreter import error, term
 import prolog.interpreter.term
