@@ -292,6 +292,7 @@ class Callable(NonVar):
         i = 0
         while i < self.argument_count():
             arg = self.argument_at(i)
+            jit.hint(arg.__class__, promote=True)
             cloned = copy_individual(arg, i, heap, *extraargs)
             newinstance = newinstance | (cloned is not arg)
             args[i] = cloned
@@ -703,6 +704,7 @@ def generate_abstract_class(n_args):
             for i in arg_iter:
                 arg = getattr(self, 'val_%d' % i)
                 cloned = copy_individual(arg, i, heap, *extraargs)
+                jit.hint(cloned.__class__, promote=True)
                 newinstance = newinstance | (cloned is not arg)
                 setattr(result, 'val_%d' % i, cloned)
                 i += 1
