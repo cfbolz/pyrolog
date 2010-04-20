@@ -7,7 +7,6 @@ sys.path.append(str(py.path.local(__file__).dirpath().dirpath().dirpath()))
 from pypy.rlib.parsing.parsing import ParseError
 from pypy.rlib.parsing.deterministic import LexerError
 from prolog.interpreter.parsing import parse_file, get_query_and_vars
-from prolog.interpreter. import get_engine
 from prolog.interpreter.continuation import Engine
 from prolog.interpreter.continuation import Continuation, DoneContinuation
 from prolog.interpreter import error
@@ -20,7 +19,7 @@ helptext = """
  ';':   redo
  'p':   print
  'h':   help
- 
+
 """
 
 class StopItNow(Exception):
