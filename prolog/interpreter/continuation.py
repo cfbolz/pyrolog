@@ -17,11 +17,11 @@ Signature.register_extr_attr("function", engine=True)
 def can_inline(*args):
     return False
 
-def get_printable_location(rule):
-    if rule:
-        s = rule.signature.string()
+def get_printable_location(rulechain):
+    if rulechain:
+        s = rulechain.rule.signature.string()
     else:
-        s = "No rule"
+        s = "No rulechain"
     return s
 
 def get_jitcell_at(where, rule):
@@ -36,7 +36,7 @@ predsig = Signature.getsignature(":-", 2)
 callsig = Signature.getsignature(":-", 1)
 
 jitdriver = jit.JitDriver(
-        greens=["rule"],
+        greens=["rulechain"],
         reds=["scont", "fcont", "heap", "engine"],
         can_inline=can_inline,
         get_printable_location=get_printable_location,
@@ -49,15 +49,15 @@ jitdriver = jit.JitDriver(
 
 
 def driver(scont, fcont, heap, engine):
-    rule = None
+    rulechain = None
     while not scont.is_done():
         #view(scont, fcont, heap)
-        if isinstance(scont, RuleContinuation) and scont._rule.body is not None:
-            rule = scont._rule
-            jitdriver.can_enter_jit(rule=rule, scont=scont, fcont=fcont,
+        if isinstance(scont, UserCallContinuation) and scont.rulechain.rule.body is not None:
+            rulechain = scont.rulechain
+            jitdriver.can_enter_jit(rulechain=rulechain, scont=scont, fcont=fcont,
                                     heap=heap, engine=engine)
         try:
-            jitdriver.jit_merge_point(rule=rule, scont=scont, fcont=fcont,
+            jitdriver.jit_merge_point(rulechain=rulechain, scont=scont, fcont=fcont,
                                       heap=heap, engine=engine)
             scont, fcont, heap  = scont.activate(fcont, heap, engine)
         except error.UnificationFailed:
@@ -215,7 +215,7 @@ class Engine(object):
 
     @specialize.argtype(0)
     def continue_(engine, scont, fcont, heap):
-        if scont.is_done() or isinstance(scont, RuleContinuation) and scont._rule.body is not None:
+        if scont.is_done() or isinstance(scont, UserCallContinuation) and scont.rulechain.rule.body is not None:
             return scont, fcont, heap
         try:
             return scont.activate(fcont, heap, engine)
