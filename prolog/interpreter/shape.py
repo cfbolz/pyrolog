@@ -2,13 +2,21 @@ from prolog.interpreter.term import Callable
 # a Callable implementation that tries to save memory
 
 class Shape(object):
-    def resolve_at(self, argnum, storage):
-        raise NotImplementedError("abstract base class")
+    def __init__(self):
+        pass
+
     def resolve(self, storage):
         raise NotImplementedError("abstract base class")
 
+    def resolve_at(self, argnum, storage):
+        w_obj = self.resolve(storage)
+        if isinstance(w_obj, Callable):
+            return w_obj.argument_at(argnum)
+        raise TypeError
+
 class WrapShape(Shape):
     def __init__(self, w_obj):
+        Shape.__init__(self)
         self.w_obj = w_obj
 
     def resolve(self, storage):
@@ -16,6 +24,7 @@ class WrapShape(Shape):
 
 class InStorageShape(Shape):
     def __init__(self, num):
+        Shape.__init__(self)
         self.num = num
 
     def resolve(self, storage):
@@ -23,6 +32,7 @@ class InStorageShape(Shape):
 
 class SharingShape(Shape):
     def __init__(self, signature, children):
+        Shape.__init__(self)
         self.signature = signature
         self.children = children
 
@@ -31,6 +41,8 @@ class SharingShape(Shape):
 
     def resolve_at(self, i, storage):
         return self.children[i].resolve(storage)
+
+# _____________________________________________________________________
 
 class ShapedCallable(Callable):
     def __init__(self, shape, storage):

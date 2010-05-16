@@ -6,9 +6,14 @@ def test_wrap():
     assert w_obj.name() == "a"
     assert w_obj.argument_at(0).num == 1
 
+    assert s.resolve_at(0, None).num == 1
+
 def test_instorage():
     s = shape.InStorageShape(0)
     assert s.resolve([1, 2, 3]) == 1
+
+    w_obj = s.resolve_at(0, [term.Callable.build("a", [term.Number(1)])])
+    assert w_obj.num == 1
 
 def test_sharing():
     sig = signature.Signature.getsignature("f", 2)
@@ -23,4 +28,3 @@ def test_sharing():
     assert isinstance(w_obj, shape.ShapedCallable)
     w_obj.argument_at(0).name() == "a"
     w_obj.argument_at(1) == 2
-
