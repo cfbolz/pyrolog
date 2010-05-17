@@ -35,3 +35,22 @@ def test_build_potentially_wrap():
         sig, [shape.WrapShape(term.Number(1)),
               shape.WrapShape(term.Callable.build("a"))])
     assert isinstance(sh, shape.WrapShape)
+
+def test_term_with_numbered_vars_to_shape():
+    w_obj = term.Callable.build("f", [term.Callable.build("a"),
+                                      term.Number(12),
+                                      term.NumberedVar(0),
+                                      term.NumberedVar(1)])
+    s = shape.term_with_numbered_vars_to_shape(w_obj)
+    assert isinstance(s, shape.SharingShape)
+    assert s.children[0].w_obj.signature().name == "a"
+    assert s.children[1].w_obj.num == 12
+    assert s.children[2].num == 0
+    assert s.children[3].num == 1
+
+
+    w_obj = term.Callable.build("f", [term.Callable.build("a"),
+                                      term.Number(12)])
+    s = shape.term_with_numbered_vars_to_shape(w_obj)
+    assert isinstance(s, shape.WrapShape)
+    assert s.w_obj.signature().name == "f"

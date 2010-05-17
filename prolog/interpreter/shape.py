@@ -66,3 +66,15 @@ class ShapedCallable(Callable):
     def argument_at(self, i):
         return self.shape.resolve_at(i, self.storage)
 
+# _____________________________________________________________________
+
+def term_with_numbered_vars_to_shape(w_obj):
+    from prolog.interpreter import term
+    if isinstance(w_obj, term.NumberedVar):
+        return InStorageShape(w_obj.num)
+    elif isinstance(w_obj, Callable):
+        argshapes = [term_with_numbered_vars_to_shape(w_arg)
+                        for w_arg in w_obj.arguments()]
+        return SharingShape.build_potentially_wrap(w_obj.signature(), argshapes)
+    return WrapShape(w_obj)
+
