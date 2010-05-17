@@ -28,3 +28,10 @@ def test_sharing():
     assert isinstance(w_obj, shape.ShapedCallable)
     w_obj.argument_at(0).name() == "a"
     w_obj.argument_at(1) == 2
+
+def test_build_potentially_wrap():
+    sig = signature.Signature.getsignature("f", 2)
+    sh = shape.SharingShape.build_potentially_wrap(
+        sig, [shape.WrapShape(term.Number(1)),
+              shape.WrapShape(term.Callable.build("a"))])
+    assert isinstance(sh, shape.WrapShape)

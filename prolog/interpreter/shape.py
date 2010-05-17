@@ -42,6 +42,16 @@ class SharingShape(Shape):
     def resolve_at(self, i, storage):
         return self.children[i].resolve(storage)
 
+    @staticmethod
+    def build_potentially_wrap(signature, children):
+        unwrapped = []
+        for child in children:
+            if not isinstance(child, WrapShape):
+                return SharingShape(signature, children)
+            unwrapped.append(child.w_obj)
+        return WrapShape(Callable.build(signature.name, unwrapped,
+                                        signature=signature))
+
 # _____________________________________________________________________
 
 class ShapedCallable(Callable):
@@ -55,3 +65,4 @@ class ShapedCallable(Callable):
 
     def argument_at(self, i):
         return self.shape.resolve_at(i, self.storage)
+
