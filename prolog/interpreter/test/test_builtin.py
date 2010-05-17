@@ -69,7 +69,7 @@ def test_consult():
     prolog_raises("_", "consult('/hopefully/does/not/exist')")
 
 def test_assert_retract():
-    e = get_engine("g(b, b).")
+    e = get_engine(":- dynamic(g/2). g(b, b).")
     assert_true("g(B, B).", e)
     assert_true("assert(g(c, d)).", e)
     assert_true("assert(g(a, b)).", e)
@@ -98,7 +98,11 @@ def test_assert_retract():
     prolog_raises("permission_error(X, Y, Z)", "retract(atom(X))")
 
 def test_assert_at_right_end():
-    e = get_engine("g(b, b). f(b, b). h(b, b).")
+    e = get_engine("""
+        :- dynamic(g/2). g(b, b).
+        :- dynamic(f/2). f(b, b).
+        :- dynamic(h/2). h(b, b).
+    """)
     assert_true("assert(g(a, a)).", e)
     assert_true("assertz(f(a, a)).", e)
     assert_true("A = a, asserta(h(A, A)).", e)
@@ -112,6 +116,7 @@ def test_assert_at_right_end():
 
 def test_assert_logical_update_view():
     e = get_engine("""
+        :- dynamic(g/1).
         g(a).
         g(c) :- assertz(g(d)).
         g(b).
@@ -119,11 +124,13 @@ def test_assert_logical_update_view():
     heaps = collect_all(e, "g(X).")
     assert len(heaps) == 3
     e = get_engine("""
+        :- dynamic(p/0).
         p :- assertz(p), fail.
         p :- fail.
     """)
     assert_false("p.", e)
     e = get_engine("""
+        :- dynamic(q/0).
         q :- fail.
         q :- assertz(q), fail.
     """)

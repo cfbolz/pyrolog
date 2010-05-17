@@ -45,7 +45,7 @@ def test_copy():
         t2 = t2.next
     assert t2 is l1
     assert prev is end
-    
+
 def test_function():
     def get_rules(chain):
         r = []
@@ -58,16 +58,16 @@ def test_function():
     r2 = Rule(C(2), C(3))
     r3 = Rule(C(0), C(0))
     r4 = Rule(C(15), C(-1))
-    f.add_rule(r1, True)
+    f.add_rule(r1, True, False)
     assert get_rules(f.rulechain) == [(C(1), C(2))]
-    f.add_rule(r2, True)
+    f.add_rule(r2, True, False)
     assert get_rules(f.rulechain) == [(C(1), C(2)), (C(2), C(3))]
-    f.add_rule(r3, False)
+    f.add_rule(r3, False, False)
     assert get_rules(f.rulechain) == [(C(0), C(0)), (C(1), C(2)), (C(2), C(3))]
 
     # test logical update view
     rulechain = f.rulechain
-    f.add_rule(r4, True)
+    f.add_rule(r4, True, False)
     assert get_rules(rulechain) == [(C(0), C(0)), (C(1), C(2)), (C(2), C(3))]
     assert get_rules(f.rulechain) == [(C(0), C(0)), (C(1), C(2)), (C(2), C(3)), (C(15), C(-1))]
 
@@ -89,14 +89,14 @@ def test__split_by_signature():
     g(b, 1).
     """)
 
-    rulechain = e._lookup(Signature.getsignature("f", 3)).rulechain
+    rulechain = e.lookup_function(Signature.getsignature("f", 3)).rulechain
     split, more = rulechain._split_by_signature(0)
     assert shorter(more) == [4]
     assert shorter(split) == [("a", [-1, 0, 1, 4]), ("b", [2, 4]), ("c", [3, 4])]
     split, more = rulechain._split_by_signature(1)
     assert shorter(more) == [-1, 2, 4]
     assert shorter(split) == [("a", [-1, 0, 2, 3, 4]), ("b", [-1, 1, 2, 4])]
-    rulechain = e._lookup(Signature.getsignature("g", 2)).rulechain
+    rulechain = e.lookup_function(Signature.getsignature("g", 2)).rulechain
     split, more = rulechain._split_by_signature(0)
     assert shorter(split) == [("a", [0]), ("b", [1])]
     assert not more
@@ -115,7 +115,7 @@ def test_get_index_dict():
     f(1, 2, 4).
     """)
 
-    rulechain = e._lookup(Signature.getsignature("f", 3)).rulechain
+    rulechain = e.lookup_function(Signature.getsignature("f", 3)).rulechain
     d = rulechain.get_index_dict(0)
     assert shorter(d) == {
         "a": [-1, 0, 1, 4],
@@ -147,7 +147,7 @@ def test_find_rulechain():
     """)
 
     query = Callable.build("f", [Callable.build("a"), Callable.build("b"), Var()])
-    rulechain = e._lookup(query.signature()).rulechain
+    rulechain = e.lookup_function(query.signature()).rulechain
     rc = rulechain.find_rulechain(query)
     assert rc.rule.headargs[-1].num == -1
     rc = rc.next
@@ -164,7 +164,7 @@ def test_find_rulechain():
     assert rc.next is None
 
     query = Callable.build("g", [Callable.build("c"), Var()])
-    rulechain = e._lookup(query.signature()).rulechain
+    rulechain = e.lookup_function(query.signature()).rulechain
     rulechain._depth = 10 # cheat a bit
     rc = rulechain.find_rulechain(query)
     assert rc is None
