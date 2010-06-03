@@ -50,26 +50,26 @@ def test_function():
     def get_rules(chain):
         r = []
         while chain:
-            r.append((chain.rule.head, chain.rule.body))
+            r.append(chain.rule.head)
             chain = chain.next
         return r
     f = Function()
-    r1 = Rule(C(1), C(2))
-    r2 = Rule(C(2), C(3))
-    r3 = Rule(C(0), C(0))
-    r4 = Rule(C(15), C(-1))
+    r1 = Rule(C(1), None)
+    r2 = Rule(C(2), None)
+    r3 = Rule(C(0), None)
+    r4 = Rule(C(15), None)
     f.add_rule(r1, True, False)
-    assert get_rules(f.rulechain) == [(C(1), C(2))]
+    assert get_rules(f.rulechain) == [C(1)]
     f.add_rule(r2, True, False)
-    assert get_rules(f.rulechain) == [(C(1), C(2)), (C(2), C(3))]
+    assert get_rules(f.rulechain) == [C(1), C(2)]
     f.add_rule(r3, False, False)
-    assert get_rules(f.rulechain) == [(C(0), C(0)), (C(1), C(2)), (C(2), C(3))]
+    assert get_rules(f.rulechain) == [C(0), C(1), C(2)]
 
     # test logical update view
     rulechain = f.rulechain
     f.add_rule(r4, True, False)
-    assert get_rules(rulechain) == [(C(0), C(0)), (C(1), C(2)), (C(2), C(3))]
-    assert get_rules(f.rulechain) == [(C(0), C(0)), (C(1), C(2)), (C(2), C(3)), (C(15), C(-1))]
+    assert get_rules(rulechain) == [C(0), C(1), C(2)]
+    assert get_rules(f.rulechain) == [C(0), C(1), C(2), C(15)]
 
 def test__split_by_signature():
     def shorter(result):

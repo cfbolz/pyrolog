@@ -114,6 +114,9 @@ class ShapedCallable(Callable):
     def argument_at(self, i):
         return self.shape.resolve_at(i, self.storage)
 
+    def argument_count(self):
+        return self.shape.signature.numargs
+
 # _____________________________________________________________________
 
 def term_with_numbered_vars_to_shape(w_obj):

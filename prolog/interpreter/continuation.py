@@ -52,7 +52,7 @@ def driver(scont, fcont, heap, engine):
     rulechain = None
     while not scont.is_done():
         #view(scont, fcont, heap)
-        if isinstance(scont, UserCallContinuation) and scont.rulechain.rule.body is not None:
+        if isinstance(scont, UserCallContinuation) and scont.rulechain.rule.bodyshape is not None:
             rulechain = scont.rulechain
             jitdriver.can_enter_jit(rulechain=rulechain, scont=scont, fcont=fcont,
                                     heap=heap, engine=engine)
@@ -215,7 +215,7 @@ class Engine(object):
 
     @specialize.argtype(0)
     def continue_(engine, scont, fcont, heap):
-        if scont.is_done() or isinstance(scont, UserCallContinuation) and scont.rulechain.rule.body is not None:
+        if scont.is_done() or isinstance(scont, UserCallContinuation) and scont.rulechain.rule.bodyshape is not None:
             return scont, fcont, heap
         try:
             return scont.activate(fcont, heap, engine)

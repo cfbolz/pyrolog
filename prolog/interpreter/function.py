@@ -1,6 +1,6 @@
 from prolog.interpreter.term import Callable
 from prolog.interpreter.memo import EnumerationMemo
-from prolog.interpreter import error
+from prolog.interpreter import error, shape
 from prolog.interpreter.signature import Signature
 from pypy.rlib import jit, objectmodel, unroll
 # XXX needs tests
@@ -37,9 +37,10 @@ class Rule(object):
             self.headargs = None
         if body is not None:
             body = helper.ensure_callable(body)
-            self.body = body.enumerate_vars(memo)
+            body = body.enumerate_vars(memo)
+            self.bodyshape = shape.term_with_numbered_vars_to_shape(body)
         else:
-            self.body = None
+            self.bodyshape = None
         self.size_env = memo.size()
         self.signature = head.signature()
         self.contains_cut = contains_cut(body)
@@ -54,10 +55,13 @@ class Rule(object):
                 arg2 = self.headargs[i]
                 arg1 = head.argument_at(i)
                 arg2.unify_and_standardize_apart(arg1, heap, env)
-        body = self.body
-        if body is None:
+        bodyshape = self.bodyshape
+        if bodyshape is None:
             return None
-        return body.copy_standardize_apart(heap, env)
+        for i in range(len(env)):
+            if env[i] is None:
+                env[i] = heap.newvar()
+        return bodyshape.resolve(env)
 
 
     @jit.unroll_safe
@@ -72,9 +76,9 @@ class Rule(object):
         return True
 
     def __repr__(self):
-        if self.body is None:
+        if self.bodyshape is None:
             return "%s." % (self.head, )
-        return "%s :- %s." % (self.head, self.body)
+        return "%s :- %s." % (self.head, self.bodyshape)
 
 def _make_chain(l, argindex=-1):
     chain = None

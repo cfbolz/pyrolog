@@ -10,7 +10,9 @@ class EnumerationMemo(object):
         res = self.seen.get(var, None)
         if not res:
             self.seen[var] = res = NumberedVar(-1)
-        elif res.num == -1:
+        # XXX next line should be "elif res.num == -1". disable this until
+        # shapes support that
+        if res.num == -1:
             # the variable is found a second time, it needs a real number
             res.num = self.varcount
             self.varcount += 1
