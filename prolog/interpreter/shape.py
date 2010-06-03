@@ -14,6 +14,9 @@ class Shape(object):
             return w_obj.argument_at(argnum)
         raise TypeError
 
+    def _compute_new_shape(self, memo):
+        raise NotImplementedError("abstract base class")
+
 class WrapShape(Shape):
     def __init__(self, w_obj):
         Shape.__init__(self)
@@ -22,6 +25,9 @@ class WrapShape(Shape):
     def resolve(self, storage):
         return self.w_obj
 
+    def _compute_new_shape(self, memo):
+        return self
+
 class InStorageShape(Shape):
     def __init__(self, num):
         Shape.__init__(self)
@@ -29,6 +35,12 @@ class InStorageShape(Shape):
 
     def resolve(self, storage):
         return storage[self.num]
+
+    def _compute_new_shape(self, memo):
+        num = memo.setdefault(self.num, len(memo))
+        if num == self.num:
+            return self
+        return InStorageShape(num)
 
 class SharingShape(Shape):
     def __init__(self, signature, children, needs_reshaping=True):
@@ -59,8 +71,21 @@ class SharingShape(Shape):
         return WrapShape(Callable.build(signature.name, unwrapped,
                                         signature=signature))
 
+    def _compute_new_shape(self, memo):
+        children = [None] * len(self.children)
+        for i in range(len(self.children)):
+            child = self.children[i]._compute_new_shape(memo)
+            children[i] = child
+        return SharingShape(self.signature, children, False)
+
+
 def make_reshaper(shape):
-    return None
+    memo = {}
+    newshape = shape._compute_new_shape(memo)
+    storage_shaper = [-1] * len(memo)
+    for key, value in memo.iteritems():
+        storage_shaper[value] = key
+    return Reshaper(storage_shaper, newshape)
 
 class Reshaper(object):
     def __init__(self, storage_shaper, newshape):

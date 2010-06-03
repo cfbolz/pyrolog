@@ -66,3 +66,33 @@ def test_reshape():
     w_obj = rs.reshape(["a", "b", "c", "d", "e", "f"])
     assert w_obj.argument_at(1) == "f"
     assert w_obj.argument_at(2) == "c"
+
+def test_compute_new_shape():
+    s = shape.SharingShape("f", [
+        shape.WrapShape(term.Callable.build("a")),
+        shape.InStorageShape(5),
+        shape.InStorageShape(2),
+        shape.InStorageShape(2),
+    ], False)
+    memo = {}
+    ns = s._compute_new_shape(memo)
+    assert s.children[0] is ns.children[0]
+    assert ns.children[1].num == 0
+    assert ns.children[2].num == 1
+    assert ns.children[3].num == 1
+    assert memo == {5:0, 2:1}
+
+def test_make_reshaper():
+    s = shape.SharingShape("f", [
+        shape.WrapShape(term.Callable.build("a")),
+        shape.InStorageShape(5),
+        shape.InStorageShape(2),
+        shape.InStorageShape(2),
+    ], False)
+    rs = shape.make_reshaper(s)
+    ns = rs.newshape
+    assert s.children[0] is ns.children[0]
+    assert ns.children[1].num == 0
+    assert ns.children[2].num == 1
+    assert ns.children[3].num == 1
+    assert rs.storage_shaper == [5, 2]
