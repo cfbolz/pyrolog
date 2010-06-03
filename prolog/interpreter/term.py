@@ -245,8 +245,12 @@ class Callable(NonVar):
         return helper.prolog_signature(self.name(), self.argument_count())
 
     def arguments(self):
-        raise NotImplementedError("abstract base")
-
+        argcount = self.argument_count()
+        result = [None] * argcount
+        for i in range(argcount):
+            result[i] = self.argument_at(i)
+        return result
+    
     def argument_at(self, i):
         raise NotImplementedError("abstract base")
 
