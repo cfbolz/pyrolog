@@ -7,7 +7,7 @@ from pypy.rlib import jit, objectmodel, unroll
 
 cutsig = Signature.getsignature("!", 0)
 
-def contain_cut(body):
+def contains_cut(body):
     if body is None:
         return False
     stack = [body]
