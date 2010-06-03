@@ -7,6 +7,19 @@ from pypy.rlib import jit, objectmodel, unroll
 
 cutsig = Signature.getsignature("!", 0)
 
+def contain_cut(body):
+    if body is None:
+        return False
+    stack = [body]
+    while stack:
+        current = stack.pop()
+        if isinstance(current, Callable):
+            if current.signature().eq(cutsig):
+                return True
+            else:
+                stack.extend(current.arguments())
+    return False
+
 class Rule(object):
     _immutable_ = True
     _immutable_fields_ = ["headargs[*]"]
@@ -29,23 +42,8 @@ class Rule(object):
             self.body = None
         self.size_env = memo.size()
         self.signature = head.signature()
-        self._does_contain_cut()
+        self.contains_cut = contains_cut(body)
 
-
-    def _does_contain_cut(self):
-        if self.body is None:
-            self.contains_cut = False
-            return
-        stack = [self.body]
-        while stack:
-            current = stack.pop()
-            if isinstance(current, Callable):
-                if current.signature().eq(cutsig):
-                    self.contains_cut = True
-                    return
-                else:
-                    stack.extend(current.arguments())
-        self.contains_cut = False
 
     @jit.unroll_safe
     def clone_and_unify_head(self, heap, head):
