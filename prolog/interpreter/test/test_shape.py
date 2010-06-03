@@ -17,12 +17,13 @@ def test_instorage():
 
 def test_sharing():
     sig = signature.Signature.getsignature("f", 2)
-    s = shape.SharingShape(sig, [
-        shape.WrapShape(term.Callable.build("a")),
-        shape.InStorageShape(1)
-    ])
-    assert s.resolve_at(0, [1, 2]).name() == "a"
-    assert s.resolve_at(1, [1, 2]) == 2
+    for b in [True, False]:
+        s = shape.SharingShape(sig, [
+            shape.WrapShape(term.Callable.build("a")),
+            shape.InStorageShape(1)
+        ], needs_reshaping=b)
+        assert s.resolve_at(0, [1, 2]).name() == "a"
+        assert s.resolve_at(1, [1, 2]) == 2
 
     w_obj = s.resolve([1, 2])
     assert isinstance(w_obj, shape.ShapedCallable)
