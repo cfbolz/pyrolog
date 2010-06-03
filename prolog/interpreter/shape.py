@@ -31,13 +31,20 @@ class InStorageShape(Shape):
         return storage[self.num]
 
 class SharingShape(Shape):
-    def __init__(self, signature, children):
+    def __init__(self, signature, children, needs_reshaping=True):
         Shape.__init__(self)
         self.signature = signature
         self.children = children
+        if needs_reshaping:
+            self.reshaper = make_reshaper(self)
+        else:
+            self.reshaper = None
 
     def resolve(self, storage):
-        return ShapedCallable(self, storage)
+        if self.reshaper is not None:
+            return self.reshaper.reshape(storage)
+        else:
+            return ShapedCallable(self, storage)
 
     def resolve_at(self, i, storage):
         return self.children[i].resolve(storage)
@@ -51,6 +58,22 @@ class SharingShape(Shape):
             unwrapped.append(child.w_obj)
         return WrapShape(Callable.build(signature.name, unwrapped,
                                         signature=signature))
+
+def make_reshaper(shape):
+    return None
+
+class Reshaper(object):
+    def __init__(self, storage_shaper, newshape):
+        assert newshape.reshaper is None
+        self.newshape = newshape
+        self.storage_shaper = storage_shaper
+
+    def reshape(self, storage):
+        newstorage = [None] * len(self.storage_shaper)
+        for i in range(len(self.storage_shaper)):
+            newstorage[i] = storage[self.storage_shaper[i]]
+        return ShapedCallable(self.newshape, newstorage)
+
 
 # _____________________________________________________________________
 

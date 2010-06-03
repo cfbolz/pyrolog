@@ -54,3 +54,15 @@ def test_term_with_numbered_vars_to_shape():
     s = shape.term_with_numbered_vars_to_shape(w_obj)
     assert isinstance(s, shape.WrapShape)
     assert s.w_obj.signature().name == "f"
+
+def test_reshape():
+    sig = signature.Signature.getsignature("f", 3)
+    s = shape.SharingShape(sig, [
+        shape.WrapShape(term.Callable.build("a")),
+        shape.InStorageShape(0),
+        shape.InStorageShape(1)
+    ], False)
+    rs = shape.Reshaper([5, 2], s)
+    w_obj = rs.reshape(["a", "b", "c", "d", "e", "f"])
+    assert w_obj.argument_at(1) == "f"
+    assert w_obj.argument_at(2) == "c"
