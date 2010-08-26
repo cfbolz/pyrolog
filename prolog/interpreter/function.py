@@ -23,7 +23,7 @@ def contains_cut(body):
 class Rule(object):
     _immutable_ = True
     _immutable_fields_ = ["headargs[*]"]
-    _attrs_ = ['head', 'headargs', 'contains_cut', 'body', 'size_env', 'signature']
+    _attrs_ = ['head', 'headargs', 'contains_cut', 'bodyshape', 'size_env', 'signature']
     unrolling_attrs = unroll.unrolling_iterable(_attrs_)
 
     def __init__(self, head, body):

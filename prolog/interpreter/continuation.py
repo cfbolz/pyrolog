@@ -51,7 +51,7 @@ jitdriver = jit.JitDriver(
 def driver(scont, fcont, heap, engine):
     rulechain = None
     while not scont.is_done():
-        #view(scont, fcont, heap)
+        view(scont, fcont, heap)
         if isinstance(scont, UserCallContinuation) and scont.rulechain.rule.bodyshape is not None:
             rulechain = scont.rulechain
             jitdriver.can_enter_jit(rulechain=rulechain, scont=scont, fcont=fcont,

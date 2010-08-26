@@ -63,11 +63,12 @@ class SharingShape(Shape):
 
     @staticmethod
     def build_potentially_wrap(signature, children):
-        unwrapped = []
-        for child in children:
+        unwrapped = [None] * len(children)
+        for i in range(len(children)):
+            child = children[i]
             if not isinstance(child, WrapShape):
                 return SharingShape(signature, children)
-            unwrapped.append(child.w_obj)
+            unwrapped[i] = child.w_obj
         return WrapShape(Callable.build(signature.name, unwrapped,
                                         signature=signature))
 
