@@ -170,3 +170,16 @@ def test_find_indexable_arg():
     assert b.find_indexable_arg() == 2
     assert b.find_indexable_arg(2) == -1
 
+def test_cyclic_term():
+    h = Heap()
+    X = h.newvar()
+    t = Callable.build("f", [X], heap=h)
+    t.unify(X, h)
+
+    Y = h.newvar()
+    t2 = Callable.build("f", [Y], heap=h)
+    t2.unify(Y, h)
+
+    t.unify(t2, h) # does not crash
+    X.unify(Y, h) # does not crash
+
