@@ -1,5 +1,13 @@
 :- module(dcg, [trans/2]).
-:- use_module('../../prolog_modules/list').
+%:- use_module('list').
+:- use_module(library(lists)).
+test1(Clause) :-
+	DCG = (func(X,Y) --> (bla(X), foo(Y), do_stuff, one_more(X,Y))),
+	trans(DCG, Clause).
+test2(Clause) :-
+	DCG = (func(X,Y) --> ([first,next], bla(X), foo(Y), [element,e2])),
+	trans(DCG, Clause).
+
 
 trans((H --> B), (TransH :- TransB)) :-
 	add_arguments(H, X0, X1, TransH),

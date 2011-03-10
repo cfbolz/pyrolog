@@ -14,5 +14,4 @@ import prolog.builtin.termconstruction
 import prolog.builtin.unify
 import prolog.builtin.numberchars
 import prolog.builtin.modules
-import prolog.builtin.flags
 import prolog.builtin.streams
