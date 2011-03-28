@@ -44,10 +44,12 @@ def var_representation(var_to_pos, engine, write):
             continue
         value = real_var.getvalue(engine.heap)
         val = f.format(value)
-        if isinstance(value, term.AttVar):
-            write("%s\n" % val)
-        else:
-            write("%s = %s\n" % (var, val))
+        write("%s = %s\n" % (var, val))
+    for var, real_var in var_to_pos.iteritems():
+        value = real_var.getvalue(engine.heap)
+        if not isinstance(value, term.AttVar):
+            continue
+        write("%s\n" % f.format_attvar(value))
         
 def getch():
     line = readline()

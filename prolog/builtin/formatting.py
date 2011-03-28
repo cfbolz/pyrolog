@@ -63,8 +63,6 @@ class TermFormatter(object):
         elif helper.is_term(term):
             assert isinstance(term, Callable)
             return self.format_term(term)
-        elif isinstance(term, AttVar):
-            return self.format_attvar(term)
         elif isinstance(term, Var):
             return self.format_var(term)
         elif isinstance(term, PrologStream):
