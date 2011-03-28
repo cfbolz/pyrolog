@@ -90,3 +90,42 @@ class TestInteraction:
         child.sendline(";")
         child.expect("no")
         child.expect(">?- ")
+
+    def test_attvar(self):
+        child = self.spawn([])
+        child.expect("welcome!")
+        child.expect(">?- ")
+        child.sendline("put_attr(X, m, 1).")
+        child.expect("yes")
+        child.expect("X = _G0")
+        child.expect(re.escape("put_attr(_G0, m, 1)"))
+        child.expect(">?- ")
+
+        child.sendline("put_attr(X, a, b), put_attr(X, b, c), put_attr(Y, x, 1).")
+        child.expect("yes")
+        child.expect("Y = _G0")
+        child.expect("X = _G1")
+        child.expect(re.escape("put_attr(_G0, x, 1)"))
+        child.expect(re.escape("put_attr(_G1, a, b)"))
+        child.expect(re.escape("put_attr(_G1, b, c)"))
+        child.expect(">?- ")
+
+        child.sendline("assert(m:attr_unify_hook(_, _)).")
+        child.expect("yes")
+        child.expect(">?- ")
+
+        child.sendline("put_attr(X, m, 1), X = a.")
+        child.expect("yes")
+        child.expect("X = a")
+        child.expect(">?- ")
+
+        child.sendline("put_attr(X, m, 1), ((X = a, write(output), nl, fail); true).")
+        child.expect("output")
+        child.expect("yes")
+        child.expect("X = _G0")
+        child.expect(re.escape("put_attr(_G0, m, 1)"))
+        child.expect(">?- ")
+
+        child.sendline("put_attr(X, m, 1), del_attr(X, m).")
+        child.expect("yes")
+        child.expect(">?- ")
