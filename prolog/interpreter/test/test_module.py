@@ -702,7 +702,31 @@ def test_file_parsing():
     """,
     create_files=True,
     m = """
-    :- module(m, [f/1]).
-    f(a).
+    :- module(m, []).
+    :- assert(user:f(a)).
     """)
     assert_true("findall(X, f(X), [a]).", e)
+
+def test_this_module():
+    e = get_engine(":- module(a).")
+    assert_true("this_module(user).")
+    assert_true("this_module(a).", e)
+    assert_true("this_module(X), X == user.")
+
+def test_this_module_2():
+    e = get_engine("""
+    :- use_module(m).
+    g(X) :- f(X).
+    """,
+    m = """
+    :- module(m, [f/1]).
+    f(X) :-
+        this_module(X).
+    """,
+    n = """
+    :- module(n).
+    :- use_module(m).
+    g(X) :- f(X).
+    """)
+    assert_true("g(X), X == user.", e)
+    #assert_true("n:g(X), X == n.", e)
