@@ -108,6 +108,7 @@ class Engine(object):
         self.clocks = Clocks()
         self.clocks.startup()
         self.streamwrapper = StreamWrapper()
+        self.tracing = False
 
     # _____________________________________________________
     # database functionality
