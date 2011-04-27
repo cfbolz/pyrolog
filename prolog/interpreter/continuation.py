@@ -214,7 +214,10 @@ class Engine(object):
         if rulechain is None:
             raise error.UnificationFailed
         scont = UserCallContinuation(self, module, scont, query, rulechain)
-        return self.continue_(scont, fcont, heap)
+        if self.tracing:
+            return self.continue_(TraceContinuation(self, scont), fcont, heap)
+        else:
+            return self.continue_(scont, fcont, heap)
 
     def _get_function(self, signature, module, query): 
         function = module.lookup(signature)
@@ -500,7 +503,6 @@ class UserCallContinuation(ChoiceContinuation):
     def __repr__(self):
         return "<UserCallContinuation query=%r rule=%r>" % (
                 self.query, self.rulechain)
-    
 
 class RuleContinuation(ContinuationWithModule):
     """ A Continuation that represents the application of a rule, i.e.:

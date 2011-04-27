@@ -35,7 +35,28 @@ class ContinueContinuation(Continuation):
                 var_representation(self.var_to_pos, self.engine, self.write)
             else:
                 self.write('unknown action. press "h" for help\n')
-                
+
+class TraceContinuation(Continuation):
+    """ This class wraps a Continuation, until it is called. It will trace
+    a step and activate this Continuation. """
+    def __init__(self, engine, cont):
+        Continuation.__init__(self, engine, DoneContinuation(engine))
+        self.cont = cont
+        self.rule = self.cont.rulechain
+
+    def activate(self, fcont, heap):
+        print "[trace] " + repr(self.cont) + " ?"
+        while 1:
+            res = getch()
+            if res in "\r\x04\n":
+                print "creep"
+                return self.cont.activate(fcont, heap)
+            if res in "a":
+                print "abort\n"
+                raise StopItNow()
+            else:
+                self.write('unknown action. press "h" for help\n')
+
 def var_representation(var_to_pos, engine, write):
     from prolog.builtin import formatting
     f = formatting.TermFormatter(engine, quoted=True, max_depth=20)
