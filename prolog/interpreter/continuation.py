@@ -11,6 +11,9 @@ from prolog.interpreter.signature import Signature
 from prolog.interpreter.module import Module, ModuleWrapper
 from prolog.interpreter.helper import unwrap_predicate_indicator
 from prolog.interpreter.stream import StreamWrapper
+from prolog.interpreter.trace import TraceContinuation, TraceRuleContinuation, \
+        TraceUserCallContinuation, TraceDoneContinuation, TraceContinueContinuation,\
+        printmessage
 
 Signature.register_extr_attr("function", engine=True)
 
@@ -70,7 +73,7 @@ def driver(scont, fcont, heap):
         else:
             scont, fcont, heap = _process_hooks(scont, fcont, heap)
 
-    assert isinstance(scont, DoneContinuation)
+    assert isinstance(scont, DoneContinuation) or isinstance(scont, TraceDoneContinuation)
     if scont.failed:
         raise error.UnificationFailed
 
@@ -213,11 +216,12 @@ class Engine(object):
         rulechain = startrulechain.find_applicable_rule(query)
         if rulechain is None:
             raise error.UnificationFailed
-        scont = UserCallContinuation(self, module, scont, query, rulechain)
         if self.tracing:
-            return self.continue_(TraceContinuation(self, scont), fcont, heap)
+            ccont = TraceUserCallContinuation(self, module, scont, query, rulechain)
+            scont = TraceContinueContinuation(self, printmessage, ccont)
         else:
-            return self.continue_(scont, fcont, heap)
+            scont = UserCallContinuation(self, module, scont, query, rulechain)
+        return self.continue_(scont, fcont, heap)
 
     def _get_function(self, signature, module, query): 
         function = module.lookup(signature)
@@ -276,7 +280,8 @@ class Engine(object):
 
     @specialize.argtype(0)
     def continue_(scont, fcont, heap):
-        if scont.is_done() or isinstance(scont, RuleContinuation) and scont._rule.body is not None:
+        if scont.is_done() or (isinstance(scont, RuleContinuation)
+                    and isinstance(scont, TraceRuleContinuation)) and scont._rule.body is not None:
             return scont, fcont, heap
         try:
             return scont.activate(fcont, heap)
