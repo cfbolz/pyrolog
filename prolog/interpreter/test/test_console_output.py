@@ -95,3 +95,46 @@ class TestInteraction:
         child.sendline(";")
         child.expect("no")
         child.expect(">?- ")
+
+    def test_simple_trace(self):
+        child = self.spawn([])
+        child.expect("welcome!")
+        child.expect(">?- ")
+        child.sendline("trace.")
+        child.expect("yes")
+        child.expect(">?- ")
+
+        child.sendline("is_list([1,2,3]).")
+        child.expect("yes")
+        child.expect(">?- ")
+
+        child.sendline("notrace.")
+        child.expect("yes")
+        child.expect(">?- ")
+
+    def test_stepping_trace(self):
+        child = self.spawn([])
+        child.expect("welcome!")
+        child.expect(">?- ")
+        
+        m = "m"
+        try:
+            create_file(m, """
+            f(A) :- A=1.
+            """)
+            child.sendline("consult(test/m).")
+            child.expect("yes")
+            child.expect(">?- ")
+            child.sendline("trace.")
+            child.expect("yes")
+            child.expect(">?- ")
+
+            child.expect("Call: \\(\d\\) f(1) ?")
+            child.sendline("\n")
+            child.expect("creep")
+            child.expect("Call: \\(\d\\) 1=1 ?")
+            child.sendline("\n")
+            child.expect("creep")
+            child.expect("Exit: \\(\d\\) 1=1 ?")
+            child.sendline("creep")
+            child.expect("creep")
