@@ -1,6 +1,26 @@
 from prolog.interpreter import shape, term, signature
 
-def test_wrap():
+def test_instorage_build():
+    assert shape.InStorageShape.build(1) is shape.InStorageShape.build(1)
+    assert shape.InStorageShape.build(1).num == 1
+    assert shape.InStorageShape.build(1) is not shape.InStorageShape.build(0)
+
+def test_sharing_build():
+    sig = signature.Signature.getsignature("f", 2)
+    s1 = shape.SharingShape.build(sig, [shape.InStorageShape.build(1),
+                                        shape.InStorageShape.build(2)])
+    s2 = shape.SharingShape.build(sig, [shape.InStorageShape.build(1),
+                                        shape.InStorageShape.build(2)])
+    assert s1 is s2
+    sig = signature.Signature.getsignature("g", 2)
+    s3 = shape.SharingShape.build(sig, [shape.InStorageShape.build(1),
+                                        shape.InStorageShape.build(2)])
+    assert s3 is not s2
+    s4 = shape.SharingShape.build(sig, [shape.InStorageShape.build(2),
+                                        shape.InStorageShape.build(2)])
+    assert s4 is not s3
+
+def test_wrapshape_resolve():
     s = shape.WrapShape(term.Callable.build("a", [term.Number(1)]))
     w_obj = s.resolve([1, 2, 3])
     assert w_obj.name() == "a"
@@ -8,14 +28,15 @@ def test_wrap():
 
     assert s.resolve_at(0, None).num == 1
 
-def test_instorage():
+def test_instorage_resolve():
     s = shape.InStorageShape(0)
     assert s.resolve([1, 2, 3]) == 1
 
     w_obj = s.resolve_at(0, [term.Callable.build("a", [term.Number(1)])])
     assert w_obj.num == 1
 
-def test_sharing():
+
+def test_sharing_resolve():
     sig = signature.Signature.getsignature("f", 2)
     s = shape.SharingShape(sig, [
         shape.WrapShape(term.Callable.build("a")),

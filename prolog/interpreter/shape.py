@@ -1,4 +1,4 @@
-from pypy.rlib.objectmodel import specialize
+from pypy.rlib import jit, objectmodel
 from prolog.interpreter.term import Callable
 # a Callable implementation that tries to save memory
 
@@ -32,9 +32,18 @@ class WrapShape(Shape):
 
 class InStorageShape(Shape):
     _immutable_fields_ = ["num"]
+    _cache = {}
+
     def __init__(self, num):
         Shape.__init__(self)
         self.num = num
+
+    @staticmethod
+    def build(num):
+        res = InStorageShape._cache.get(num, None)
+        if res is None:
+            InStorageShape._cache[num] = res = InStorageShape(num)
+        return res
 
     def resolve(self, storage):
         return storage[self.num]
@@ -45,13 +54,35 @@ class InStorageShape(Shape):
             return self
         return InStorageShape(num)
 
+def shape_eq((sig1, children1), (sig2, children2)):
+    return sig1 is sig2 and children1 == children2
+
+def shape_hash((sig, children)):
+    from pypy.rlib.rarithmetic import intmask
+    x = objectmodel.compute_identity_hash(sig)
+    for item in children:
+        y = objectmodel.compute_identity_hash(item)
+        x = intmask((1000003 * x) ^ y)
+    return x
+
 class SharingShape(Shape):
     _immutable_fields_ = ["signature", "children[*]", "reshaper"]
+    _cache = objectmodel.r_dict(shape_eq, shape_hash)
+
     def __init__(self, signature, children):
         Shape.__init__(self)
         self.signature = signature
         self.children = children
         self.reshaper = make_reshaper(self)
+
+    @staticmethod
+    def build(signature, children):
+        key = signature, children
+        res = SharingShape._cache.get(key, None)
+        if res is None:
+            SharingShape._cache[key] = res = SharingShape(signature, children)
+        return res
+
 
     def resolve(self, storage):
         if self.reshaper is not None:
@@ -127,7 +158,7 @@ class ShapedCallable(Callable):
     def argument_count(self):
         return self.shape.signature.numargs
 
-    @specialize.arg(3)
+    @objectmodel.specialize.arg(3)
     def basic_unify(self, other, heap, occurs_check=False):
         if (isinstance(other, ShapedCallable) and
                 self.shape is other.shape):
@@ -147,3 +178,10 @@ def term_with_numbered_vars_to_shape(w_obj):
         return SharingShape.build_potentially_wrap(w_obj.signature(), argshapes)
     return WrapShape(w_obj)
 
+@jit.unroll_safe
+def build(signature, args):
+    assert len(args) != 0
+    assert signature.numargs == len(args)
+    assert isinstance(signature, Signature)
+
+# _____________________________________________________________________
