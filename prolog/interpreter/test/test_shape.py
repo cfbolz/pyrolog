@@ -17,13 +17,12 @@ def test_instorage():
 
 def test_sharing():
     sig = signature.Signature.getsignature("f", 2)
-    for b in [True, False]:
-        s = shape.SharingShape(sig, [
-            shape.WrapShape(term.Callable.build("a")),
-            shape.InStorageShape(1)
-        ], needs_reshaping=b)
-        assert s.resolve_at(0, [1, 2]).name() == "a"
-        assert s.resolve_at(1, [1, 2]) == 2
+    s = shape.SharingShape(sig, [
+        shape.WrapShape(term.Callable.build("a")),
+        shape.InStorageShape(1)
+    ])
+    assert s.resolve_at(0, [1, 2]).name() == "a"
+    assert s.resolve_at(1, [1, 2]) == 2
 
     w_obj = s.resolve([1, 2])
     assert isinstance(w_obj, shape.ShapedCallable)
@@ -62,7 +61,7 @@ def test_reshape():
         shape.WrapShape(term.Callable.build("a")),
         shape.InStorageShape(0),
         shape.InStorageShape(1)
-    ], False)
+    ])
     rs = shape.Reshaper([5, 2], s)
     w_obj = rs.reshape(["a", "b", "c", "d", "e", "f"])
     assert w_obj.argument_at(1) == "f"
@@ -74,7 +73,7 @@ def test_compute_new_shape():
         shape.InStorageShape(5),
         shape.InStorageShape(2),
         shape.InStorageShape(2),
-    ], False)
+    ])
     memo = {}
     ns = s._compute_new_shape(memo)
     assert s.children[0] is ns.children[0]
@@ -83,13 +82,28 @@ def test_compute_new_shape():
     assert ns.children[3].num == 1
     assert memo == {5:0, 2:1}
 
+def test_compute_new_shape_reuses():
+    s = shape.WrapShape(term.Callable.build("a"))
+    ns = s._compute_new_shape({})
+    assert ns is s
+    s = shape.InStorageShape(0)
+    assert s._compute_new_shape({}) is s
+    s = shape.SharingShape("f", [
+        shape.WrapShape(term.Callable.build("a")),
+        shape.InStorageShape(0),
+        shape.InStorageShape(1),
+        shape.InStorageShape(2),
+    ])
+    assert s._compute_new_shape({}) is s
+
+
 def test_make_reshaper():
     s = shape.SharingShape("f", [
         shape.WrapShape(term.Callable.build("a")),
         shape.InStorageShape(5),
         shape.InStorageShape(2),
         shape.InStorageShape(2),
-    ], False)
+    ])
     rs = shape.make_reshaper(s)
     ns = rs.newshape
     assert s.children[0] is ns.children[0]

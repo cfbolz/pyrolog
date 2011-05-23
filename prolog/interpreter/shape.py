@@ -43,14 +43,11 @@ class InStorageShape(Shape):
         return InStorageShape(num)
 
 class SharingShape(Shape):
-    def __init__(self, signature, children, needs_reshaping=True):
+    def __init__(self, signature, children):
         Shape.__init__(self)
         self.signature = signature
         self.children = children
-        if needs_reshaping:
-            self.reshaper = make_reshaper(self)
-        else:
-            self.reshaper = None
+        self.reshaper = make_reshaper(self)
 
     def resolve(self, storage):
         if self.reshaper is not None:
@@ -74,15 +71,21 @@ class SharingShape(Shape):
 
     def _compute_new_shape(self, memo):
         children = [None] * len(self.children)
+        reuse = True
         for i in range(len(self.children)):
             child = self.children[i]._compute_new_shape(memo)
             children[i] = child
-        return SharingShape(self.signature, children, False)
+            reuse = reuse and child is self.children[i]
+        if reuse:
+            return self
+        return SharingShape(self.signature, children)
 
 
 def make_reshaper(shape):
     memo = {}
     newshape = shape._compute_new_shape(memo)
+    if newshape is shape:
+        return None
     storage_shaper = [-1] * len(memo)
     for key, value in memo.iteritems():
         storage_shaper[value] = key
