@@ -19,6 +19,7 @@ class Shape(object):
         raise NotImplementedError("abstract base class")
 
 class WrapShape(Shape):
+    _immutable_fields_ = ["w_obj"]
     def __init__(self, w_obj):
         Shape.__init__(self)
         self.w_obj = w_obj
@@ -30,6 +31,7 @@ class WrapShape(Shape):
         return self
 
 class InStorageShape(Shape):
+    _immutable_fields_ = ["num"]
     def __init__(self, num):
         Shape.__init__(self)
         self.num = num
@@ -44,6 +46,7 @@ class InStorageShape(Shape):
         return InStorageShape(num)
 
 class SharingShape(Shape):
+    _immutable_fields_ = ["signature", "children[*]", "reshaper"]
     def __init__(self, signature, children):
         Shape.__init__(self)
         self.signature = signature
@@ -93,6 +96,7 @@ def make_reshaper(shape):
     return Reshaper(storage_shaper, newshape)
 
 class Reshaper(object):
+    _immutable_fields_ = ["newshape", "storage_shaper[*]"]
     def __init__(self, storage_shaper, newshape):
         assert newshape.reshaper is None
         self.newshape = newshape
@@ -108,6 +112,7 @@ class Reshaper(object):
 # _____________________________________________________________________
 
 class ShapedCallable(Callable):
+    _immutable_fields_ = ["shape", "storage[*]"]
     def __init__(self, shape, storage):
         assert isinstance(shape, SharingShape)
         self.shape = shape
