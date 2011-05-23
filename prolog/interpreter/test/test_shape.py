@@ -111,3 +111,26 @@ def test_make_reshaper():
     assert ns.children[2].num == 1
     assert ns.children[3].num == 1
     assert rs.storage_shaper == [5, 2]
+
+def test_shaped_callable_unify():
+    from prolog.interpreter import heap
+    a = term.Callable.build("a")
+    b = term.Callable.build("b")
+    c = term.Callable.build("c")
+    sig = term.Callable.build("f", [None, None, None, None]).signature()
+
+    s = shape.SharingShape(sig, [
+        shape.WrapShape(a),
+        shape.InStorageShape(0),
+        shape.InStorageShape(1),
+        shape.InStorageShape(2),
+    ])
+    h = heap.Heap()
+    X = h.newvar()
+    c1 = shape.ShapedCallable(s, [a, b, c])
+    c1.argument_at = None
+    c2 = shape.ShapedCallable(s, [X, b, c])
+    c2.argument_at = None
+    c1.unify(c2, h)
+    assert X.binding is a
+

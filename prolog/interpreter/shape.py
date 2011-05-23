@@ -1,3 +1,4 @@
+from pypy.rlib.objectmodel import specialize
 from prolog.interpreter.term import Callable
 # a Callable implementation that tries to save memory
 
@@ -121,6 +122,14 @@ class ShapedCallable(Callable):
     def argument_count(self):
         return self.shape.signature.numargs
 
+    @specialize.arg(3)
+    def basic_unify(self, other, heap, occurs_check=False):
+        if (isinstance(other, ShapedCallable) and
+                self.shape is other.shape):
+            for i in range(len(self.storage)):
+                self.storage[i].unify(other.storage[i], heap, occurs_check)
+            return
+        return Callable.basic_unify(self, other, heap, occurs_check)
 # _____________________________________________________________________
 
 def term_with_numbered_vars_to_shape(w_obj):
