@@ -52,7 +52,7 @@ class InStorageShape(Shape):
         num = memo.setdefault(self.num, len(memo))
         if num == self.num:
             return self
-        return InStorageShape(num)
+        return InStorageShape.build(num)
 
 def shape_eq((sig1, children1), (sig2, children2)):
     return sig1 is sig2 and children1 == children2
@@ -99,7 +99,7 @@ class SharingShape(Shape):
         for i in range(len(children)):
             child = children[i]
             if not isinstance(child, WrapShape):
-                return SharingShape(signature, children)
+                return SharingShape.build(signature, children)
             unwrapped[i] = child.w_obj
         return WrapShape(Callable.build(signature.name, unwrapped,
                                         signature=signature))
@@ -113,7 +113,7 @@ class SharingShape(Shape):
             reuse = reuse and child is self.children[i]
         if reuse:
             return self
-        return SharingShape(self.signature, children)
+        return SharingShape.build(self.signature, children)
 
 
 def make_reshaper(shape):
@@ -171,7 +171,7 @@ class ShapedCallable(Callable):
 def term_with_numbered_vars_to_shape(w_obj):
     from prolog.interpreter import term
     if isinstance(w_obj, term.NumberedVar):
-        return InStorageShape(w_obj.num)
+        return InStorageShape.build(w_obj.num)
     elif isinstance(w_obj, Callable):
         argshapes = [term_with_numbered_vars_to_shape(w_arg)
                         for w_arg in w_obj.arguments()]
