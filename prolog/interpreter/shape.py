@@ -30,6 +30,9 @@ class WrapShape(Shape):
     def _compute_new_shape(self, memo):
         return self
 
+    def __repr__(self):
+        return "%s(%r)" % (self.__class__.__name__, self.w_obj)
+
 class InStorageShape(Shape):
     _immutable_fields_ = ["num"]
     _cache = {}
@@ -53,6 +56,9 @@ class InStorageShape(Shape):
         if num == self.num:
             return self
         return InStorageShape.build(num)
+
+    def __repr__(self):
+        return "%s(%r)" % (self.__class__.__name__, self.num)
 
 def shape_eq((sig1, children1), (sig2, children2)):
     return sig1 is sig2 and children1 == children2
@@ -122,6 +128,8 @@ class SharingShape(Shape):
             return self
         return SharingShape.build(self.signature, children)
 
+    def __repr__(self):
+        return "%s(%r, %r)" % (self.__class__.__name__, self.signature, self.children)
 
 def make_reshaper(shape):
     memo = {}
