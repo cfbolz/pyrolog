@@ -18,6 +18,8 @@ class Shape(object):
     def _compute_new_shape(self, memo):
         raise NotImplementedError("abstract base class")
 
+    from prolog.interpreter.continuation import _dot
+
 class WrapShape(Shape):
     _immutable_fields_ = ["w_obj"]
     def __init__(self, w_obj):
@@ -130,6 +132,17 @@ class SharingShape(Shape):
 
     def __repr__(self):
         return "%s(%r, %r)" % (self.__class__.__name__, self.signature, self.children)
+
+    def _dot(self, seen):
+        if self in seen:
+            return
+        for line in Shape._dot(self, seen):
+            yield line
+        for i, child in enumerate(self.children):
+            yield "%s -> %s [label=%s]" % (id(self), id(child), i)
+            for line in child._dot(seen):
+                yield line
+
 
 def make_reshaper(shape):
     memo = {}
