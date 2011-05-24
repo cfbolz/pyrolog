@@ -1,4 +1,4 @@
-from pypy.rlib import jit, objectmodel
+from pypy.rlib import jit, objectmodel, debug
 from prolog.interpreter.term import Callable
 # a Callable implementation that tries to save memory
 
@@ -69,10 +69,13 @@ class SharingShape(Shape):
     _immutable_fields_ = ["signature", "children[*]", "reshaper"]
     _cache = objectmodel.r_dict(shape_eq, shape_hash)
 
+    transitions = None
+
     def __init__(self, signature, children):
         Shape.__init__(self)
         self.signature = signature
         self.children = children
+        children = debug.make_sure_not_resized(children)
         self.reshaper = make_reshaper(self)
 
     @staticmethod
@@ -83,6 +86,10 @@ class SharingShape(Shape):
             SharingShape._cache[key] = res = SharingShape(signature, children)
         return res
 
+    def _get_transition(self, i, shape):
+        if self.transitions is None:
+            return None
+        return self.transitions.get((i, shape))
 
     def resolve(self, storage):
         if self.reshaper is not None:
@@ -131,6 +138,7 @@ class Reshaper(object):
     def __init__(self, storage_shaper, newshape):
         assert newshape.reshaper is None
         self.newshape = newshape
+        storage_shaper = debug.make_sure_not_resized(storage_shaper)
         self.storage_shaper = storage_shaper
 
     def reshape(self, storage):
@@ -147,6 +155,7 @@ class ShapedCallable(Callable):
     def __init__(self, shape, storage):
         assert isinstance(shape, SharingShape)
         self.shape = shape
+        storage = debug.make_sure_not_resized(storage)
         self.storage = storage
 
     def signature(self):
@@ -179,9 +188,26 @@ def term_with_numbered_vars_to_shape(w_obj):
     return WrapShape(w_obj)
 
 @jit.unroll_safe
-def build(signature, args):
+def build(shape, args):
     assert len(args) != 0
-    assert signature.numargs == len(args)
-    assert isinstance(signature, Signature)
+    assert len(shape.children) == len(args)
+    storage = []
+    shapeargs = []
+    storeindex = 0
+    for i in range(len(args)):
+        arg = args[i]
+        if isinstance(arg, ShapedCallable):
+            newshape = shape._get_transition(storeindex, arg.shape)
+            if newshape:
+                storeindex += len(arg.storage)
+                shapeargs += arg.storage
+                shape = newshape
+                continue
+        shapeargs.append(InStorageShape.build(storeindex))
+        storeindex += 1
+        shapeargs.append(arg)
+    return ShapedCallable(shape, shapeargs)
+
 
 # _____________________________________________________________________
+

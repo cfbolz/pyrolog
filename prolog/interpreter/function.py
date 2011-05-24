@@ -15,7 +15,7 @@ class Rule(object):
     unrolling_attrs = unroll.unrolling_iterable(_attrs_)
     
     def __init__(self, head, body, module, next = None):
-        from prolog.interpreter import helper
+        from prolog.interpreter import helper, shape
         assert isinstance(head, Callable)
         memo = EnumerationMemo()
         self.head = h = head.enumerate_vars(memo)
@@ -26,6 +26,7 @@ class Rule(object):
         if body is not None:
             body = helper.ensure_callable(body)
             self.body = body.enumerate_vars(memo)
+            self.body_shape = shape.term_with_numbered_vars_to_shape(self.body)
         else:
             self.body = None
         self.size_env = memo.size()

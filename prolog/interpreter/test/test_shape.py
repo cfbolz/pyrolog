@@ -155,3 +155,45 @@ def test_shaped_callable_unify():
     c1.unify(c2, h)
     assert X.binding is a
 
+
+def test_build_callable_shape():
+    fsig = signature.Signature("f", 2)
+    f0 = shape.SharingShape(fsig, [
+        shape.InStorageShape.build(0),
+        shape.InStorageShape.build(1),
+    ])
+    gsig = signature.Signature("g", 2)
+    g0 = shape.SharingShape(gsig, [
+        shape.InStorageShape.build(0),
+        shape.InStorageShape.build(1),
+    ])
+
+    f1 = shape.SharingShape(fsig, [
+        g0,
+        shape.InStorageShape.build(2)
+    ])
+    f0.transitions = {(0, g0): f1}
+
+    hsig = signature.Signature("h", 1)
+    h0 = shape.SharingShape(hsig, [
+        shape.InStorageShape.build(0),
+    ])
+
+    h1 = shape.SharingShape(hsig, [
+        shape.InStorageShape.build(2),
+    ])
+
+    f2 = shape.SharingShape(fsig, [
+        g0,
+        h1
+    ])
+
+    f1.transitions = {(2, h0): f2}
+
+    res = shape.build(f0, [
+        shape.ShapedCallable(g0, [1, 2]),
+        shape.ShapedCallable(h0, [3]),
+    ])
+    assert res.storage == [1, 2, 3]
+    assert res.shape is f2
+
