@@ -6,6 +6,7 @@ from prolog.interpreter.continuation import Heap, Engine
 from prolog.interpreter.helper import is_term
 from prolog.interpreter.stream import PrologStream, PrologInputStream, \
 PrologOutputStream
+from prolog.interpreter.test.tool import assert_false
 
 def test_atom():
     a = Callable.build("hallo")
@@ -118,10 +119,11 @@ def test_run():
     c2 = Callable.build(":-", [Callable.build("f", [X, Y]),
                            Callable.build("f", [Y, X])])
     e.add_rule(c2)
-    X = e.heap.newvar()
+    hp = Heap()
+    X = hp.newvar()
     c3 = Callable.build("f", [Callable.build("b"), X])
     e.run(c3, e.modulewrapper.user_module)
-    assert X.dereference(e.heap).name()== "b"
+    assert X.dereference(hp).name()== "b"
     query = Callable.build("f", [Callable.build("b"), Callable.build("a")]) 
     e.run(query, e.modulewrapper.user_module)
 
@@ -174,3 +176,6 @@ def test_cyclic_term():
     t.unify(t2, h) # does not crash
     X.unify(Y, h) # does not crash
 
+def test_not_unifiable():
+    assert_false("\+ X \= Y, X == Y.")
+    assert_false("(X \= Y; true), X == Y.")

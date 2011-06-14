@@ -7,13 +7,13 @@ from prolog.interpreter import continuation
 from prolog.interpreter.helper import is_term, unwrap_predicate_indicator
 from prolog.interpreter.signature import Signature
 
-meta_args = "0123456789:?+-"
+meta_args = list("0123456789:?+-")
 libsig = Signature.getsignature("library", 1)
 andsig = Signature.getsignature(",", 2)
 
 @expose_builtin("module", unwrap_spec=["atom", "list"])
 def impl_module(engine, heap, name, exports):
-    engine.add_module(name, exports)
+    engine.modulewrapper.add_module(name, exports)
 
 def handle_use_module_with_library(engine, heap, module, path, imports=None):
     import os
@@ -25,13 +25,17 @@ def handle_use_module_with_library(engine, heap, module, path, imports=None):
         if isinstance(arg, Var) or not isinstance(arg, Atom): # XXX throw different errors
             error.throw_instantiation_error()
         modulename = arg.name()
+        assert modulename is not None
         for libpath in engine.modulewrapper.libs:
             temppath = os.path.join(libpath, modulename)
             try:
+                assert isinstance(temppath, str)
                 fd = get_filehandle(temppath)
             except OSError:
                 continue
+                assert 0, "unreachable"
             else:
+                assert isinstance(fd, int)
                 os.close(fd) # cleanup
                 newpath = Atom(temppath)
                 break
@@ -99,36 +103,32 @@ def impl_module_prefixing(engine, heap, modulename,
 
 @expose_builtin("add_library_dir", unwrap_spec=["atom"])
 def impl_add_library_dir(engine, heap, path):
-    from os.path import isdir, abspath, isabs
+    from os.path import isdir, abspath
+    assert path is not None
     if not isdir(path):
         error.throw_existence_error("source_sink", Callable.build(path))
     abspath = abspath(path)
+    libs = engine.modulewrapper.libs
+    for lib in libs:
+        if lib == abspath:  
+            return
     engine.modulewrapper.libs.append(abspath)
 
-class LibraryDirContinuation(continuation.ChoiceContinuation):
-    def __init__(self, engine, scont, fcont, heap, pathvar):
-        continuation.ChoiceContinuation.__init__(self, engine, scont)
-        self.undoheap = heap
-        self.orig_fcont = fcont
-        self.pathvar = pathvar
-        self.keycount = 0
-        self.engine = engine
-        self.max = len(engine.modulewrapper.libs)
-
-    def activate(self, fcont, heap):
-        if self.keycount < self.max:
-            fcont, heap = self.prepare_more_solutions(fcont, heap)
-            self.pathvar.unify(Callable.build(self.engine.modulewrapper.libs[self.keycount]), heap)
-            self.keycount += 1
-            return self.nextcont, fcont, heap
-        raise error.UnificationFailed()
+@continuation.make_failure_continuation
+def continue_librarydir(Choice, engine, scont, fcont, heap, pathvar, keycount):
+    if keycount < len(engine.modulewrapper.libs) - 1:
+        fcont = Choice(engine, scont, fcont, heap, pathvar, keycount + 1)
+        heap = heap.branch()
+    pathvar.unify(Callable.build(engine.modulewrapper.libs[keycount]), heap)
+    return scont, fcont, heap
 
 @expose_builtin("library_directory", unwrap_spec=["obj"],
         handles_continuation=True)
 def impl_library_directory(engine, heap, directory, scont, fcont):
     if isinstance(directory, Var):
-        libcont = LibraryDirContinuation(engine, scont, fcont, heap, directory)
-        return libcont, fcont, heap
+        if not engine.modulewrapper.libs:
+            raise error.UnificationFailed
+        return continue_librarydir(engine, scont, fcont, heap, directory, 0)
     elif isinstance(directory, Atom):
         for lib in engine.modulewrapper.libs:
             if lib == directory.name():
@@ -165,35 +165,24 @@ def unwrap_meta_arguments(predicate):
     for arg in args:
         if isinstance(arg, Var):
             error.throw_instantiation_error()
+            assert 0
         elif isinstance(arg, Atom) and arg.name() in meta_args:
             val = arg.name()
-            arglist.append(val)
         elif isinstance(arg, Number) and 0 <= arg.num <= 9:
             val = str(arg.num)
-            arglist.append(val)
         else:
             error.throw_domain_error("expected one of 0..9, :, ?, +, -", arg)
-    return arglist
+            assert 0
+        arglist.append(val[0])
+    return "".join(arglist)
 
-class CurrentModuleContinuation(continuation.ChoiceContinuation):
-    def __init__(self, engine, scont, fcont, heap, modvar):
-        continuation.ChoiceContinuation.__init__(self, engine, scont)
-        self.undoheap = heap
-        self.orig_fcont = fcont
-        self.modvar = modvar
-        self.engine = engine
-        self.modcount = 0
-        self.mods = [val.nameatom for val in 
-                self.engine.modulewrapper.modules.values()]
-        self.nummods = len(self.engine.modulewrapper.modules)
-
-    def activate(self, fcont, heap):
-        if self.modcount < self.nummods:
-            fcont, heap = self.prepare_more_solutions(fcont, heap)
-            self.modvar.unify(self.mods[self.modcount], heap)
-            self.modcount += 1
-            return self.nextcont, fcont, heap
-        raise error.UnificationFailed()
+@continuation.make_failure_continuation
+def continue_current_module(Choice, engine, scont, fcont, heap, allmods, i, modvar):
+    if i < len(allmods) - 1:
+        fcont = Choice(engine, scont, fcont, heap, allmods, i + 1, modvar)
+        heap = heap.branch()
+    modvar.unify(allmods[i], heap)
+    return scont, fcont, heap
 
 @expose_builtin("current_module", unwrap_spec=["obj"],
         handles_continuation=True)
@@ -204,7 +193,9 @@ def impl_current_module(engine, heap, module, scont, fcont):
         except KeyError:
             raise error.UnificationFailed()
     elif isinstance(module, Var):
-        scont = CurrentModuleContinuation(engine, scont, fcont, heap, module)
+        mods = [val.nameatom for val in
+                    engine.modulewrapper.modules.values()]
+        return continue_current_module(engine, scont, fcont, heap, mods, 0, module)
     else:
         raise error.UnificationFailed()
     return scont, fcont, heap

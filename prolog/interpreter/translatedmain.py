@@ -1,28 +1,37 @@
 import os, sys
 from pypy.rlib.parsing.parsing import ParseError
 from pypy.rlib.parsing.deterministic import LexerError
-from prolog.interpreter.interactive import helptext, StopItNow, \
-ContinueContinuation
 from prolog.interpreter.parsing import parse_file, get_query_and_vars
 from prolog.interpreter.parsing import get_engine
-from prolog.interpreter.continuation import Continuation, Engine, DoneContinuation
+from prolog.interpreter.continuation import Continuation, Engine, \
+        DoneSuccessContinuation, DoneFailureContinuation
 from prolog.interpreter import error, term
 import prolog.interpreter.term
 prolog.interpreter.term.DEBUG = False
 
+helptext = """
+ ';':   redo
+ 'p':   print
+ 'h':   help
+ 
+"""
+
+class StopItNow(Exception):
+    pass
+
 class ContinueContinuation(Continuation):
     def __init__(self, engine, var_to_pos, write):
-        Continuation.__init__(self, engine, DoneContinuation(engine))
+        Continuation.__init__(self, engine, DoneSuccessContinuation(engine))
         self.var_to_pos = var_to_pos
         self.write = write
 
     def activate(self, fcont, heap):
         self.write("yes\n")
-        var_representation(self.var_to_pos, self.engine, self.write)
+        var_representation(self.var_to_pos, self.engine, self.write, heap)
         while 1:
-            if isinstance(fcont, DoneContinuation):
+            if isinstance(fcont, DoneFailureContinuation):
                 self.write("\n")
-                return DoneContinuation(None), fcont, heap
+                return DoneSuccessContinuation(None), fcont, heap
             res = getch()
             if res in "\r\x04\n":
                 self.write("\n")
@@ -32,17 +41,17 @@ class ContinueContinuation(Continuation):
             elif res in "h?":
                 self.write(helptext)
             elif res in "p":
-                var_representation(self.var_to_pos, self.engine, self.write)
+                var_representation(self.var_to_pos, self.engine, self.write, heap)
             else:
                 self.write('unknown action. press "h" for help\n')
 
-def var_representation(var_to_pos, engine, write):
+def var_representation(var_to_pos, engine, write, heap):
     from prolog.builtin import formatting
     f = formatting.TermFormatter(engine, quoted=True, max_depth=20)
     for var, real_var in var_to_pos.iteritems():
         if var.startswith("_"):
             continue
-        value = real_var.getvalue(engine.heap)
+        value = real_var.getvalue(heap)
         val = f.format(value)
         if isinstance(value, term.AttVar):
             write("%s\n" % val)

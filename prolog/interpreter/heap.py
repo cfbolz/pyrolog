@@ -15,11 +15,21 @@ class Heap(object):
 
     # _____________________________________________________
     # interface that term.py uses
+    def _find_not_discarded(self):
+        while self is not None and self.discarded:
+            self = self.prev
+        return self
 
     def add_trail_atts(self, attvar, attr_name):
         if self._is_created_in_self(attvar):
             return
-        self.trail_attrs.append((attvar, attr_name, attvar.atts.get(attr_name, None)))
+        value, index = attvar.get_attribute(attr_name)
+        self.trail_attrs.append((attvar, index, value))
+
+    def trail_new_attr(self, attvar, index, value):
+        if self._is_created_in_self(attvar):
+            return
+        self.trail_attrs.append((attvar, index, value))
 
     def add_trail(self, var):
         """ Remember the current state of a variable to be able to backtrack it
@@ -28,7 +38,8 @@ class Heap(object):
         # trail it (variable shunting)
         if self._is_created_in_self(var):
             return
-        i = jit.hint(self.i, promote=True)
+        #i = jit.hint(self.i, promote=True)
+        i = self.i
         if i >= len(self.trail_var):
             self._double_size()
         self.trail_var[i] = var
@@ -38,11 +49,6 @@ class Heap(object):
     def add_hook(self, attvar):
         self.hooks.add_hook(attvar)
 
-    def _find_not_discarded(self):
-        while self is not None and self.discarded:
-            self = self.prev
-        return self
-
     def _is_created_in_self(self, var):
         created_in = var.created_after_choice_point
         if created_in is not None and created_in.discarded:
@@ -50,16 +56,9 @@ class Heap(object):
             var.created_after_choice_point = created_in
         return self is created_in
 
-    @jit.unroll_safe
     def _double_size(self):
-        trail_var = [None] * (len(self.trail_var) * 2)
-        l = len(trail_var)
-        trail_binding = [None] * l
-        for i in range(self.i):
-            trail_var[i] = self.trail_var[i]
-            trail_binding[i] = self.trail_binding[i]
-        self.trail_var = trail_var
-        self.trail_binding = trail_binding
+        self.trail_var = self.trail_var + [None] * len(self.trail_var)
+        self.trail_binding = self.trail_binding + [None] * len(self.trail_var)
 
     def newvar(self):
         """ Make a new variable. Should return a Var instance, possibly with
@@ -99,7 +98,6 @@ class Heap(object):
 
     @jit.unroll_safe
     def _revert(self):
-        assert not self.discarded
         for i in range(self.i-1, -1, -1):
             v = self.trail_var[i]
             assert v is not None
@@ -108,15 +106,12 @@ class Heap(object):
             self.trail_binding[i] = None
         self.i = 0
 
-        for attvar, name, value in self.trail_attrs:
-            if value is None:
-                del attvar.atts[name]
-            else:
-                attvar.atts[name] = value
+        for attvar, index, value in self.trail_attrs:
+            attvar.reset_field(index, value)
+
         self.trail_attrs = []
         self.hooks.clear()
 
-    @jit.unroll_safe
     def discard(self, current_heap):
         """ Remove a heap that is no longer needed (usually due to a cut) from
         a chain of frames. """
@@ -138,6 +133,7 @@ class Heap(object):
                     targetpos += 1
             current_heap.i = targetpos
 
+            
             trail_attrs = []
             targetpos = 0
             for var, attr, value in current_heap.trail_attrs:
@@ -158,17 +154,13 @@ class Heap(object):
                 current_heap.add_trail(var)
                 var.binding = currbinding
 
-            for attvar, name, value in self.trail_attrs:
-                current_val = attvar.atts[name]
-                attvar.atts[name] = value
-                current_heap.add_trail_atts(attvar, name)
-                attvar.atts[name] = current_val
+            for tup in self.trail_attrs:
+                current_heap.trail_attrs.append(tup)
 
             current_heap.prev = self.prev
             self.trail_var = None
             self.trail_binding = None
             self.i = -1
-            # make self.prev point to the heap that replaced it
             self.prev = current_heap
         else:
             return self
@@ -202,6 +194,16 @@ class HookChain(object):
 
     def clear(self):
         self.__init__()
+
+    def _size(self):
+        if self.last is None:
+            return 0
+        current = self.last
+        size = 0
+        while current is not None:
+            current = current.next
+            size += 1
+        return size
 
 class HookCell(object):
     def __init__(self, hook):

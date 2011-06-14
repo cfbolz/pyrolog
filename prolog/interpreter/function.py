@@ -119,14 +119,12 @@ class Rule(object):
 
 
 class Function(object):
-    def __init__(self, firstrule=None):
+    _immutable_fields_ = ["rulechain?", "meta_args?"]
+    def __init__(self):
         self.meta_args = None
-        if firstrule is None:
-            self.rulechain = self.last = None
-        else:
-            self.rulechain = Rule(firstrule)
-            self.last = self.rulechain
+        self.rulechain = self.last = None
 
+    @jit.unroll_safe
     def add_meta_prefixes(self, query, current_module):
         if not self.meta_args:
             return query

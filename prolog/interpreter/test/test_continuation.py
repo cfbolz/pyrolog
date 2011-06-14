@@ -10,13 +10,12 @@ from prolog.interpreter.test.tool import collect_all, assert_true, assert_false
 
 def test_driver():
     order = []
-    done = DoneContinuation(None)
+    done = DoneFailureContinuation(None)
     class FakeC(object):
         rule = None
         def __init__(self, next, val):
             self.next = next
             self.val = val
-            self.candiscard = lambda : True
 
         def is_done(self):
             return False
@@ -33,7 +32,7 @@ def test_driver():
         def discard(self):
             pass
 
-    c5 = FakeC(FakeC(FakeC(FakeC(FakeC(done, 1), 2), 3), 4), 5)
+    c5 = FakeC(FakeC(FakeC(FakeC(FakeC(DoneSuccessContinuation(None), 1), 2), 3), 4), 5)
     driver(c5, done, Heap())
     assert order == [5, 4, 3, 2, 1]
 
@@ -45,51 +44,45 @@ def test_driver():
 def test_failure_continuation():
     order = []
     h = Heap()
-    done = DoneContinuation(None)
+    done = DoneFailureContinuation(None)
     class FakeC(object):
         rule = None
         def __init__(self, next, val):
             self.next = next
             self.val = val
-            self.candiscard = lambda : True
-        
+
         def is_done(self):
             return False
-        def discard(self):
-            pass
         def activate(self, fcont, heap):
             if self.val == -1:
                 raise error.UnificationFailed
             order.append(self.val)
             return self.next, fcont, heap
 
-        def fail(self, heap):
-            order.append("fail")
-            return self, None, heap
-
-    class FakeF(ChoiceContinuation):
+    class FakeF(FailureContinuation):
         def __init__(self, next, count):
             self.next = next
             self.count = count
             self.engine = FakeE()
 
-        def activate(self, fcont, heap):
+        def fail(self, heap):
             if self.count:
-                fcont, heap = self.prepare_more_solutions(fcont, heap)
+                fcont = FakeF(self.next, self.count - 1)
+                heap = heap.branch()
+            else:
+                fcont = DoneFailureContinuation(None)
             res = self.count
             order.append(res)
             self.count -= 1
             return self.next, fcont, heap
 
     class FakeE(object):
-        @staticmethod
-        def continue_(*args):
-            return args
+        pass
 
-    ca = FakeF(FakeC(FakeC(done, -1), 'c'), 10)
-    driver(ca, FakeC(done, "done"), h)
+    ca = FakeF(FakeC(FakeC(DoneSuccessContinuation(None), -1), 'c'), 10)
+    py.test.raises(UnificationFailed, driver, FakeC(DoneSuccessContinuation(None), -1), ca, h)
     assert order == [10, 'c', 9, 'c', 8, 'c', 7, 'c', 6, 'c', 5, 'c', 4, 'c',
-                     3, 'c', 2, 'c', 1, 'c', 0, 'c', "fail", "done"]
+                     3, 'c', 2, 'c', 1, 'c', 0, 'c']
 
 def test_full():
     from prolog.interpreter.term import Var, Atom, Term
@@ -98,7 +91,6 @@ def test_full():
     class CollectContinuation(object):
         rule = None
         module = e.modulewrapper.user_module
-        candiscard = lambda self: True
         def is_done(self):
             return False
         def discard(self):
@@ -123,34 +115,17 @@ def test_full():
     assert all[3].argument_at(0).argument_at(0).name()== "y"
     assert all[3].argument_at(1).argument_at(0).name()== "b"
 
-def test_cut_can_be_discarded():
-    cont = DoneContinuation(None)
-    assert not cont.candiscard()
-    cont = RuleContinuation(None, None, cont, None, None)
-    assert not cont.candiscard()
-    cont = CutScopeNotifier(None, None)
-    assert cont.candiscard()
-    cont = RuleContinuation(None, None, cont, None, None)
-    assert cont.candiscard()
-
-    cont = CutScopeNotifier(None, None)
-    cont.discard()
-    assert not cont.candiscard()
-    cont = RuleContinuation(None, None, cont, None, None)
-    assert not cont.candiscard()
-
 
 def test_cut_not_reached():
     class CheckContinuation(Continuation):
         def __init__(self):
             self.nextcont = None
-            self._candiscard = True
             self.module = e.modulewrapper.user_module
         def is_done(self):
             return False
         def activate(self, fcont, heap):
-            assert fcont.nextcont.is_done()
-            return DoneContinuation(e), DoneContinuation(e), heap
+            assert fcont.is_done()
+            return DoneSuccessContinuation(e), DoneFailureContinuation(e), heap
     e = get_engine("""
         g(X, Y) :- X > 0, !, Y = a.
         g(_, b).
@@ -168,7 +143,7 @@ def test_trivial():
     m = e.modulewrapper
     t, vars = get_query_and_vars("f(X).")
     e.run(t, m.user_module)
-    assert vars['X'].dereference(e.heap).name()== "a"
+    assert vars['X'].dereference(None).name()== "a"
 
 def test_and():
     e = get_engine("""
@@ -181,7 +156,7 @@ def test_and():
     e.run(parse_query_term("f(a, c)."), m.user_module)
     t, vars = get_query_and_vars("f(X, c).")
     e.run(t, m.user_module)
-    assert vars['X'].dereference(e.heap).name()== "a"
+    assert vars['X'].dereference(None).name()== "a"
 
 def test_and_long():
     e = get_engine("""
@@ -214,7 +189,7 @@ def test_numeral():
     e.run(parse_query_term("num(succ(0))."), m.user_module)
     t, vars = get_query_and_vars("num(X).")
     e.run(t, m.user_module)
-    assert vars['X'].dereference(e.heap).num == 0
+    assert vars['X'].dereference(None).num == 0
     e.run(parse_query_term("add(0, 0, 0)."), m.user_module)
     py.test.raises(UnificationFailed, e.run, parse_query_term("""
         add(0, 0, succ(0))."""), m.user_module)
@@ -236,7 +211,7 @@ def test_or_backtrack():
         """)
     t, vars = get_query_and_vars("f(a, b, Z).")
     e.run(t, e.modulewrapper.user_module)
-    assert vars['Z'].dereference(e.heap).name()== "a"
+    assert vars['Z'].dereference(None).name()== "a"
     f = collect_all(e, "X = 1; X = 2.")
     assert len(f) == 2
 
@@ -338,7 +313,7 @@ def test_metainterp():
 # Trace tests
 def test_trace_wrapper():
     engine = get_engine("")
-    done = DoneContinuation(engine)
+    done = DoneSuccessContinuation(engine)
     order = []
     class FakeC(object):
         rule = None

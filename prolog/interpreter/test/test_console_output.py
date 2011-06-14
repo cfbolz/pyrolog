@@ -93,7 +93,6 @@ class TestInteraction:
         child.expect("A = abc")
         child.expect("B = ''")
         child.sendline(";")
-        child.expect("no")
         child.expect(">?- ")
 
     def test_simple_trace(self):

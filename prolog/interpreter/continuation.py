@@ -50,6 +50,7 @@ jitdriver = jit.JitDriver(
 def driver(scont, fcont, heap):
     rule = None
     while not scont.is_done():
+        #view(scont=scont, fcont=fcont, heap=heap)
         if isinstance(scont, RuleContinuation) and scont._rule.body is not None:
             rule = scont._rule
             jitdriver.can_enter_jit(rule=rule, scont=scont, fcont=fcont,
@@ -57,20 +58,20 @@ def driver(scont, fcont, heap):
         try:
             jitdriver.jit_merge_point(rule=rule, scont=scont, fcont=fcont,
                                       heap=heap)
+            oldscont = scont
             scont, fcont, heap  = scont.activate(fcont, heap)
+            assert heap is not None
         except error.UnificationFailed:
             if not we_are_translated():
                 if fcont.is_done():
                     raise
-            if scont.candiscard():
-                scont.discard()
             scont, fcont, heap = fcont.fail(heap)
         except error.CatchableError, e:
             scont, fcont, heap = scont.engine.throw(e.term, scont, fcont, heap)
         else:
             scont, fcont, heap = _process_hooks(scont, fcont, heap)
+    assert isinstance(scont, DoneSuccessContinuation)
 
-    assert isinstance(scont, DoneContinuation) or isinstance(scont, TraceDoneContinuation)
     if scont.failed:
         raise error.UnificationFailed
 
@@ -82,7 +83,12 @@ def _process_hooks(scont, fcont, heap):
         heap.hooks.clear()
         while hookcell:
             hook = hookcell.hook
-            for module, val in hook.atts.iteritems():
+            attmap = jit.hint(hook.attmap, promote=True)
+            for i in range(len(hook.value_list)):
+                val = hook.value_list[i]
+                if val is None:
+                    continue
+                module = attmap.get_attname_at_index(i)
                 query = Callable.build("attr_unify_hook", [val, hook.getvalue(heap)])
                 try:
                     mod = e.modulewrapper.get_module(module, query)
@@ -92,12 +98,11 @@ def _process_hooks(scont, fcont, heap):
                 scont, fcont, heap = e.call(query, mod, scont, fcont, heap)
                 heap.add_trail_atts(hook, module)
             hookcell = hookcell.next
-            hook.atts.clear() # remove attributes from unified attvar
+            hook.value_list = None
     return scont, fcont, heap
 
 class Engine(object):
     def __init__(self, load_system=False):
-        self.heap = Heap()
         self.parser = None
         self.operations = None
         self.modulewrapper = ModuleWrapper(self)
@@ -137,7 +142,7 @@ class Engine(object):
         if old_modname is not None:
             self.switch_module(old_modname)
 
-    @jit.purefunction_promote("0")
+    @jit.purefunction_promote('all')
     def get_builtin(self, signature):
         from prolog import builtin # for the side-effects
         return signature.get_extra("builtin")
@@ -191,12 +196,15 @@ class Engine(object):
 
     def run_query(self, query, module, continuation=None):
         assert isinstance(module, Module)
+        fcont = DoneFailureContinuation(self)
         if continuation is None:
-            continuation = DoneContinuation(self)
-        driver(*self.call(query, module, continuation, DoneContinuation(self), Heap()))
+            continuation = CutScopeNotifier(self, DoneSuccessContinuation(self), fcont)
+        driver(*self.call(query, module, continuation, fcont, Heap()))
     run = run_query
 
     def call(self, query, module, scont, fcont, heap):
+        if isinstance(query, Var):
+            query = query.dereference(heap)
         if not isinstance(query, Callable):
             if isinstance(query, Var):
                 raise error.throw_instantiation_error()
@@ -204,7 +212,7 @@ class Engine(object):
         signature = query.signature()        
         builtin = self.get_builtin(signature)
         if builtin is not None:
-            return self.continue_(BuiltinContinuation(self, module, scont, builtin, query), fcont, heap)
+            return BuiltinContinuation(self, module, scont, builtin, query), fcont, heap
 
         # do a real call
         function = self._get_function(signature, module, query)
@@ -213,12 +221,8 @@ class Engine(object):
         rulechain = startrulechain.find_applicable_rule(query)
         if rulechain is None:
             raise error.UnificationFailed
-        if self.tracing:
-            ccont = TraceUserCallContinuation(self, module, scont, query, rulechain)
-            scont = TraceContinueContinuation(self, printmessage, ccont)
-        else:
-            scont = UserCallContinuation(self, module, scont, query, rulechain)
-        return self.continue_(scont, fcont, heap)
+        scont, fcont, heap = _make_rule_conts(self, module, scont, fcont, heap, query, rulechain)
+        return scont, fcont, heap
 
     def _get_function(self, signature, module, query): 
         function = module.lookup(signature)
@@ -231,15 +235,6 @@ class Engine(object):
 
     # _____________________________________________________
     # module handling
-
-    def add_module(self, name, exports = []):
-        m = self.modulewrapper
-        mod = Module(name)
-        for export in exports:
-            mod.exports.append(Signature.getsignature(
-                    *unwrap_predicate_indicator(export)))
-        m.current_module = mod
-        m.modules[name] = mod
 
     def switch_module(self, modulename):
         m = self.modulewrapper
@@ -261,8 +256,6 @@ class Engine(object):
                 scont = scont.nextcont
                 continue
             discard_heap = scont.heap
-            if discard_heap.discarded:
-                discard_heap = discard_heap._find_not_discarded() # XXX strange thing
             heap = heap.revert_upto(discard_heap)
             try:
                 scont.catcher.unify(exc, heap)
@@ -275,31 +268,37 @@ class Engine(object):
         raise error.UncaughtError(exc)
 
 
-    @specialize.argtype(0)
-    def continue_(scont, fcont, heap):
-        if scont.is_done() or (isinstance(scont, RuleContinuation)
-                    and isinstance(scont, TraceRuleContinuation)) and scont._rule.body is not None:
-            return scont, fcont, heap
-        try:
-            return scont.activate(fcont, heap)
-        except error.UnificationFailed:
-            if not we_are_translated():
-                if fcont.is_done():
-                    raise
-            if scont.candiscard():
-                scont.discard()
-            return fcont.fail(heap)
-        except error.CatchableError, e:
-            return scont.engine.throw(e.term, scont, fcont, heap)
-
-    continue_._always_inline_ = True
-    continue_ = staticmethod(continue_)
 
     def __freeze__(self):
         return True
 
+def _make_rule_conts(engine, module, scont, fcont, heap, query, rulechain):
+    rule = jit.hint(rulechain, promote=True)
+    if rule.contains_cut:
+        scont = CutScopeNotifier.insert_scope_notifier(
+                engine, scont, fcont)
+    restchain = rule.find_next_applicable_rule(query)
+    if restchain is not None:
+        fcont = UserCallContinuation(engine, module, scont, fcont, heap, query, restchain)
+        heap = heap.branch()
+
+    scont = RuleContinuation(engine, module, scont, rule, query)
+    return scont, fcont, heap
+
 # ___________________________________________________________________
 # Continuation classes
+
+def _dot(self, seen):
+    if self in seen:
+        return
+    seen.add(self)
+    yield '%s [label="%s", shape=box]' % (id(self), repr(self)[:50])
+    for key, value in self.__dict__.iteritems():
+        if hasattr(value, "_dot"):
+            yield "%s -> %s [label=%s]" % (id(self), id(value), key)
+            for line in value._dot(seen):
+                yield line
+
 
 class Continuation(object):
     """ Represents a continuation of the Prolog computation. This can be seen
@@ -308,13 +307,6 @@ class Continuation(object):
     def __init__(self, engine, nextcont):
         self.engine = engine
         self.nextcont = nextcont
-        if nextcont is not None:
-            self._candiscard = nextcont.candiscard()
-        else:
-            self._candiscard = False
-
-    def candiscard(self):
-        return self._candiscard
 
     def activate(self, fcont, heap):
         """ Follow the continuation. heap is the heap that should be used while
@@ -328,22 +320,10 @@ class Continuation(object):
     def is_done(self):
         return False
 
-    def discard(self):
-        """ Discard the information stored in a Continuation. This will be used
-        if a SuccessContinuation will no longer be activatable, since
-        backtracking occurred. """
-        if self.nextcont is not None:
-            self.nextcont.discard()
+    def find_end_of_cut(self):
+        return self.nextcont.find_end_of_cut()
 
-    def _dot(self, seen):
-        if self in seen:
-            return
-        seen.add(self)
-        yield '%s [label="%s", shape=box]' % (id(self), repr(self)[:50])
-        if self.nextcont is not None:
-            yield "%s -> %s [label=nextcont]" % (id(self), id(self.nextcont))
-            for line in self.nextcont._dot(seen):
-                yield line
+    _dot = _dot
 
 class ContinuationWithModule(Continuation):
     """ This class represents continuations which need
@@ -353,48 +333,80 @@ class ContinuationWithModule(Continuation):
         Continuation.__init__(self, engine, nextcont)
         self.module = module
 
-def view(*objects):
+def view(*objects, **names):
     from dotviewer import graphclient
     content = ["digraph G{"]
     seen = set()
-    for obj in objects:
+    for obj in list(objects) + names.values():
         content.extend(obj._dot(seen))
+    for key, value in names.items():
+        content.append("%s -> %s" % (key, id(value)))
     content.append("}")
     p = py.test.ensuretemp("prolog").join("temp.dot")
     p.write("\n".join(content))
     graphclient.display_dot_file(str(p))
 
-class FailureContinuation(Continuation):
+
+class FailureContinuation(object):
     """ A continuation that can represent failures. It has a .fail method that
-    is called to prepare it for being used as a failure continuation.
-    
-    NB: a Continuation can be used both as a failure continuation and as a
-    success continuation."""
+    is called to figure out what should happen on a failure.
+    """
+    def __init__(self, engine, nextcont, orig_fcont, heap):
+        self.engine = engine
+        self.nextcont = nextcont
+        self.orig_fcont = orig_fcont
+        self.undoheap = heap
 
     def fail(self, heap):
-        """ Needs to be called to prepare the object as being used as a failure
-        continuation. After fail has been called, the continuation will usually
-        be activated. Particularly useful for objects that are both a regular
-        and a failure continuation, to distinguish the two cases. """
-        # returns (next cont, failure cont, heap)
+        """ Needs to be called to get the new success continuation.
+        Returns a tuple (next cont, failure cont, heap)
+        """
         raise NotImplementedError("abstract base class")
 
-    def cut(self, heap):
-        """ Cut away choice points till the next correct cut delimiter.
-        Slightly subtle. """
-        return self
+    def cut(self, upto, heap):
+        """ Cut away choice points till upto. """
+        if self is upto:
+            return
+        heap = self.undoheap.discard(heap)
+        self.orig_fcont.cut(upto, heap)
 
-class DoneContinuation(FailureContinuation):
+    def is_done(self):
+        return False
+
+    _dot = _dot
+
+def make_failure_continuation(make_func):
+    class C(FailureContinuation):
+        def __init__(self, engine, scont, fcont, heap, *state):
+            FailureContinuation.__init__(self, engine, scont, fcont, heap)
+            self.state = state
+
+        def fail(self, heap):
+            heap = heap.revert_upto(self.undoheap, discard_choicepoint=True)
+            return make_func(C, self.engine, self.nextcont, self.orig_fcont,
+                             heap, *self.state)
+    C.__name__ = make_func.__name__ + "FailureContinuation"
+    def make_func_wrapper(*args):
+        return make_func(C, *args)
+    make_func_wrapper.__name__ = make_func.__name__ + "_wrapper"
+    return make_func_wrapper
+
+class DoneSuccessContinuation(Continuation):
     def __init__(self, engine):
         Continuation.__init__(self, engine, None)
         self.failed = False
 
-    def activate(self, fcont, heap):
-        assert 0, "unreachable"
+    def is_done(self):
+        return True
+
+class DoneFailureContinuation(FailureContinuation):
+    def __init__(self, engine):
+        FailureContinuation.__init__(self, engine, None, None, None)
 
     def fail(self, heap):
-        self.failed = True
-        return self, self, heap
+        scont = DoneSuccessContinuation(self.engine)
+        scont.failed = True
+        return scont, self, heap
 
     def is_done(self):
         return True
@@ -426,81 +438,19 @@ class BuiltinContinuation(ContinuationWithModule):
     def __repr__(self):
         return "<BuiltinContinuation %r, %r>" % (self.builtin, self.query, )
 
-class ChoiceContinuation(FailureContinuation):
-    """ An abstract base class for Continuations that represent a choice point,
-    i.e. a point to which the execution can backtrack to."""
 
-    def __init__(self, *args):
-        FailureContinuation.__init__(self, *args)
-        self.undoheap = None
-        self.orig_fcont = None
-
-    #def activate(self, fcont, heap):
-    #    this method needs to be structured as follows:
-    #    <some code>
-    #    if <has more solutions>:
-    #        fcont, heap = self.prepare_more_solutions(fcont, heap)
-    #    <construct cont> # must not raise UnificationFailed!
-    #    return cont, fcont, heap
-
-    def prepare_more_solutions(self, fcont, heap):
-        self.undoheap = heap
-        heap = heap.branch()
-        self.orig_fcont = fcont
-        fcont = self
-        return fcont, heap
-    
-    def fail(self, heap):
-        assert self.undoheap is not None
-        heap = heap.revert_upto(self.undoheap, discard_choicepoint=True)
-        return self.engine.continue_(self, self.orig_fcont, heap)
-
-    def cut(self, heap):
-        heap = self.undoheap.discard(heap)
-        return self.orig_fcont.cut(heap)
-
-    def discard(self):
-        # don't propagate the discarding, as a ChoiceContinuation can both be a
-        # success and a failure continuation at the same time
-        pass
-
-    def _dot(self, seen):
-        if self in seen:
-            return
-        for line in FailureContinuation._dot(self, seen):
-            yield line
-        seen.add(self)
-        if self.orig_fcont is not None:
-            yield "%s -> %s [label=orig_fcont]" % (id(self), id(self.orig_fcont))
-            for line in self.orig_fcont._dot(seen):
-                yield line
-        if self.undoheap is not None:
-            yield "%s -> %s [label=heap]" % (id(self), id(self.undoheap))
-            for line in self.undoheap._dot(seen):
-                yield line
-
-class UserCallContinuation(ChoiceContinuation):
-    def __init__(self, engine, module, nextcont, query, rulechain):
-        ChoiceContinuation.__init__(self, engine, nextcont)
+class UserCallContinuation(FailureContinuation):
+    def __init__(self, engine, module, nextcont, orig_fcont, heap, query, rulechain):
+        FailureContinuation.__init__(self, engine, nextcont, orig_fcont, heap)
         self.query = query
         self.rulechain = rulechain
         self.module = module
 
-    def activate(self, fcont, heap):
-        rulechain = jit.hint(self.rulechain, promote=True)
-        rule = rulechain
-        nextcont = self.nextcont
-        if rule.contains_cut:
-            nextcont, fcont = CutDelimiter.insert_cut_delimiter(
-                    self.engine, nextcont, fcont)
-        query = self.query
-        restchain = rulechain.find_next_applicable_rule(query)
-        if restchain is not None:
-            fcont, heap = self.prepare_more_solutions(fcont, heap)
-            self.rulechain = restchain
+    def fail(self, heap):
+        heap = heap.revert_upto(self.undoheap, discard_choicepoint=True)
+        return _make_rule_conts(self.engine, self.module, self.nextcont, self.orig_fcont,
+                                heap, self.query, self.rulechain)
 
-        cont = RuleContinuation(self.engine, self.module, nextcont, rule, query)
-        return cont, fcont, heap
 
     def __repr__(self):
         return "<UserCallContinuation query=%r rule=%r>" % (
@@ -532,77 +482,21 @@ class RuleContinuation(ContinuationWithModule):
         return "<RuleContinuation rule=%r query=%r>" % (self._rule, self.query)
 
 class CutScopeNotifier(Continuation):
-    def __init__(self, engine, nextcont):
+    def __init__(self, engine, nextcont, fcont_after_cut):
         Continuation.__init__(self, engine, nextcont)
-        self.cutcell = CutCell()
-
-    def candiscard(self):
-        return not self.cutcell.discarded
-
-    def activate(self, fcont, heap):
-        self.cutcell.activated = True
-        return self.nextcont, fcont, heap
-
-    def discard(self):
-        assert not self.cutcell.activated
-        self.cutcell.discarded = True
-
-
-class CutCell(object):
-    def __init__(self):
-        self.activated = False
-        self.discarded = False
-
-class CutDelimiter(FailureContinuation):
-    def __init__(self, engine, nextcont, cutcell):
-        FailureContinuation.__init__(self, engine, nextcont)
-        self.cutcell = cutcell
-
-    def candiscard(self):
-        return not self.cutcell.discarded
+        self.fcont_after_cut = fcont_after_cut
 
     @staticmethod
-    def insert_cut_delimiter(engine, nextcont, fcont):
-        if isinstance(fcont, CutDelimiter):
-            if fcont.cutcell.activated or fcont.cutcell.discarded:
-                fcont = fcont.nextcont
-                if isinstance(nextcont, CutScopeNotifier) and nextcont.cutcell.discarded:
-                    nextcont = nextcont.nextcont
-            elif (isinstance(nextcont, CutScopeNotifier) and
-                    nextcont.cutcell is fcont.cutcell):
-                assert not fcont.cutcell.activated
-                return nextcont, fcont
-        scont = CutScopeNotifier(engine, nextcont)
-        fcont = CutDelimiter(engine, fcont, scont.cutcell)
-        return scont, fcont
+    def insert_scope_notifier(engine, nextcont, fcont):
+        if isinstance(nextcont, CutScopeNotifier) and nextcont.fcont_after_cut is fcont:
+            return nextcont
+        return CutScopeNotifier(engine, nextcont, fcont)
 
-    def activate(self, *args):
-        raise NotImplementedError("unreachable")
+    def find_end_of_cut(self):
+        return self.fcont_after_cut
 
-    def fail(self, heap):
-        nextcont = self.nextcont
-        assert isinstance(nextcont, FailureContinuation)
-        return nextcont.fail(heap)
-
-    def cut(self, heap):
-        if not self.cutcell.activated:
-            return self
-        nextcont = self.nextcont
-        assert isinstance(nextcont, FailureContinuation)
-        return nextcont.cut(heap)
-
-    def __repr__(self):
-        return "<CutDelimiter activated=%r, discarded=%r>" % (self.cutcell.activated, self.cutcell.discarded)
-
-    def _dot(self, seen):
-        if self in seen:
-            return
-        for line in FailureContinuation._dot(self, seen):
-            yield line
-        seen.add(self)
-        yield "%s -> %s [label=nextcont]" % (id(self), id(self.nextcont))
-        for line in self.nextcont._dot(seen):
-            yield line
+    def activate(self, fcont, heap):
+        return self.nextcont, fcont, heap
 
 
 class CatchingDelimiter(ContinuationWithModule):
@@ -616,15 +510,8 @@ class CatchingDelimiter(ContinuationWithModule):
     def activate(self, fcont, heap):
         return self.nextcont, fcont, heap
 
-    def _dot(self, seen):
-        if self in seen:
-            return
-        for line in Continuation._dot(self, seen):
-            yield line
-        if self.heap is not None:
-            yield "%s -> %s [label=heap]" % (id(self), id(self.heap))
-            for line in self.heap._dot(seen):
-                yield line
+    def __repr__(self):
+        return "<CatchingDelimiter catcher=%s recover=%s>" % (self.catcher, self.recover)
 
 
 
@@ -635,7 +522,7 @@ enter  creep
 a      abort
 """
 
-class TraceContinuation(FailureContinuation):
+class TraceContinuation(Continuation):
     """ Represents a trace port which can be one of: Call, Exit, Redo, Fail."""
     def __init__(self, port, innercont, nextcont, write, getch, query=None):
         Continuation.__init__(self, innercont.engine, nextcont)
@@ -656,7 +543,7 @@ class TraceContinuation(FailureContinuation):
         tm = self.port, f.format(self.query)
         self.write("[%s] %s ?" % tm)
 
-        if isinstance(self.innercont, DoneContinuation):
+        if isinstance(self.innercont, DoneSuccessContinuation):
             return self.innercont, fcont, heap
 
         while 1:
@@ -667,7 +554,7 @@ class TraceContinuation(FailureContinuation):
                 break
             elif res in "a":
                 self.write("abort\n")
-                return DoneContinuation(None), fcont, heap
+                return DoneSuccessContinuation(self.engine), fcont, heap
             elif res in "h?":
                 self.write(tracehelptext)
                 break
