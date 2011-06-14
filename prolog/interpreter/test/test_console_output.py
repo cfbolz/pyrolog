@@ -136,5 +136,12 @@ class TestInteraction:
             child.sendline("\n")
             child.expect("creep")
             child.expect("Exit: \\(\d\\) 1=1 ?")
-            child.sendline("creep")
+            child.sendline("\n")
             child.expect("creep")
+            child.expect("Exit: \\(\d\\) f(1) ?")
+            child.sendline("\n")
+            child.expect("creep")
+            child.expect("yes")
+            child.expect(">?- ")
+        finally:
+            delete_file(m)

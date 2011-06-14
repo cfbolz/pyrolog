@@ -1,6 +1,7 @@
 import py
 from prolog.interpreter.continuation import *
 
+from prolog.interpreter import heap
 from prolog.interpreter.parsing import parse_query_term, get_engine
 from prolog.interpreter.parsing import get_query_and_vars
 from prolog.interpreter.error import UnificationFailed
@@ -332,3 +333,47 @@ def test_metainterp():
 
     """)
     assert_true("run(app([1, 2, 3, 4], [5, 6], X)), X == [1, 2, 3, 4, 5, 6].", e)
+
+# ___________________________________________________________________
+# Trace tests
+def test_trace_wrapper():
+    engine = get_engine("")
+    done = DoneContinuation(engine)
+    order = []
+    class FakeC(object):
+        rule = None
+        def __init__(self, next, val):
+            self.engine = engine
+            self.next = next
+            self.val = val
+            self.candiscard = lambda : True
+            self.query = Atom("fakec")
+
+        def is_done(self):
+            return False
+        
+        def activate(self, fcont, heap):
+            if self.val == -1:
+                raise error.UnificationFailed
+            order.append(self.val)
+            return self.next, fcont, heap
+
+        def fail(self, heap):
+            order.append("fail")
+            return self, done, heap
+
+        def discard(self):
+            pass
+
+    def w(port):
+        order.append(port)
+
+    def g():
+        return "\n"
+
+    # TC(Call, FakeC) - TC(Exit) - TC(Call, FakeC) - TC(Exit)
+    tc = TraceContinuation("Call", FakeC(done, 1), None, w, g)
+    
+    driver(tc, None, heap.Heap())
+    assert order == ["[Call] fakec ?", "creep\n", 1, "[Exit] fakec ?"]
+    

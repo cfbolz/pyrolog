@@ -11,9 +11,6 @@ from prolog.interpreter.signature import Signature
 from prolog.interpreter.module import Module, ModuleWrapper
 from prolog.interpreter.helper import unwrap_predicate_indicator
 from prolog.interpreter.stream import StreamWrapper
-from prolog.interpreter.trace import TraceContinuation, TraceRuleContinuation, \
-        TraceUserCallContinuation, TraceDoneContinuation, TraceContinueContinuation,\
-        printmessage
 
 Signature.register_extr_attr("function", engine=True)
 
@@ -628,3 +625,71 @@ class CatchingDelimiter(ContinuationWithModule):
             yield "%s -> %s [label=heap]" % (id(self), id(self.heap))
             for line in self.heap._dot(seen):
                 yield line
+
+
+
+tracehelptext = """
+key    action
+-------------
+enter  creep
+a      abort
+"""
+
+class TraceContinuation(FailureContinuation):
+    """ Represents a trace port which can be one of: Call, Exit, Redo, Fail."""
+    def __init__(self, port, innercont, nextcont, write, getch, query=None):
+        Continuation.__init__(self, innercont.engine, nextcont)
+        self.port = port
+        self.nextcont = nextcont
+        self.innercont = innercont
+        self.write = write
+        self.getch = getch
+        if query is not None:
+            self.query = query
+        else:
+            self.query = self.innercont.query
+
+    def activate(self, fcont, heap):
+        from prolog.builtin import formatting
+
+        f = formatting.TermFormatter(self.engine, quoted=True, max_depth=20)
+        tm = self.port, f.format(self.query)
+        self.write("[%s] %s ?" % tm)
+
+        if isinstance(self.innercont, DoneContinuation):
+            return self.innercont, fcont, heap
+
+        while 1:
+            res = self.getch()
+            if res in "\r\x04\n":
+                self.write("creep\n")
+                nextcont, fcont, heap = self.innercont.activate(fcont, heap)
+                break
+            elif res in "a":
+                self.write("abort\n")
+                return DoneContinuation(None), fcont, heap
+            elif res in "h?":
+                self.write(tracehelptext)
+                break
+            else:
+                self.write('unknown action. press "h" for help\n')
+
+        next = TraceContinuation("Exit", nextcont, None, self.write, self.getch, self.query)
+        return next, fcont, heap
+
+"""
+        while 1:
+            if isinstance(fcont, DoneContinuation):
+                return DoneContinuation(None), fcont, heap
+            res = self.getch()
+            if res in "\r\x04\n":
+                self.write("creep\n")
+                return self.nextcont, fcont, heap
+            if res in "a":
+                self.write("abort\n")
+                return DoneContinuation(None), fcont, heap
+            elif res in "h?":
+                self.write(tracehelptext)
+            else:
+                self.write('unknown action. press "h" for help\n')
+"""
