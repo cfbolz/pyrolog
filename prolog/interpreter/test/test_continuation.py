@@ -319,10 +319,10 @@ def test_trace_wrapper():
         rule = None
         def __init__(self, next, val):
             self.engine = engine
-            self.next = next
+            self.nextcont = next
             self.val = val
             self.candiscard = lambda : True
-            self.query = Atom("fakec")
+            self.query = Atom("fakec%d" % val)
 
         def is_done(self):
             return False
@@ -330,8 +330,8 @@ def test_trace_wrapper():
         def activate(self, fcont, heap):
             if self.val == -1:
                 raise error.UnificationFailed
-            order.append(self.val)
-            return self.next, fcont, heap
+            #order.append(self.val)
+            return self.nextcont, fcont, heap
 
         def fail(self, heap):
             order.append("fail")
@@ -347,8 +347,19 @@ def test_trace_wrapper():
         return "\n"
 
     # TC(Call, FakeC) - TC(Exit) - TC(Call, FakeC) - TC(Exit)
-    tc = TraceContinuation("Call", FakeC(done, 1), None, w, g)
-    
+    tc = TraceSuccessContinuation("Call", FakeC(done, 1), None, w, g)
     driver(tc, None, heap.Heap())
-    assert order == ["[Call] fakec ?", "creep\n", 1, "[Exit] fakec ?"]
-    
+    assert order == ["[Call] fakec1 ?", "creep\n", "[Exit] fakec1 ?", "creep\n"]
+
+    order = []
+    tc = TraceSuccessContinuation("Call", FakeC(FakeC(done, 1), 2), None, w, g)
+    #import pdb; pdb.set_trace()
+    driver(tc, None, heap.Heap())
+    assert order == ["[Call] fakec2 ?", "creep\n", "[Exit] fakec2 ?", "creep\n", "[Call] fakec1 ?", "creep\n", "[Exit] fakec1 ?", "creep\n"]
+
+    order = []
+    tc = TraceSuccessContinuation("Call", FakeC(FakeC(FakeC(done, 1), 2), 3), None, w, g)
+    driver(tc, None, heap.Heap())
+    order_comp = ["[Call] fakec3 ?", "creep\n", "[Exit] fakec3 ?", "creep\n", "[Call] fakec2 ?",
+            "creep\n", "[Exit] fakec2 ?", "creep\n", "[Call] fakec1 ?", "creep\n", "[Exit] fakec1 ?", "creep\n"]
+    assert order == order_comp

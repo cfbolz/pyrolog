@@ -522,61 +522,93 @@ enter  creep
 a      abort
 """
 
-class TraceContinuation(Continuation):
-    """ Represents a trace port which can be one of: Call, Exit, Redo, Fail."""
+def get_next_trace_cont(tracecont, fcont, heap):
+    while 1:
+        res = tracecont.getch()
+        if res in "\r\x04\n":
+            tracecont.write("creep\n")
+            if tracecont.port == "Exit":
+                nextcont = tracecont.nextcont
+            else:
+                nextcont, fcont, heap = tracecont.innercont.activate(fcont, heap)
+            break
+        elif res in "a":
+            tracecont.write("abort\n")
+            nextcont = DoneSuccessContinuation(tracecont.engine)
+            break
+        elif res in "h?":
+            tracecont.write(tracehelptext)
+        else:
+            tracecont.write('unknown action. press "h" for help\n')
+    return nextcont, fcont, heap
+
+def print_trace_step(tracecont):
+    from prolog.builtin import formatting
+    f = formatting.TermFormatter(tracecont.engine, quoted=True, max_depth=20)
+    tm = tracecont.port, f.format(tracecont.query)
+    tracecont.write("[%s] %s ?" % tm)
+
+class TraceSuccessContinuation(Continuation):
+    """ Represents a trace port which can be one of: Call and Exit."""
+
     def __init__(self, port, innercont, nextcont, write, getch, query=None):
-        Continuation.__init__(self, innercont.engine, nextcont)
+        #Continuation.__init__(self, innercont.engine, innercont.nextcont)
+        if innercont is not None:
+            self.engine = innercont.engine
+        elif nextcont is not None:
+            self.engine = nextcont.engine
         self.port = port
         self.nextcont = nextcont
         self.innercont = innercont
         self.write = write
         self.getch = getch
-        if query is not None:
-            self.query = query
-        else:
-            self.query = self.innercont.query
+        if query is None:
+            query = self.innercont.query
+        self.query = query
 
     def activate(self, fcont, heap):
-        from prolog.builtin import formatting
-
-        f = formatting.TermFormatter(self.engine, quoted=True, max_depth=20)
-        tm = self.port, f.format(self.query)
-        self.write("[%s] %s ?" % tm)
-
         if isinstance(self.innercont, DoneSuccessContinuation):
             return self.innercont, fcont, heap
+        print_trace_step(self)
+        nextcont, fcont, heap = get_next_trace_cont(self, fcont, heap)
+        if self.port == "Exit":
+            if isinstance(nextcont, DoneSuccessContinuation):
+                return nextcont, fcont, heap
+            nextcont = TraceSuccessContinuation("Call", nextcont, None, self.write, self.getch)
+        else:
+            if not isinstance(nextcont, TraceSuccessContinuation):
+                nextcont = TraceSuccessContinuation("Exit", None, nextcont, self.write, self.getch, self.query)
 
-        while 1:
-            res = self.getch()
-            if res in "\r\x04\n":
-                self.write("creep\n")
-                nextcont, fcont, heap = self.innercont.activate(fcont, heap)
-                break
-            elif res in "a":
-                self.write("abort\n")
-                return DoneSuccessContinuation(self.engine), fcont, heap
-            elif res in "h?":
-                self.write(tracehelptext)
-                break
-            else:
-                self.write('unknown action. press "h" for help\n')
+        return nextcont, fcont, heap
+    
+    _dot = _dot
 
-        next = TraceContinuation("Exit", nextcont, None, self.write, self.getch, self.query)
-        return next, fcont, heap
+class TraceFailureContinuation(FailureContinuation):
+    """ Represents a trace port which can be one of: Fail and Redo."""
 
-"""
-        while 1:
-            if isinstance(fcont, DoneContinuation):
-                return DoneContinuation(None), fcont, heap
-            res = self.getch()
-            if res in "\r\x04\n":
-                self.write("creep\n")
-                return self.nextcont, fcont, heap
-            if res in "a":
-                self.write("abort\n")
-                return DoneContinuation(None), fcont, heap
-            elif res in "h?":
-                self.write(tracehelptext)
-            else:
-                self.write('unknown action. press "h" for help\n')
-"""
+    def __init__(self, port, fcont, write, getch, query=None):
+        FailureContinuation.__init__(self, engine)
+        self.port = port
+        self.innerfcont = fcont
+        self.write = write
+        self.getch = getch
+        if query is None:
+            query = self.innerfcont.query
+        self.query = query
+
+    def fail(self, heap):
+        if isinstance(self.innercont, DoneFailureContinuation):
+            return self.innercont, fcont, heap
+        print_trace_step(self)
+        nextcont, fcont, heap = get_next_trace_cont(self, fcont, heap)
+        if self.port == "Fail":
+            if isinstance(nextcont, DoneFailureContinuation):
+                return nextcont, fcont, heap
+            nextcont = TraceSuccessContinuation("Redo", nextcont, None, self.write, self.getch)
+        else:
+            if not isinstance(nextcont, TraceSuccessContinuation):
+                nextcont = TraceSuccessContinuation("Call", nextcont, None, self.write, self.getch, self.query)
+
+        return nextcont, fcont, heap
+    
+    _dot = _dot
