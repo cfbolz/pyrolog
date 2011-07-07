@@ -522,43 +522,36 @@ enter  creep
 a      abort
 """
 
-def get_next_trace_cont(tracecont, fcont, heap):
+def get_decision(write, getch):
     while 1:
-        res = tracecont.getch()
+        res = getch()
         if res in "\r\x04\n":
-            tracecont.write("creep\n")
-            if tracecont.port == "Exit":
-                nextcont = tracecont.nextcont
-            else:
-                nextcont, fcont, heap = tracecont.innercont.activate(fcont, heap)
+            write("creep\n")
+            res = "creep"
             break
         elif res in "a":
-            tracecont.write("abort\n")
-            nextcont = DoneSuccessContinuation(tracecont.engine)
+            write("abort\n")
+            res = "abort"
             break
         elif res in "h?":
-            tracecont.write(tracehelptext)
+            write(tracehelptext)
         else:
-            tracecont.write('unknown action. press "h" for help\n')
-    return nextcont, fcont, heap
+            write('unknown action. press "h" for help\n')
+    return res
 
-def print_trace_step(tracecont):
+
+def print_trace_step(engine, port, query, write):
     from prolog.builtin import formatting
-    f = formatting.TermFormatter(tracecont.engine, quoted=True, max_depth=20)
-    tm = tracecont.port, f.format(tracecont.query)
-    tracecont.write("[%s] %s ?" % tm)
+    f = formatting.TermFormatter(engine, quoted=True, max_depth=20)
+    tm = port, f.format(query)
+    write("[%s] %s ?" % tm)
 
 class TraceSuccessContinuation(Continuation):
     """ Represents a trace port which can be one of: Call and Exit."""
 
-    def __init__(self, port, innercont, nextcont, write, getch, query=None):
-        #Continuation.__init__(self, innercont.engine, innercont.nextcont)
-        if innercont is not None:
-            self.engine = innercont.engine
-        elif nextcont is not None:
-            self.engine = nextcont.engine
+    def __init__(self, port, innercont, write, getch, query=None):
+        self.engine = innercont.engine
         self.port = port
-        self.nextcont = nextcont
         self.innercont = innercont
         self.write = write
         self.getch = getch
@@ -566,18 +559,21 @@ class TraceSuccessContinuation(Continuation):
             query = self.innercont.query
         self.query = query
 
+    def is_done(self):
+        return False
+
     def activate(self, fcont, heap):
-        if isinstance(self.innercont, DoneSuccessContinuation):
-            return self.innercont, fcont, heap
-        print_trace_step(self)
-        nextcont, fcont, heap = get_next_trace_cont(self, fcont, heap)
-        if self.port == "Exit":
-            if isinstance(nextcont, DoneSuccessContinuation):
-                return nextcont, fcont, heap
-            nextcont = TraceSuccessContinuation("Call", nextcont, None, self.write, self.getch)
-        else:
-            if not isinstance(nextcont, TraceSuccessContinuation):
-                nextcont = TraceSuccessContinuation("Exit", None, nextcont, self.write, self.getch, self.query)
+        print_trace_step(self.engine, self.port, self.query, self.write)
+        res = get_decision(self.write, self.getch) 
+        if res == "creep":
+            if self.port == "Exit":
+                nextcont = self.innercont
+                if isinstance(nextcont, DoneSuccessContinuation):
+                    return nextcont, fcont, heap
+                nextcont = TraceSuccessContinuation("Call", nextcont, self.write, self.getch)
+            elif self.port == "Call":
+                nextcont, fcont, heap = self.innercont.activate(fcont, heap)
+                nextcont = TraceSuccessContinuation("Exit", nextcont, self.write, self.getch, self.query)
 
         return nextcont, fcont, heap
     
@@ -586,29 +582,36 @@ class TraceSuccessContinuation(Continuation):
 class TraceFailureContinuation(FailureContinuation):
     """ Represents a trace port which can be one of: Fail and Redo."""
 
-    def __init__(self, port, fcont, write, getch, query=None):
-        FailureContinuation.__init__(self, engine)
+    def __init__(self, port, fcont, write, getch, nextc=None, query=None):
+        self.engine = fcont.engine
         self.port = port
         self.innerfcont = fcont
+        self.nextcont = nextc
         self.write = write
         self.getch = getch
         if query is None:
             query = self.innerfcont.query
         self.query = query
 
+    def is_done(self):
+        return False
+
     def fail(self, heap):
-        if isinstance(self.innercont, DoneFailureContinuation):
-            return self.innercont, fcont, heap
-        print_trace_step(self)
-        nextcont, fcont, heap = get_next_trace_cont(self, fcont, heap)
-        if self.port == "Fail":
-            if isinstance(nextcont, DoneFailureContinuation):
-                return nextcont, fcont, heap
-            nextcont = TraceSuccessContinuation("Redo", nextcont, None, self.write, self.getch)
-        else:
-            if not isinstance(nextcont, TraceSuccessContinuation):
-                nextcont = TraceSuccessContinuation("Call", nextcont, None, self.write, self.getch, self.query)
+        """ Innerfcont contains the query for -Fail- output. Nextcont is the failure continuation."""
+        print_trace_step(self.engine, self.port, self.query, self.write)
+        res = get_decision(self.write, self.getch)
+        if res == "creep":
+            if self.port == "Fail":
+                nextcont, fcont, heap = self.nextcont.fail(heap)
+                if isinstance(nextcont, DoneSuccessContinuation):
+                    return nextcont, fcont, heap
+                nextcont, fcont, heap = TraceFailureContinuation("Redo", nextcont, self.write, self.getch, nextc=fcont).fail(heap)
+                nextcont = TraceSuccessContinuation("Call", nextcont, self.write, self.getch)
+            elif self.port == "Redo":
+                nextcont = self.innerfcont
+                fcont = TraceFailureContinuation("Fail", nextcont, self.write, self.getch, nextc=nextcont)
 
         return nextcont, fcont, heap
     
     _dot = _dot
+

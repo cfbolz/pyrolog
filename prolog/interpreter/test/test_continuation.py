@@ -1,7 +1,6 @@
 import py
 from prolog.interpreter.continuation import *
 
-from prolog.interpreter import heap
 from prolog.interpreter.parsing import parse_query_term, get_engine
 from prolog.interpreter.parsing import get_query_and_vars
 from prolog.interpreter.error import UnificationFailed
@@ -311,17 +310,15 @@ def test_metainterp():
 
 # ___________________________________________________________________
 # Trace tests
-def test_trace_wrapper():
+def test_trace_wrapper_success():
     engine = get_engine("")
     done = DoneSuccessContinuation(engine)
     order = []
     class FakeC(object):
-        rule = None
         def __init__(self, next, val):
             self.engine = engine
             self.nextcont = next
             self.val = val
-            self.candiscard = lambda : True
             self.query = Atom("fakec%d" % val)
 
         def is_done(self):
@@ -330,15 +327,7 @@ def test_trace_wrapper():
         def activate(self, fcont, heap):
             if self.val == -1:
                 raise error.UnificationFailed
-            #order.append(self.val)
             return self.nextcont, fcont, heap
-
-        def fail(self, heap):
-            order.append("fail")
-            return self, done, heap
-
-        def discard(self):
-            pass
 
     def w(port):
         order.append(port)
@@ -346,20 +335,88 @@ def test_trace_wrapper():
     def g():
         return "\n"
 
-    # TC(Call, FakeC) - TC(Exit) - TC(Call, FakeC) - TC(Exit)
-    tc = TraceSuccessContinuation("Call", FakeC(done, 1), None, w, g)
-    driver(tc, None, heap.Heap())
+    tc = TraceSuccessContinuation("Call", FakeC(done, 1), w, g)
+    driver(tc, None, Heap())
     assert order == ["[Call] fakec1 ?", "creep\n", "[Exit] fakec1 ?", "creep\n"]
 
     order = []
-    tc = TraceSuccessContinuation("Call", FakeC(FakeC(done, 1), 2), None, w, g)
-    #import pdb; pdb.set_trace()
-    driver(tc, None, heap.Heap())
+    # TC(Call, FakeC) - TC(Exit) - TC(Call, FakeC) - TC(Exit)
+    tc = TraceSuccessContinuation("Call", FakeC(FakeC(done, 1), 2), w, g)
+    driver(tc, None, Heap())
     assert order == ["[Call] fakec2 ?", "creep\n", "[Exit] fakec2 ?", "creep\n", "[Call] fakec1 ?", "creep\n", "[Exit] fakec1 ?", "creep\n"]
 
     order = []
-    tc = TraceSuccessContinuation("Call", FakeC(FakeC(FakeC(done, 1), 2), 3), None, w, g)
-    driver(tc, None, heap.Heap())
+    tc = TraceSuccessContinuation("Call", FakeC(FakeC(FakeC(done, 1), 2), 3), w, g)
+    driver(tc, None, Heap())
     order_comp = ["[Call] fakec3 ?", "creep\n", "[Exit] fakec3 ?", "creep\n", "[Call] fakec2 ?",
             "creep\n", "[Exit] fakec2 ?", "creep\n", "[Call] fakec1 ?", "creep\n", "[Exit] fakec1 ?", "creep\n"]
     assert order == order_comp
+
+def test_trace_wrapper_fail():
+    engine = get_engine("")
+    h = Heap()
+    dones = DoneSuccessContinuation(engine)
+    donef = DoneFailureContinuation(engine)
+    order = []
+    class FakeC(object):
+        def __init__(self, next, val):
+            self.engine = engine
+            self.nextcont = next
+            self.val = val
+            self.query = Atom("fakec%d" % val)
+
+        def is_done(self):
+            return False
+
+        def activate(self, fcont, heap):
+            if self.val == -1:
+                raise error.UnificationFailed
+            return self.nextcont, fcont, heap
+
+    class FakeF(FailureContinuation):
+        def __init__(self, next, count):
+            self.nextcont = next
+            self.count = count
+            self.engine = engine
+            self.query = Atom("fakef%d" % count)
+
+        def is_done(self):
+            return False
+
+        def fail(self, heap):
+            if self.count:
+                fcont = FakeF(self.nextcont, self.count - 1)
+                heap = heap.branch()
+            else:
+                fcont = donef
+            self.count -= 1
+            return self.nextcont, fcont, heap
+
+    def w(port):
+        order.append(port)
+
+    def g():
+        return "\n"
+
+    f = FakeC(dones, -1)
+    driver(TraceSuccessContinuation("Call", f, w, g), TraceFailureContinuation("Fail", f, w, g, nextc=FakeF(dones, 1)), Heap())
+    assert order == ["[Call] 'fakec-1' ?", "creep\n", "[Fail] 'fakec-1' ?", "creep\n"]
+    order = []
+
+    success = TraceSuccessContinuation("Call", f, w, g)
+    fail = TraceFailureContinuation("Fail", f, w, g, FakeF(FakeC(dones, 2), 3))
+
+    driver(success, fail, Heap())
+    assert order == ["[Call] 'fakec-1' ?", "creep\n", "[Fail] 'fakec-1' ?", "creep\n", 
+            "[Call] fakec2 ?", "creep\n", "[Exit] fakec2 ?", "creep\n"]
+    order = []
+
+def test_trace_view():
+    e = get_engine("""
+    f(A) :- A = 1; A = 2.
+
+    g(X) :- X = 1.
+    g(X) :- X = a; X = b.
+    """)
+    assert_false("f(r).", e)
+    assert_false("g(r).", e)
