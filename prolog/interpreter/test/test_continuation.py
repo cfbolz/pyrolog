@@ -311,7 +311,7 @@ def test_metainterp():
 # ___________________________________________________________________
 # Trace tests
 
-def test_trace_real():
+def test_trace():
     e = get_engine("")
     assert e.tracewrapper.tracing == False
     e.run(parse_query_term("trace."), e.modulewrapper.user_module, DoneSuccessContinuation(e))
@@ -319,7 +319,7 @@ def test_trace_real():
     e.run(parse_query_term("notrace."), e.modulewrapper.user_module, DoneSuccessContinuation(e))
     assert e.tracewrapper.tracing == False
 
-def test_trace_real_success():
+def test_trace_success():
     e = get_engine("""
        f(X) :- X = 1.
     """)
@@ -335,26 +335,72 @@ def test_trace_real_success():
     assert order == ["[Call] f(1) ?", "creep\n", "[Call] 1=1 ?", "creep\n", "[Exit] 1=1 ?",
             "creep\n", "[Exit] f(1) ?", "creep\n"]
 
-def test_trace_real_fail():
+def test_trace_simple_fail():
     e = get_engine("""
-       f(X) :- X = 1 ; X = 2.
-       f(X) :- X = x.
+        f(X) :- X = 1.
     """)
-    e.run(parse_query_term("f(2)."), e.modulewrapper.user_module)
+    order = []
+    def w(s):
+        order.append(s)
+    def g():
+        return "\n"
 
-def test_trace_real_redo():
+    e.tracewrapper.write = w
+    e.tracewrapper.getch = g
+    e.run(parse_query_term("trace, f(2)."), e.modulewrapper.user_module)
+
+    assert order == ["[Call] f(2) ?","creep\n","[Call] 2=1 ?","creep\n","[Fail] 2=1 ?",
+            "[Fail] f(2) ?","creep\n"]
+
+def test_trace_fail_success():
+    e = get_engine("""
+        f(X) :- X = 1 ; X = 2.
+    """)
+    order = []
+    def w(s):
+        order.append(s)
+    def g():
+        return "\n"
+
+    e.tracewrapper.write = w
+    e.tracewrapper.getch = g
+    e.run(parse_query_term("trace, f(2)."), e.modulewrapper.user_module)
+
+    assert order == ["[Call] f(2) ?","creep\n","[Call] 2=1 ?","creep\n","[Fail] 2=1 ?","creep\n"
+            "[Call] 2=2 ?","creep\n","[Exit] 2=2 ?","creep\n","[Exit] f(2) ?","creep\n"]
+
+def test_trace_fail_redo():
      e = get_engine("""
-       f(X) :- X = 1 ; X = 2.
-       f(X) :- X = x.
+        f(X) :- X = 1 ; X = 2.
+        f(X) :- X = x.
     """)
+    order = []
+    def w(s):
+        order.append(s)
+    def g():
+        return "\n"
 
-def t1est_trace_view():
+    e.tracewrapper.write = w
+    e.tracewrapper.getch = g
+    e.run(parse_query_term("trace, f(x)."), e.modulewrapper.user_module)
+
+    assert order == ["[Call] f(x) ?","creep\n","[Call] x=1 ?","creep\n","[Fail] x=1 ?","creep\n",
+            "[Call] x=2 ?","creep\n","[Fail] x=2 ?","creep\n","[Redo] f(x) ?","creep\n","[Call] x=x ?",
+            "creep\n","[Exit] x=x ?","creep\n","[Exit] f(x) ?","creep\n"]
+
+def test_trace_complex():
     e = get_engine("""
-    f(A) :- A = 1; A = 2.
-    f(A) :- A = x.
-
-    g(X) :- X = 1.
-    g(X) :- X = a; X = b.
+        f(X,Y) :- g(X), h(X,Y).
+        g(X) :- X =.. [.,1,nil].
+        h([],[]).
+        h([H|R], [H|R2]) :- h(R,R2).
     """)
-    #assert_false("f(2).", e)
-    assert_false("f(x).", e)
+    order = []
+    def w(s):
+        order.append(s)
+    def g():
+        return "\n"
+
+    e.tracewrapper.write = w
+    e.tracewrapper.getch = g
+    e.run(parse_query_term("trace, f(x)."), e.modulewrapper.user_module)

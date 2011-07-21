@@ -159,7 +159,7 @@ def repl(engine):
             module = ""
         else:
             module += ":  "
-        if engine.tracing:
+        if engine.tracewrapper.tracing:
             trace = "[trace] "
         else:
             trace = ""
