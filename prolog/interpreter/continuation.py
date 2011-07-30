@@ -475,7 +475,7 @@ class BuiltinContinuation(ContinuationWithModule):
 
     def trace_wrap(self, query=None):
         if self.builtin.should_trace:
-            nextcont = TraceSuccessContinuation("Exit", self.nextcont, query=self.query)
+            nextcont = TraceSuccessContinuation("Exit", self, query=self.query, nextcont=self.nextcont)
             self = BuiltinContinuation(self.engine, self.module, nextcont, self.builtin, self.query)
             return TraceSuccessContinuation("Call", self)
         return TraceSuccessContinuation(None, self)
@@ -501,8 +501,7 @@ class UserCallContinuation(FailureContinuation):
         #nextcont = TraceSuccessContinuation("Redo", self.nextcont)
         #self = UserCallContinuation(self.engine, self.module, nextcont, self.orig_fcont,
         #        self.heap, self.query, self.rulechain)
-        innercont = TraceSuccessContinuation("Redo", self)
-        return TraceFailureContinuation("Fail", innercont, query=self.query)
+        return TraceFailureContinuation("Redo", self, query=self.query)
 
 class RuleContinuation(ContinuationWithModule):
     """ A Continuation that represents the application of a rule, i.e.:
@@ -530,7 +529,7 @@ class RuleContinuation(ContinuationWithModule):
         return "<RuleContinuation rule=%r query=%r>" % (self._rule, self.query)
 
     def trace_wrap(self, query=None):
-        nextcont = TraceSuccessContinuation("Exit", self.nextcont, query=self.query)
+        nextcont = TraceSuccessContinuation("Exit", self, query=self.query, nextcont=self.nextcont)
         self = RuleContinuation(self.engine, self.module, nextcont, self._rule, self.query)
         return TraceSuccessContinuation("Call", self)
 
@@ -611,10 +610,11 @@ class TraceSuccessContinuation(Continuation):
     Port can be None in case of e.g. BodyContinuation. Then, wrapping
     without tracing output is necessary. """
 
-    def __init__(self, port, innercont, query=None):
+    def __init__(self, port, innercont, query=None, nextcont=None):
         self.engine = innercont.engine
         self.port = port
         self.innercont = innercont
+        self.nextcont = nextcont
         if query is None and port is not None:
             query = self.innercont.query
         self.query = query
@@ -635,7 +635,7 @@ class TraceSuccessContinuation(Continuation):
         res = get_decision(write, getch)
         if res == "creep":
             if self.port == "Exit":
-                nextcont = self.innercont
+                nextcont = self.nextcont
             elif self.port == "Call":
                 nextcont, fcont, heap = self.innercont.activate(fcont, heap)
             nextcont = nextcont.trace_wrap()
@@ -687,10 +687,13 @@ class TraceFailureContinuation(FailureContinuation):
         if res == "creep":
             if self.port == "Fail":
                 nextcont, fcont, heap = self.innerfcont.fail(heap)
+                nextcont = nextcont.trace_wrap()
             elif self.port == "Redo":
-                nextcont = self.innerfcont
+                nextcont, fcont, heap = self.innerfcont.fail(heap)
+                nextcont = nextcont.trace_wrap()
+                nextcont.port = None
+                fcont = nextcont.make_next_fcont(fcont)
 
-        nextcont = nextcont.trace_wrap()
         return nextcont, fcont, heap
     
     def trace_wrap(self, query=None):
