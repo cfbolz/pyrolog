@@ -347,10 +347,12 @@ def test_trace_simple_fail():
 
     e.tracewrapper.write = w
     e.tracewrapper.getch = g
-    e.run(parse_query_term("trace, f(2)."), e.modulewrapper.user_module)
+    t = parse_query_term("trace, f(2).")
+    py.test.raises(UnificationFailed, e.run, t, e.modulewrapper.user_module)
+    #e.run(parse_query_term("trace, f(2)."), e.modulewrapper.user_module)
 
     assert order == ["[Call] f(2) ?","creep\n","[Call] 2=1 ?","creep\n","[Fail] 2=1 ?",
-            "[Fail] f(2) ?","creep\n"]
+            "creep\n","[Fail] f(2) ?","creep\n"]
 
 def test_trace_fail_success():
     e = get_engine("""
@@ -366,11 +368,11 @@ def test_trace_fail_success():
     e.tracewrapper.getch = g
     e.run(parse_query_term("trace, f(2)."), e.modulewrapper.user_module)
 
-    assert order == ["[Call] f(2) ?","creep\n","[Call] 2=1 ?","creep\n","[Fail] 2=1 ?","creep\n"
+    assert order == ["[Call] f(2) ?","creep\n","[Call] 2=1 ?","creep\n","[Fail] 2=1 ?","creep\n",
             "[Call] 2=2 ?","creep\n","[Exit] 2=2 ?","creep\n","[Exit] f(2) ?","creep\n"]
 
 def test_trace_fail_redo():
-     e = get_engine("""
+    e = get_engine("""
         f(X) :- X = 1 ; X = 2.
         f(X) :- X = x.
     """)
@@ -391,7 +393,7 @@ def test_trace_fail_redo():
 def test_trace_complex():
     e = get_engine("""
         f(X,Y) :- g(X), h(X,Y).
-        g(X) :- X =.. [.,1,nil].
+        g(X) :- X =.. ['.',1,[]].
         h([],[]).
         h([H|R], [H|R2]) :- h(R,R2).
     """)
@@ -403,4 +405,8 @@ def test_trace_complex():
 
     e.tracewrapper.write = w
     e.tracewrapper.getch = g
-    e.run(parse_query_term("trace, f(x)."), e.modulewrapper.user_module)
+    e.run(parse_query_term("trace, f(X,Y)."), e.modulewrapper.user_module)
+    c = "creep\n"
+    assert order == ["[Call] f(_G0, _G1) ?",c,"[Call] g(_G0) ?",c,"[Call] _G0=..['.', 1, []] ?",c,"[Exit] [1]=..['.',1,[]] ?",
+            c,"[Exit] g([1]) ?",c,"[Call] h([1], _G1) ?",c,"[Call] h([], _G2) ?",c,"[Exit] h([], []) ?",c,"[Exit] h([1], [1]) ?",
+            c,"[Exit] f([1], [1]) ?",c]
