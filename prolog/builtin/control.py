@@ -35,7 +35,8 @@ def impl_cut(engine, heap, scont, fcont):
     return scont, end_fcont, heap
 
 @expose_builtin(",", unwrap_spec=["callable", "raw"], 
-        handles_continuation=True, needs_module=True)
+        handles_continuation=True, needs_module=True,
+        trace=False)
 def impl_and(engine, heap, module, call1, call2, scont, fcont):
     if not isinstance(call2, term.Var) and not isinstance(call2, term.Callable):
         return error.throw_type_error('callable', call2)
@@ -57,9 +58,13 @@ class OrContinuation(continuation.FailureContinuation):
     def __repr__(self):
         return "<OrContinuation %r" % (self.altcall, )
 
+    def trace_wrap(self, query=None):
+        from prolog.interpreter.continuation import TraceFailureContinuation
+        return TraceFailureContinuation("Fail", self, query=query)
+
 
 @expose_builtin(";", unwrap_spec=["callable", "callable"],
-                handles_continuation=True, needs_module=True)
+                handles_continuation=True, needs_module=True, trace=False)
 def impl_or(engine, heap, module, call1, call2, scont, fcont):
     # sucks a bit to have to special-case A -> B ; C here :-(
     if call1.signature().eq(ifsig):

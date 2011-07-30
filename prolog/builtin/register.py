@@ -15,11 +15,12 @@ jit_modules = ["control"]
 
 class Builtin(object):
     _immutable_ = True
-    def __init__(self, function, name, numargs, signature):
+    def __init__(self, function, name, numargs, signature, trace):
         self.function = function
         self.name = name
         self.numargs = numargs
         self.signature = signature
+        self.should_trace = trace
 
     def call(self, engine, query, module, scont, fcont, heap):
         return self.function(engine, query, module, scont, fcont, heap)
@@ -33,7 +34,7 @@ def expose_builtin(*args, **kwargs):
     return really_expose
 
 def make_wrapper(func, name, unwrap_spec=[], handles_continuation=False,
-                   translatable=True, needs_module=False):
+                   translatable=True, needs_module=False, trace=True):
     if isinstance(name, list):
         expose_as = name
         name = name[0]
@@ -119,6 +120,6 @@ def make_wrapper(func, name, unwrap_spec=[], handles_continuation=False,
     for name in expose_as:
         l = len(unwrap_spec)
         signature = Signature.getsignature(name, l)
-        b = Builtin(miniglobals[funcname], funcname, l, signature)
+        b = Builtin(miniglobals[funcname], funcname, l, signature, trace)
         signature.set_extra("builtin", b)
     return func
