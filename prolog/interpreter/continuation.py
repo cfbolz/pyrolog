@@ -326,7 +326,7 @@ class Continuation(object):
     def find_end_of_cut(self):
         return self.nextcont.find_end_of_cut()
 
-    def trace_wrap(self, query=None):
+    def trace_wrap(self, depth, query=None):
         """ Returns an instance of TraceSuccessContinuation or
         TraceFailureContinuation, if neccessary. """
         return self 
@@ -389,7 +389,7 @@ class FailureContinuation(object):
     def is_done(self):
         return False
 
-    def trace_wrap(self, query=None):
+    def trace_wrap(self, depth, query=None):
         """ Returns an instance of TraceSuccessContinuation or
         TraceFailureContinuation, if neccessary. """
         return self
@@ -440,8 +440,8 @@ class DoneFailureContinuation(FailureContinuation):
     def is_done(self):
         return True
 
-    def trace_wrap(self, query=None):
-        return TraceFailureContinuation("Fail", self, query=query)
+    def trace_wrap(self, depth, query=None):
+        return TraceFailureContinuation("Fail", self, depth, query=query)
 
 
 class BodyContinuation(ContinuationWithModule):
@@ -456,8 +456,8 @@ class BodyContinuation(ContinuationWithModule):
     def __repr__(self):
         return "<BodyContinuation %r>" % (self.body, )
 
-    def trace_wrap(self, query=None):
-        return TraceSuccessContinuation(None, self)
+    def trace_wrap(self, depth, query=None):
+        return TraceSuccessContinuation(None, self, depth)
 
 class BuiltinContinuation(ContinuationWithModule):
     """ Represents the call to a builtin. """
@@ -473,12 +473,12 @@ class BuiltinContinuation(ContinuationWithModule):
     def __repr__(self):
         return "<BuiltinContinuation %r, %r>" % (self.builtin, self.query, )
 
-    def trace_wrap(self, query=None):
+    def trace_wrap(self, depth, query=None):
         if self.builtin.should_trace:
-            nextcont = TraceSuccessContinuation("Exit", self, query=self.query, nextcont=self.nextcont)
+            nextcont = TraceSuccessContinuation("Exit", self, depth, query=self.query, nextcont=self.nextcont)
             self = BuiltinContinuation(self.engine, self.module, nextcont, self.builtin, self.query)
-            return TraceSuccessContinuation("Call", self)
-        return TraceSuccessContinuation(None, self)
+            return TraceSuccessContinuation("Call", self, depth)
+        return TraceSuccessContinuation(None, self, depth)
 
 
 class UserCallContinuation(FailureContinuation):
@@ -497,11 +497,8 @@ class UserCallContinuation(FailureContinuation):
         return "<UserCallContinuation query=%r rule=%r>" % (
                 self.query, self.rulechain)
 
-    def trace_wrap(self, query=None):
-        #nextcont = TraceSuccessContinuation("Redo", self.nextcont)
-        #self = UserCallContinuation(self.engine, self.module, nextcont, self.orig_fcont,
-        #        self.heap, self.query, self.rulechain)
-        return TraceFailureContinuation("Redo", self, query=self.query)
+    def trace_wrap(self, depth, query=None):
+        return TraceFailureContinuation("Redo", self, depth, query=self.query)
 
 class RuleContinuation(ContinuationWithModule):
     """ A Continuation that represents the application of a rule, i.e.:
@@ -528,10 +525,10 @@ class RuleContinuation(ContinuationWithModule):
     def __repr__(self):
         return "<RuleContinuation rule=%r query=%r>" % (self._rule, self.query)
 
-    def trace_wrap(self, query=None):
-        nextcont = TraceSuccessContinuation("Exit", self, query=self.query, nextcont=self.nextcont)
+    def trace_wrap(self, depth, query=None):
+        nextcont = TraceSuccessContinuation("Exit", self, depth, query=self.query, nextcont=self.nextcont)
         self = RuleContinuation(self.engine, self.module, nextcont, self._rule, self.query)
-        return TraceSuccessContinuation("Call", self)
+        return TraceSuccessContinuation("Call", self, depth)
 
 class CutScopeNotifier(Continuation):
     def __init__(self, engine, nextcont, fcont_after_cut):
@@ -592,11 +589,11 @@ def get_decision(write, getch):
     return res
 
 
-def print_trace_step(engine, port, query, write):
+def print_trace_step(engine, port, query, write, depth):
     from prolog.builtin import formatting
     f = formatting.TermFormatter(engine, quoted=True, max_depth=20)
-    tm = port, f.format(query)
-    write("[%s] %s ?" % tm)
+    tm = port, depth, f.format(query)
+    write("%s: (%d) %s ?" % tm)
 
 # XXX
 """
@@ -610,10 +607,11 @@ class TraceSuccessContinuation(Continuation):
     Port can be None in case of e.g. BodyContinuation. Then, wrapping
     without tracing output is necessary. """
 
-    def __init__(self, port, innercont, query=None, nextcont=None):
+    def __init__(self, port, innercont, depth, query=None, nextcont=None):
         self.engine = innercont.engine
         self.port = port
         self.innercont = innercont
+        self.depth = depth
         self.nextcont = nextcont
         if query is None and port is not None:
             query = self.innercont.query
@@ -625,20 +623,22 @@ class TraceSuccessContinuation(Continuation):
     def activate(self, fcont, heap):
         if self.port is None:
             nextcont, fcont, heap = self.innercont.activate(fcont, heap)
-            nextcont = nextcont.trace_wrap()
+            nextcont = nextcont.trace_wrap(self.depth)
             fcont = nextcont.make_next_fcont(fcont)
             return nextcont, fcont, heap
 
         write = self.engine.tracewrapper.write
         getch = self.engine.tracewrapper.getch
-        print_trace_step(self.engine, self.port, self.query, write)
+        print_trace_step(self.engine, self.port, self.query, write, self.depth)
         res = get_decision(write, getch)
         if res == "creep":
             if self.port == "Exit":
                 nextcont = self.nextcont
+                depth = self.depth
             elif self.port == "Call":
                 nextcont, fcont, heap = self.innercont.activate(fcont, heap)
-            nextcont = nextcont.trace_wrap()
+                depth = self.depth + 1
+            nextcont = nextcont.trace_wrap(depth)
             fcont = nextcont.make_next_fcont(fcont)
         return nextcont, fcont, heap
 
@@ -650,27 +650,28 @@ class TraceSuccessContinuation(Continuation):
         while isinstance(nextc, TraceSuccessContinuation):
             nextc = nextc.innercont
         if isinstance(nextc, RuleContinuation) or (isinstance(nextc, BuiltinContinuation) and nextc.builtin.should_trace):
-            fcont = fcont.trace_wrap(query=nextc.query)
+            fcont = fcont.trace_wrap(self.depth, query=nextc.query)
         return fcont
 
-    def trace_wrap(self, query=None):
+    def trace_wrap(self, depth, query=None):
         return self
 
     def trace_unwrap(self):
         return self.innercont # XXX needs to be recursive
 
     def __repr__(self):
-        return "<TraceSuccessContinuation %s innercont=%s>" % (self.port, self.innercont)
+        return "<TraceSuccessContinuation %s depth=%d innercont=%s>" % (self.port, self.depth, self.innercont)
 
     _dot = _dot
 
 class TraceFailureContinuation(FailureContinuation):
     """ Represents a trace port which can be one of: Fail and Redo."""
 
-    def __init__(self, port, fcont, query=None):
+    def __init__(self, port, fcont, depth, query=None):
         self.port = port
         self.engine = fcont.engine
         self.innerfcont = fcont
+        self.depth = depth
         if query is None:
             query = self.innerfcont.query
         self.query = query
@@ -682,28 +683,29 @@ class TraceFailureContinuation(FailureContinuation):
         """ Innerfcont contains the query for -Fail- and -Redo- output. Nextcont is the failure continuation."""
         write = self.engine.tracewrapper.write
         getch = self.engine.tracewrapper.getch
-        print_trace_step(self.engine, self.port, self.query, write)
+        print_trace_step(self.engine, self.port, self.query, write, self.depth)
         res = get_decision(write, getch)
         if res == "creep":
             if self.port == "Fail":
                 nextcont, fcont, heap = self.innerfcont.fail(heap)
-                nextcont = nextcont.trace_wrap()
+                nextcont = nextcont.trace_wrap(self.depth)
             elif self.port == "Redo":
                 nextcont, fcont, heap = self.innerfcont.fail(heap)
-                nextcont = nextcont.trace_wrap()
+                nextcont = nextcont.trace_wrap(self.depth)
                 nextcont.port = None
                 fcont = nextcont.make_next_fcont(fcont)
+                nextcont.depth += 1
 
         return nextcont, fcont, heap
     
-    def trace_wrap(self, query=None):
-        return TraceFailureContinuation("Fail", self, query=query)
+    def trace_wrap(self, depth, query=None):
+        return TraceFailureContinuation("Fail", self, depth, query=query)
 
     def trace_unwrap(self):
         return self.innerfcont
 
     def __repr__(self):
-        return "<TraceFailureContinuation %s innerfcont=%s>" % (self.port, self.innerfcont)
+        return "<TraceFailureContinuation %s depth=%d innerfcont=%s>" % (self.port, self.depth, self.innerfcont)
 
     _dot = _dot
 
