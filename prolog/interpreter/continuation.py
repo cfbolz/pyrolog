@@ -457,6 +457,7 @@ class BodyContinuation(ContinuationWithModule):
         return "<BodyContinuation %r>" % (self.body, )
 
     def trace_wrap(self, depth, query=None):
+        # XXX If fact doesnt exists, no Call or Fail is shown
         return TraceSuccessContinuation(None, self, depth)
 
 class BuiltinContinuation(ContinuationWithModule):
@@ -578,6 +579,10 @@ def get_decision(write, getch):
             write("creep\n")
             res = "creep"
             break
+        elif res in "s":
+            write("skip\n")
+            res = "skip"
+            break
         elif res in "a":
             write("abort\n")
             res = "abort"
@@ -621,6 +626,8 @@ class TraceSuccessContinuation(Continuation):
         return False
 
     def activate(self, fcont, heap):
+        skip = self.engine.tracewrapper.skip(self.depth, self.port)
+
         if self.port is None:
             nextcont, fcont, heap = self.innercont.activate(fcont, heap)
             nextcont = nextcont.trace_wrap(self.depth)
@@ -629,8 +636,15 @@ class TraceSuccessContinuation(Continuation):
 
         write = self.engine.tracewrapper.write
         getch = self.engine.tracewrapper.getch
-        print_trace_step(self.engine, self.port, self.query, write, self.depth)
-        res = get_decision(write, getch)
+        if not skip:
+            print_trace_step(self.engine, self.port, self.query, write, self.depth)
+            res = get_decision(write, getch)
+        else:
+            res = "creep"
+
+        if res == "skip":
+            self.engine.tracewrapper.skiplevel = self.depth
+            res = "creep"
         if res == "creep":
             if self.port == "Exit":
                 nextcont = self.nextcont
@@ -640,6 +654,8 @@ class TraceSuccessContinuation(Continuation):
                 depth = self.depth + 1
             nextcont = nextcont.trace_wrap(depth)
             fcont = nextcont.make_next_fcont(fcont)
+            nextcont = nextcont.trace_wrap(depth)
+
         return nextcont, fcont, heap
 
     def make_next_fcont(self, fcont):
@@ -681,10 +697,20 @@ class TraceFailureContinuation(FailureContinuation):
 
     def fail(self, heap):
         """ Innerfcont contains the query for -Fail- and -Redo- output. Nextcont is the failure continuation."""
+        skip = self.engine.tracewrapper.skip(self.depth, self.port)
+
         write = self.engine.tracewrapper.write
         getch = self.engine.tracewrapper.getch
-        print_trace_step(self.engine, self.port, self.query, write, self.depth)
-        res = get_decision(write, getch)
+        if not skip:
+            print_trace_step(self.engine, self.port, self.query, write, self.depth)
+            res = get_decision(write, getch)
+        else:
+            res = "creep"
+
+        if res == "skip":
+            self.engine.tracewrapper.skiplevel = self.depth
+            res = "creep"
+
         if res == "creep":
             if self.port == "Fail":
                 nextcont, fcont, heap = self.innerfcont.fail(heap)
