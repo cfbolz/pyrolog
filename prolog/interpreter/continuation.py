@@ -579,9 +579,21 @@ def get_decision(write, getch):
             write("creep\n")
             res = "creep"
             break
+        elif res in "g":
+            write("goals\n")
+            res = "goals"
+            break
         elif res in "s":
             write("skip\n")
             res = "skip"
+            break
+        elif res in "p":
+            write("print\n")
+            res = "print"
+            break
+        elif res in "w":
+            write("write\n")
+            res = "write"
             break
         elif res in "a":
             write("abort\n")
@@ -599,6 +611,14 @@ def print_trace_step(engine, port, query, write, depth):
     f = formatting.TermFormatter(engine, quoted=True, max_depth=20)
     tm = port, depth, f.format(query)
     write("%s: (%d) %s ?" % tm)
+
+def get_goal_string(engine, query, depth):
+    from prolog.builtin import formatting
+    f = formatting.TermFormatter(engine, quoted=True, max_depth=20)
+    tm = depth, f.format(query)
+    return "    [%d] %s\n" % tm
+
+
 
 # XXX
 """
@@ -636,27 +656,45 @@ class TraceSuccessContinuation(Continuation):
 
         write = self.engine.tracewrapper.write
         getch = self.engine.tracewrapper.getch
-        if not skip:
-            print_trace_step(self.engine, self.port, self.query, write, self.depth)
-            res = get_decision(write, getch)
-        else:
-            res = "creep"
+        while 1:
+            if not skip:
+                print_trace_step(self.engine, self.port, self.query, write, self.depth)
+                res = get_decision(write, getch)
+            else:
+                res = "creep"
 
-        if res == "skip":
-            self.engine.tracewrapper.skiplevel = self.depth
-            res = "creep"
-        if res == "creep":
-            if self.port == "Exit":
-                nextcont = self.nextcont
-                depth = self.depth
-            elif self.port == "Call":
-                nextcont, fcont, heap = self.innercont.activate(fcont, heap)
-                depth = self.depth + 1
-            nextcont = nextcont.trace_wrap(depth)
-            fcont = nextcont.make_next_fcont(fcont)
-            nextcont = nextcont.trace_wrap(depth)
+            if res == "skip":
+                self.engine.tracewrapper.skiplevel = self.depth
+                res = "creep"
+            if res == "creep":
+                if self.port == "Exit":
+                    nextcont = self.nextcont
+                    depth = self.depth
+                elif self.port == "Call":
+                    nextcont, fcont, heap = self.innercont.activate(fcont, heap)
+                    depth = self.depth + 1
+                nextcont = nextcont.trace_wrap(depth)
+                fcont = nextcont.make_next_fcont(fcont)
+                nextcont = nextcont.trace_wrap(depth)
+                break
+            elif res == "goals":
+                self.write_goals(write)
+            elif res == "print" or res == "write":
+                pass
 
         return nextcont, fcont, heap
+
+    def write_goals(self, write):
+        if self.port == "Call":
+            cont = self.innercont.nextcont
+        else:
+            cont = self
+        while not isinstance(cont, DoneSuccessContinuation):
+            if isinstance(cont, TraceSuccessContinuation):
+                write(get_goal_string(cont.engine, cont.query, cont.depth))
+                cont = cont.innercont
+            cont = cont.nextcont
+
 
     def make_next_fcont(self, fcont):
         """ This method wraps fcont with TraceFailureContinuation.
@@ -701,29 +739,41 @@ class TraceFailureContinuation(FailureContinuation):
 
         write = self.engine.tracewrapper.write
         getch = self.engine.tracewrapper.getch
-        if not skip:
-            print_trace_step(self.engine, self.port, self.query, write, self.depth)
-            res = get_decision(write, getch)
-        else:
-            res = "creep"
+        while 1:
+            if not skip:
+                print_trace_step(self.engine, self.port, self.query, write, self.depth)
+                res = get_decision(write, getch)
+            else:
+                res = "creep"
 
-        if res == "skip":
-            self.engine.tracewrapper.skiplevel = self.depth
-            res = "creep"
-
-        if res == "creep":
-            if self.port == "Fail":
-                nextcont, fcont, heap = self.innerfcont.fail(heap)
-                nextcont = nextcont.trace_wrap(self.depth)
-            elif self.port == "Redo":
-                nextcont, fcont, heap = self.innerfcont.fail(heap)
-                nextcont = nextcont.trace_wrap(self.depth)
-                nextcont.port = None
-                fcont = nextcont.make_next_fcont(fcont)
-                nextcont.depth += 1
+            if res == "skip":
+                self.engine.tracewrapper.skiplevel = self.depth
+                res = "creep"
+            if res == "creep":
+                if self.port == "Fail":
+                    nextcont, fcont, heap = self.innerfcont.fail(heap)
+                    nextcont = nextcont.trace_wrap(self.depth)
+                elif self.port == "Redo":
+                    nextcont, fcont, heap = self.innerfcont.fail(heap)
+                    nextcont = nextcont.trace_wrap(self.depth)
+                    nextcont.port = None
+                    fcont = nextcont.make_next_fcont(fcont)
+                    nextcont.depth += 1
+                break
+            elif res == "goals":
+                self.write_goals(write)
 
         return nextcont, fcont, heap
-    
+
+    def write_goals(self, write):
+        cont = self
+        while not isinstance(cont, DoneFailureContinuation):
+            if isinstance(cont, TraceFailureContinuation):
+                write(get_goal_string(cont.engine, cont.query, cont.depth))
+                cont = cont.innerfcont
+            else:
+                break
+
     def trace_wrap(self, depth, query=None):
         return TraceFailureContinuation("Fail", self, depth, query=query)
 
