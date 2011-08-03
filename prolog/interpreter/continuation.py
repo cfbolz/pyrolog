@@ -579,6 +579,10 @@ def get_decision(write, getch):
             write("creep\n")
             res = "creep"
             break
+        elif res in "f":
+            write("fail\n")
+            res = "fail"
+            break
         elif res in "g":
             write("goals\n")
             res = "goals"
@@ -594,6 +598,10 @@ def get_decision(write, getch):
         elif res in "w":
             write("write\n")
             res = "write"
+            break
+        elif res in "l":
+            write("leap\n")
+            res = "leap"
             break
         elif res in "a":
             write("abort\n")
@@ -623,7 +631,6 @@ def get_goal_string(engine, query, depth):
 # XXX
 """
 TODO:
-- Refactor Redo, maybe in TraceSuccessContinuation
 - engine.throw throws exceptions, if f/1 not exists, because nextcont is missing
 """
 
@@ -645,6 +652,7 @@ class TraceSuccessContinuation(Continuation):
     def is_done(self):
         return False
 
+    # XXX optimizie
     def activate(self, fcont, heap):
         skip = self.engine.tracewrapper.skip(self.depth, self.port)
 
@@ -677,10 +685,21 @@ class TraceSuccessContinuation(Continuation):
                 fcont = nextcont.make_next_fcont(fcont)
                 nextcont = nextcont.trace_wrap(depth)
                 break
+            elif res == "fail":
+                if isinstance(fcont, TraceFailureContinuation):
+                    fcont.failmarker = True
+                raise error.UnificationFailed
             elif res == "goals":
                 self.write_goals(write)
             elif res == "print" or res == "write":
                 pass
+            elif res == "leap":
+                # XXX Call notrace
+                self.engine.tracewrapper.tracing = False
+                self = self.trace_unwrap()
+                fcont = fcont.trace_unwrap()
+                nextcont, fcont, heap = self.activate(fcont, heap)
+                break
 
         return nextcont, fcont, heap
 
@@ -711,7 +730,9 @@ class TraceSuccessContinuation(Continuation):
         return self
 
     def trace_unwrap(self):
-        return self.innercont # XXX needs to be recursive
+        self = self.innercont
+        self.nextcont = self.nextcont.trace_unwrap()
+        return self
 
     def __repr__(self):
         return "<TraceSuccessContinuation %s depth=%d innercont=%s>" % (self.port, self.depth, self.innercont)
@@ -726,6 +747,7 @@ class TraceFailureContinuation(FailureContinuation):
         self.engine = fcont.engine
         self.innerfcont = fcont
         self.depth = depth
+        self.failmarker = False
         if query is None:
             query = self.innerfcont.query
         self.query = query
@@ -733,6 +755,7 @@ class TraceFailureContinuation(FailureContinuation):
     def is_done(self):
         return False
 
+    # XXX optimizie
     def fail(self, heap):
         """ Innerfcont contains the query for -Fail- and -Redo- output. Nextcont is the failure continuation."""
         skip = self.engine.tracewrapper.skip(self.depth, self.port)
@@ -740,15 +763,22 @@ class TraceFailureContinuation(FailureContinuation):
         write = self.engine.tracewrapper.write
         getch = self.engine.tracewrapper.getch
         while 1:
-            if not skip:
+            if not skip and not self.failmarker:
                 print_trace_step(self.engine, self.port, self.query, write, self.depth)
                 res = get_decision(write, getch)
-            else:
+            elif not self.failmarker:
                 res = "creep"
+            if self.failmarker:
+                res = "fail"
 
             if res == "skip":
                 self.engine.tracewrapper.skiplevel = self.depth
                 res = "creep"
+            if res == "fail":
+                if self.port == "Fail":
+                    res = "creep"
+                else:
+                    raise error.UnificationFailed
             if res == "creep":
                 if self.port == "Fail":
                     nextcont, fcont, heap = self.innerfcont.fail(heap)
@@ -762,6 +792,11 @@ class TraceFailureContinuation(FailureContinuation):
                 break
             elif res == "goals":
                 self.write_goals(write)
+            elif res == "leap":
+                self.engine.tracewrapper.tracing = False
+                self = self.trace_unwrap()
+                nextcont, fcont, heap = self.fail(heap)
+                break
 
         return nextcont, fcont, heap
 
@@ -778,7 +813,10 @@ class TraceFailureContinuation(FailureContinuation):
         return TraceFailureContinuation("Fail", self, depth, query=query)
 
     def trace_unwrap(self):
-        return self.innerfcont
+        self = self.innerfcont
+        if not isinstance(self, DoneFailureContinuation):
+            self.innerfcont.trace_unwrap()
+        return self
 
     def __repr__(self):
         return "<TraceFailureContinuation %s depth=%d innerfcont=%s>" % (self.port, self.depth, self.innerfcont)
