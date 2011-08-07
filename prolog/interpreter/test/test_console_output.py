@@ -2,6 +2,7 @@ from __future__ import with_statement
 import py
 import sys, os, re
 from pypy.tool.udir import udir
+from prolog.interpreter.test.tool import delete_file, create_file
 
 app_main = py.path.local(__file__).dirpath().dirpath().join("translatedmain.py")
 app_main.check()
@@ -121,25 +122,26 @@ class TestInteraction:
             create_file(m, """
             f(A) :- A=1.
             """)
-            child.sendline("consult(test/m).")
+            child.sendline("consult(test/"+m+").")
             child.expect("yes")
             child.expect(">?- ")
             child.sendline("trace.")
             child.expect("yes")
             child.expect(">?- ")
 
+            child.sendline("f(1).")
             child.expect("Call: \\(\d\\) f(1) ?")
             child.sendline("\n")
-            child.expect("creep")
+            child.expect("creep\n")
             child.expect("Call: \\(\d\\) 1=1 ?")
             child.sendline("\n")
-            child.expect("creep")
+            child.expect("creep\n")
             child.expect("Exit: \\(\d\\) 1=1 ?")
             child.sendline("\n")
-            child.expect("creep")
+            child.expect("creep\n")
             child.expect("Exit: \\(\d\\) f(1) ?")
             child.sendline("\n")
-            child.expect("creep")
+            child.expect("creep\n")
             child.expect("yes")
             child.expect(">?- ")
         finally:

@@ -349,6 +349,9 @@ class ContinuationWithModule(Continuation):
         Continuation.__init__(self, engine, nextcont)
         self.module = module
 
+    def trace_wrap(self, depth, query=None):
+        return TraceSuccessContinuation(None, self, depth)
+
 def view(*objects, **names):
     from dotviewer import graphclient
     content = ["digraph G{"]
@@ -547,6 +550,9 @@ class CutScopeNotifier(Continuation):
 
     def activate(self, fcont, heap):
         return self.nextcont, fcont, heap
+
+    def trace_wrap(self, depth, query=None):
+        return TraceSuccessContinuation(None, self, depth)
 
 class CatchingDelimiter(ContinuationWithModule):
     def __init__(self, engine, module, nextcont, fcont, catcher, recover, heap):
@@ -813,10 +819,7 @@ class TraceFailureContinuation(FailureContinuation):
         return TraceFailureContinuation("Fail", self, depth, query=query)
 
     def trace_unwrap(self):
-        self = self.innerfcont
-        if not isinstance(self, DoneFailureContinuation):
-            self.innerfcont.trace_unwrap()
-        return self
+        return self.innerfcont.trace_unwrap()
 
     def __repr__(self):
         return "<TraceFailureContinuation %s depth=%d innerfcont=%s>" % (self.port, self.depth, self.innerfcont)

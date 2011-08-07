@@ -1,7 +1,5 @@
 from prolog.builtin.register import expose_builtin
 from prolog.interpreter import continuation
-from prolog.interpreter.translatedmain import getch, printmessage
-
 
 @expose_builtin("trace", unwrap_spec=[], handles_continuation=True)
 def impl_trace(engine, heap, scont, fcont):

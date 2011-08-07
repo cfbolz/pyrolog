@@ -45,6 +45,10 @@ class ContinueContinuation(Continuation):
             else:
                 self.write('unknown action. press "h" for help\n')
 
+    def trace_wrap(self, depth, query=None):
+        from prolog.interpreter.continuation import TraceSuccessContinuation
+        return TraceSuccessContinuation(None, self, depth)
+
 def var_representation(var_to_pos, engine, write, heap):
     from prolog.builtin import formatting
     f = formatting.TermFormatter(engine, quoted=True, max_depth=20)
