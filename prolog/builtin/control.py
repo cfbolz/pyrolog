@@ -58,9 +58,9 @@ class OrContinuation(continuation.FailureContinuation):
     def __repr__(self):
         return "<OrContinuation %r" % (self.altcall, )
 
-    def trace_wrap(self, depth, query=None):
+    def trace_wrap(self, depth, scont=None):
         from prolog.interpreter.continuation import TraceFailureContinuation
-        return TraceFailureContinuation("Fail", self, depth, query=query)
+        return TraceFailureContinuation("Fail", self, depth, scont=scont)
 
 
 @expose_builtin(";", unwrap_spec=["callable", "callable"],

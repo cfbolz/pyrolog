@@ -392,7 +392,7 @@ class FailureContinuation(object):
     def is_done(self):
         return False
 
-    def trace_wrap(self, depth, query=None):
+    def trace_wrap(self, depth, scont=None):
         """ Returns an instance of TraceSuccessContinuation or
         TraceFailureContinuation, if neccessary. """
         return self
@@ -443,8 +443,8 @@ class DoneFailureContinuation(FailureContinuation):
     def is_done(self):
         return True
 
-    def trace_wrap(self, depth, query=None):
-        return TraceFailureContinuation("Fail", self, depth, query=query)
+    def trace_wrap(self, depth, scont=None):
+        return TraceFailureContinuation("Fail", self, depth, scont=scont)
 
 
 class BodyContinuation(ContinuationWithModule):
@@ -501,8 +501,8 @@ class UserCallContinuation(FailureContinuation):
         return "<UserCallContinuation query=%r rule=%r>" % (
                 self.query, self.rulechain)
 
-    def trace_wrap(self, depth, query=None):
-        return TraceFailureContinuation("Redo", self, depth, query=self.query)
+    def trace_wrap(self, depth, scont=None):
+        return TraceFailureContinuation("Redo", self, depth, scont=scont)
 
 class RuleContinuation(ContinuationWithModule):
     """ A Continuation that represents the application of a rule, i.e.:
@@ -588,6 +588,10 @@ def get_decision(write, getch):
         elif res in "f":
             write("fail\n")
             res = "fail"
+            break
+        elif res in "r":
+            write("retry\n")
+            res = "retry"
             break
         elif res in "g":
             write("goals\n")
@@ -680,6 +684,15 @@ class TraceSuccessContinuation(Continuation):
             if res == "skip":
                 self.engine.tracewrapper.skiplevel = self.depth
                 res = "creep"
+            elif res == "retry":
+                if self.port == "Call":
+                    write("Can't retry at this point\n")
+                    res = "creep"
+                elif self.port == "Exit":
+                    # XXX output like "retrying frame 153 running f(2)" possible?
+                    write("[retry]\n")
+                    nextcont = self.innercont.trace_wrap(self.depth)
+                    break
             if res == "creep":
                 if self.port == "Exit":
                     nextcont = self.nextcont
@@ -712,7 +725,7 @@ class TraceSuccessContinuation(Continuation):
     def write_goals(self, write):
         if self.port == "Call":
             cont = self.innercont.nextcont
-        else:
+        elif self.port == "Exit":
             cont = self
         while not isinstance(cont, DoneSuccessContinuation):
             if isinstance(cont, TraceSuccessContinuation):
@@ -722,14 +735,10 @@ class TraceSuccessContinuation(Continuation):
 
 
     def make_next_fcont(self, fcont):
-        """ This method wraps fcont with TraceFailureContinuation.
-        The query for the wrapper is taken from the next valid Continuation from "self".
-        fcont remains unchanged if next Continuation is not valid. """
+        """ Prepend an element to fcont-chain for fail output, if self Continuation fails. """
         nextc = self.innercont
-        while isinstance(nextc, TraceSuccessContinuation):
-            nextc = nextc.innercont
         if isinstance(nextc, RuleContinuation) or (isinstance(nextc, BuiltinContinuation) and nextc.builtin.should_trace):
-            fcont = fcont.trace_wrap(self.depth, query=nextc.query)
+            fcont = fcont.trace_wrap(self.depth, scont=self)
         return fcont
 
     def trace_wrap(self, depth, query=None):
@@ -748,15 +757,16 @@ class TraceSuccessContinuation(Continuation):
 class TraceFailureContinuation(FailureContinuation):
     """ Represents a trace port which can be one of: Fail and Redo."""
 
-    def __init__(self, port, fcont, depth, query=None):
+    def __init__(self, port, fcont, depth, scont=None):
         self.port = port
         self.engine = fcont.engine
         self.innerfcont = fcont
         self.depth = depth
         self.failmarker = False
-        if query is None:
+        self.scont = scont # korreponding success continuation of this fcont
+        if scont is None:
             query = self.innerfcont.query
-        self.query = query
+        self.query = scont.query
 
     def is_done(self):
         return False
@@ -776,7 +786,6 @@ class TraceFailureContinuation(FailureContinuation):
                 res = "creep"
             if self.failmarker:
                 res = "fail"
-
             if res == "skip":
                 self.engine.tracewrapper.skiplevel = self.depth
                 res = "creep"
@@ -798,6 +807,16 @@ class TraceFailureContinuation(FailureContinuation):
                 break
             elif res == "goals":
                 self.write_goals(write)
+            elif res == "retry":
+                write("[retry]\n")
+                if self.port == "Fail":
+                    nextcont = self.scont.trace_wrap(self.depth)
+                    fcont = nextcont.make_next_fcont(self.innerfcont)
+                    break
+                elif self.port == "Redo":
+                    nextcont = self.scont
+                    fcont = self
+                    break
             elif res == "leap":
                 self.engine.tracewrapper.tracing = False
                 self = self.trace_unwrap()
@@ -815,8 +834,9 @@ class TraceFailureContinuation(FailureContinuation):
             else:
                 break
 
-    def trace_wrap(self, depth, query=None):
-        return TraceFailureContinuation("Fail", self, depth, query=query)
+    def trace_wrap(self, depth, scont=None):
+        # XXX scont and fcont are the same UserCallContinuation
+        return TraceFailureContinuation("Fail", self, depth, scont=scont)
 
     def trace_unwrap(self):
         return self.innerfcont.trace_unwrap()

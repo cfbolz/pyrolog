@@ -745,3 +745,49 @@ def test_trace_failopt2():
     py.test.raises(UnificationFailed, e.run, parse_query_term("trace, f(x)."), e.modulewrapper.user_module)
     assert order == ["Call: (1) f(x) ?","fail\n"]
 
+def test_trace_retry():
+    e = get_engine("""
+    f(X) :- X=1;X=2.
+    f(X) :- X=x.
+    """)
+    order = []
+    def w(s):
+        order.append(s)
+    def gen():
+        for i in ["\n","r","r","\n","\n","\n","\n","\n"] + ["\n","\n","\n","\n","\n","r","s","\n"]:
+            yield i
+        for i in ["\n"] * 8 + ["r","s","\n"]:
+            yield i
+    gengetch = gen()
+    def g():
+        return gengetch.next()
+    e.tracewrapper.write = w
+    e.tracewrapper.getch = g
+
+    try:
+        e.run(parse_query_term("trace, f(2)."), e.modulewrapper.user_module)
+    except StopIteration:
+        pass
+    assert order == ["Call: (1) f(2) ?","creep\n","Call: (2) 2=1 ?","retry\n","Can't retry at this point\n","Fail: (2) 2=1 ?",
+            "retry\n","[retry]\n","Call: (2) 2=1 ?","creep\n","Fail: (2) 2=1 ?","creep\n", "Call: (2) 2=2 ?","creep\n","Exit: (2) 2=2 ?",
+            "creep\n","Exit: (1) f(2) ?","creep\n"]
+
+    order = []
+    try:
+        e.run(parse_query_term("trace, f(x)."), e.modulewrapper.user_module)
+    except StopIteration:
+        pass
+    assert order == ["Call: (1) f(x) ?","creep\n","Call: (2) x=1 ?","creep\n","Fail: (2) x=1 ?","creep\n",
+            "Call: (2) x=2 ?","creep\n","Fail: (2) x=2 ?","creep\n","Redo: (1) f(x) ?","retry\n","[retry]\n",
+            "Call: (1) f(x) ?","skip\n","Exit: (1) f(x) ?","creep\n"]
+
+    order = []
+    try:
+        e.run(parse_query_term("trace, f(x)."), e.modulewrapper.user_module)
+    except StopIteration:
+        pass
+    assert order == ["Call: (1) f(x) ?","creep\n","Call: (2) x=1 ?","creep\n","Fail: (2) x=1 ?","creep\n",
+            "Call: (2) x=2 ?","creep\n","Fail: (2) x=2 ?","creep\n","Redo: (1) f(x) ?","creep\n",
+            "Call: (2) x=x ?","creep\n","Exit: (2) x=x ?","creep\n","Exit: (1) f(x) ?","retry\n","[retry]\n","Call: (1) f(x) ?","skip\n",
+            "Exit: (1) f(x) ?","creep\n"]
+
