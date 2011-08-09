@@ -689,6 +689,10 @@ class TraceSuccessContinuation(Continuation):
             else:
                 res = "creep"
 
+            if res == "abort":
+                nextcont = DoneSuccessContinuation(self.engine)
+                write("Execution aborted\n")
+                break
             if res == "skip":
                 self.engine.tracewrapper.skiplevel = self.depth
                 res = "creep"
