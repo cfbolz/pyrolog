@@ -575,7 +575,15 @@ tracehelptext = """
 key    action
 -------------
 enter  creep
+f      fail
+r      retry
+g      show current goals
+s      skip
+p      print
+w      write
+l      leap
 a      abort
+h      this help text
 """
 
 def get_decision(write, getch):
