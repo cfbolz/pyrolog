@@ -319,6 +319,20 @@ def test_trace():
     e.run(parse_query_term("notrace."), e.modulewrapper.user_module, DoneSuccessContinuation(e))
     assert e.tracewrapper.tracing == False
 
+def test_trace_tracing():
+    e = get_engine("")
+    order = []
+    def w(s):
+        order.append(s)
+    def g():
+        return "\n"
+    e.tracewrapper.write = w
+    e.tracewrapper.getch = g
+    assert_true("trace, tracing.", e)
+    assert_false("notrace, tracing.", e)
+    assert_true("trace,tracing,notrace.",e)
+    assert order == []
+
 def test_trace_fact():
     e = get_engine("""
        f(1).
