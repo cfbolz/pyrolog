@@ -462,7 +462,7 @@ class BodyContinuation(ContinuationWithModule):
         return "<BodyContinuation %r>" % (self.body, )
 
     def trace_wrap(self, depth, query=None):
-        # XXX If fact doesnt exists, no Call or Fail is shown
+        # XXX If fact doesnt exist, no Call or Fail is shown
         # XXX If predicate throws errors no Call is shown
         return TraceSuccessContinuation(None, self, depth)
 
@@ -700,7 +700,7 @@ class TraceSuccessContinuation(Continuation):
                 write("Execution aborted\n")
                 break
             if res == "skip":
-                self.engine.tracewrapper.skiplevel = self.depth
+                self.engine.tracewrapper.skip_from_level = self.depth
                 res = "creep"
             elif res == "retry":
                 if self.port == "Call":
@@ -728,7 +728,7 @@ class TraceSuccessContinuation(Continuation):
                 break
             elif res == "fail":
                 if isinstance(fcont, TraceFailureContinuation):
-                    fcont.failmarker = True
+                    fcont.shall_fail = True
                 raise error.UnificationFailed
             elif res == "goals":
                 self.write_goals(write)
@@ -757,10 +757,10 @@ class TraceSuccessContinuation(Continuation):
 
 
     def make_next_fcont(self, fcont):
-        """ Prepend an element to fcont-chain for fail output, if self Continuation fails. """
+        """ Prepend an element to fcont-chain for fail output, if innercont fails. """
         nextc = self.innercont
         if isinstance(nextc, RuleContinuation) or (isinstance(nextc, BuiltinContinuation) and
-                    nextc.builtin.should_trace):
+                    nextc.builtin.should_trace) or isinstance(nextc, BodyContinuation):
             fcont = fcont.trace_wrap(self.depth, scont=self)
         return fcont
 
@@ -795,7 +795,7 @@ class TraceFailureContinuation(FailureContinuation):
         self.engine = fcont.engine
         self.innerfcont = fcont
         self.depth = depth
-        self.failmarker = False
+        self.shall_fail = False
         self.scont = scont # korreponding success continuation of this fcont
         if scont is None:
             query = self.innerfcont.query
@@ -812,18 +812,18 @@ class TraceFailureContinuation(FailureContinuation):
         write = self.engine.tracewrapper.write
         getch = self.engine.tracewrapper.getch
         while 1:
-            if not skip and not self.failmarker:
+            if not skip and not self.shall_fail:
                 print_trace_step(self.engine, self.port, self.query, write, self.depth)
                 if self.port.lower() in self.engine.tracewrapper.leash_options:
                     res = get_decision(write, getch)
                 else:
                     res = "creep"
-            elif not self.failmarker:
+            elif not self.shall_fail:
                 res = "creep"
-            if self.failmarker:
+            if self.shall_fail:
                 res = "fail"
             if res == "skip":
-                self.engine.tracewrapper.skiplevel = self.depth
+                self.engine.tracewrapper.skip_from_level = self.depth
                 res = "creep"
             if res == "fail":
                 if self.port == "Fail":
