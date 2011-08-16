@@ -3,7 +3,7 @@ from prolog.interpreter.continuation import *
 
 from prolog.interpreter.parsing import parse_query_term, get_engine
 from prolog.interpreter.parsing import get_query_and_vars
-from prolog.interpreter.error import UnificationFailed, UncaughtError
+from prolog.interpreter.error import UnificationFailed, UncaughtError, CatchableError
 from prolog.interpreter.test.tool import collect_all, assert_true, assert_false
 
 
@@ -852,3 +852,43 @@ def test_trace_exception():
             "creep\n","Call: (4) 0<1 ?","creep\n","Exit: (4) 0<1 ?","creep\n","Call: (4) not_exists(0) ?",
             "creep\n","Error: err/1: Undefined procedure: not_exists/1\n","Exception: (3) err(0) ?","creep\n",
             "Exception: (2) err1(0) ?","creep\n","Exception: (1) err2(0) ?","creep\n"]
+
+def test_trace_leash():
+    e = get_engine("""
+    f(X) :- X = 1; X = 2.
+    f(X) :- X = x.
+    """)
+    order = []
+    def w(s):
+        order.append(s)
+    def g():
+        return "\n"
+    e.tracewrapper.write = w
+    e.tracewrapper.getch = g
+
+    try:
+        e.run(parse_query_term("leash(X)."), e.modulewrapper.user_module)
+    except UncaughtError, err:
+        assert err.term.argument_at(0).name() == "instantiation_error"
+
+    try:
+        e.run(parse_query_term("leash([foo])."), e.modulewrapper.user_module)
+    except UncaughtError, err:
+        assert err.term.argument_at(0).name() == "domain_error"
+
+    try:
+        e.run(parse_query_term("leash([call,foo])."), e.modulewrapper.user_module)
+    except UncaughtError, err:
+        assert err.term.argument_at(0).name() == "domain_error"
+
+    e.run(parse_query_term("leash([call,exit])."), e.modulewrapper.user_module)
+    e.run(parse_query_term("leash([call,exit]), trace, f(x)."), e.modulewrapper.user_module)
+    assert order == ["Call: (1) f(x) ?","creep\n","Call: (2) x=1 ?","creep\n","Fail: (2) x=1 ?",
+            "Call: (2) x=2 ?","creep\n","Fail: (2) x=2 ?","Redo: (1) f(x) ?","Call: (2) x=x ?",
+            "creep\n","Exit: (2) x=x ?","creep\n","Exit: (1) f(x) ?","creep\n"]
+
+    order = []
+    e.run(parse_query_term("leash([]), trace, f(x)."), e.modulewrapper.user_module)
+    assert order == ["Call: (1) f(x) ?","Call: (2) x=1 ?","Fail: (2) x=1 ?","Call: (2) x=2 ?",
+            "Fail: (2) x=2 ?","Redo: (1) f(x) ?","Call: (2) x=x ?","Exit: (2) x=x ?",
+            "Exit: (1) f(x) ?"]

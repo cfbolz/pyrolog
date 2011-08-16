@@ -688,7 +688,10 @@ class TraceSuccessContinuation(Continuation):
         while 1:
             if not skip:
                 print_trace_step(self.engine, self.port, self.query, write, self.depth)
-                res = get_decision(write, getch)
+                if self.port.lower() in self.engine.tracewrapper.leash_options:
+                    res = get_decision(write, getch)
+                else:
+                    res = "creep"
             else:
                 res = "creep"
 
@@ -756,7 +759,8 @@ class TraceSuccessContinuation(Continuation):
     def make_next_fcont(self, fcont):
         """ Prepend an element to fcont-chain for fail output, if self Continuation fails. """
         nextc = self.innercont
-        if isinstance(nextc, RuleContinuation) or (isinstance(nextc, BuiltinContinuation) and nextc.builtin.should_trace):
+        if isinstance(nextc, RuleContinuation) or (isinstance(nextc, BuiltinContinuation) and
+                    nextc.builtin.should_trace):
             fcont = fcont.trace_wrap(self.depth, scont=self)
         return fcont
 
@@ -810,7 +814,10 @@ class TraceFailureContinuation(FailureContinuation):
         while 1:
             if not skip and not self.failmarker:
                 print_trace_step(self.engine, self.port, self.query, write, self.depth)
-                res = get_decision(write, getch)
+                if self.port.lower() in self.engine.tracewrapper.leash_options:
+                    res = get_decision(write, getch)
+                else:
+                    res = "creep"
             elif not self.failmarker:
                 res = "creep"
             if self.failmarker:

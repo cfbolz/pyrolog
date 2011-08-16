@@ -1,6 +1,7 @@
 from prolog.builtin.register import expose_builtin
 from prolog.interpreter import continuation
-from prolog.interpreter.error import UnificationFailed
+from prolog.interpreter import term, error
+from prolog.interpreter.helper import unwrap_list
 
 @expose_builtin("trace", unwrap_spec=[], handles_continuation=True)
 def impl_trace(engine, heap, scont, fcont):
@@ -21,4 +22,25 @@ def impl_notrace(engine, heap, scont, fcont):
 @expose_builtin("tracing", unwrap_spec=[], trace=False)
 def impl_tracing(engine, heap):
     if not engine.tracewrapper.tracing:
-        raise UnificationFailed
+        raise error.UnificationFailed
+
+@expose_builtin("leash", unwrap_spec=["obj"], trace=False)
+def impl_leash(engine, heap, optionlist):
+    if isinstance(optionlist, term.Var):
+        error.throw_instantiation_error()
+    optionlist = unwrap_list(optionlist)
+    options = {}
+    leash = []
+    for o in optionlist:
+        name = o.name()
+        if not name in ['call','exit','fail','redo','exception']:
+            error.throw_domain_error('One of call,exit,fail,redo,exception', o)
+        options[name] = None
+        leash.append(name)
+    engine.tracewrapper.leash_options = options
+"""
+    if leash == []:
+        write("No leashing")
+    else:
+        write("Using leashing stopping at "+repr(leash)+" ports")
+"""
