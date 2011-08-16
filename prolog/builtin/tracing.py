@@ -6,8 +6,9 @@ from prolog.interpreter.error import UnificationFailed
 def impl_trace(engine, heap, scont, fcont):
     engine.tracewrapper.tracing = True
     scont = scont.trace_wrap(1)
-    if "query" in dir(scont) and scont.query is not None:
-        fcont = fcont.trace_wrap(1, query=scont.query)
+    #if "query" in dir(scont) and scont.query is not None:
+    #    import pdb; pdb.set_trace()
+    #    fcont = fcont.trace_wrap(1, query=scont.query)
     return scont, fcont, heap
 
 @expose_builtin("notrace", unwrap_spec=[], handles_continuation=True, trace=False)

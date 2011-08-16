@@ -254,7 +254,9 @@ class Engine(object):
         # XXX write tests for catching non-ground things
         while not scont.is_done():
             if isinstance(scont, TraceSuccessContinuation):
-                XXX
+                scont = scont.trace_exception()
+                scont, fcont, heap = scont.activate(fcont, heap)
+                continue
             if not isinstance(scont, CatchingDelimiter):
                 scont = scont.nextcont
                 continue
@@ -461,6 +463,7 @@ class BodyContinuation(ContinuationWithModule):
 
     def trace_wrap(self, depth, query=None):
         # XXX If fact doesnt exists, no Call or Fail is shown
+        # XXX If predicate throws errors no Call is shown
         return TraceSuccessContinuation(None, self, depth)
 
 class BuiltinContinuation(ContinuationWithModule):
@@ -670,7 +673,7 @@ class TraceSuccessContinuation(Continuation):
     def is_done(self):
         return False
 
-    # XXX optimizie
+    # XXX optimize
     def activate(self, fcont, heap):
         skip = self.engine.tracewrapper.skip(self.depth, self.port)
 
@@ -710,8 +713,12 @@ class TraceSuccessContinuation(Continuation):
                     nextcont = self.nextcont
                     depth = self.depth
                 elif self.port == "Call":
+                    # XXX exception causing call wont be displayed -> wrap BodyContinuation
                     nextcont, fcont, heap = self.innercont.activate(fcont, heap)
                     depth = self.depth + 1
+                elif self.port == "Exception":
+                    nextcont = self.nextcont
+                    depth = self.depth
                 nextcont = nextcont.trace_wrap(depth)
                 fcont = nextcont.make_next_fcont(fcont)
                 nextcont = nextcont.trace_wrap(depth)
@@ -761,6 +768,16 @@ class TraceSuccessContinuation(Continuation):
         self.nextcont = self.nextcont.trace_unwrap()
         return self
 
+    def trace_exception(self):
+        # XXX
+        if isinstance(self.innercont, CutScopeNotifier):
+            return self.innercont
+        while isinstance(self, TraceSuccessContinuation) and self.port != "Exit":
+            self = self.innercont.nextcont
+        if isinstance(self, TraceSuccessContinuation):
+            self.port = "Exception"
+        return self
+
     def __repr__(self):
         return "<TraceSuccessContinuation %s depth=%d innercont=%s>" % (self.port, self.depth, self.innercont)
 
@@ -783,7 +800,7 @@ class TraceFailureContinuation(FailureContinuation):
     def is_done(self):
         return False
 
-    # XXX optimizie
+    # XXX optimize
     def fail(self, heap):
         """ Innerfcont contains the query for -Fail- and -Redo- output. Nextcont is the failure continuation."""
         skip = self.engine.tracewrapper.skip(self.depth, self.port)
@@ -847,7 +864,6 @@ class TraceFailureContinuation(FailureContinuation):
                 break
 
     def trace_wrap(self, depth, scont=None):
-        # XXX scont and fcont are the same UserCallContinuation
         return TraceFailureContinuation("Fail", self, depth, scont=scont)
 
     def trace_unwrap(self):
