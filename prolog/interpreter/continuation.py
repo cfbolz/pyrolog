@@ -462,9 +462,8 @@ class BodyContinuation(ContinuationWithModule):
         return "<BodyContinuation %r>" % (self.body, )
 
     def trace_wrap(self, depth, query=None):
-        # XXX If fact doesnt exist, no Call or Fail is shown
         # XXX If predicate throws errors no Call is shown
-        return TraceSuccessContinuation(None, self, depth)
+        return TraceSuccessContinuation(None, self, depth, query=self.body)
 
 class BuiltinContinuation(ContinuationWithModule):
     """ Represents the call to a builtin. """
@@ -482,6 +481,7 @@ class BuiltinContinuation(ContinuationWithModule):
 
     def trace_wrap(self, depth, query=None):
         if self.builtin.should_trace:
+            # XXX let Exit and Call Wrapper point to the same innercont
             nextcont = TraceSuccessContinuation("Exit", self, depth, query=self.query, nextcont=self.nextcont)
             self = BuiltinContinuation(self.engine, self.module, nextcont, self.builtin, self.query)
             return TraceSuccessContinuation("Call", self, depth)
@@ -533,6 +533,7 @@ class RuleContinuation(ContinuationWithModule):
         return "<RuleContinuation rule=%r query=%r>" % (self._rule, self.query)
 
     def trace_wrap(self, depth, query=None):
+        # XXX let Exit and Call wrapper point to the same innercont
         nextcont = TraceSuccessContinuation("Exit", self, depth, query=self.query, nextcont=self.nextcont)
         self = RuleContinuation(self.engine, self.module, nextcont, self._rule, self.query)
         return TraceSuccessContinuation("Call", self, depth)
@@ -678,7 +679,27 @@ class TraceSuccessContinuation(Continuation):
         skip = self.engine.tracewrapper.skip(self.depth, self.port)
 
         if self.port is None:
-            nextcont, fcont, heap = self.innercont.activate(fcont, heap)
+            if isinstance(self.innercont, BodyContinuation):
+                # Call BodyContinuation in-a-box, show trace output if it fails
+                # XXX refactor
+                try:
+                    nextcont, fcont, heap = self.innercont.activate(fcont, heap)
+                except (error.UnificationFailed, error.UncaughtError, error.CatchableError):
+                    scont = TraceSuccessContinuation("Call",
+                            self.innercont, self.depth, query=self.innercont.body)
+                    try:
+                        scont.activate(fcont, heap)
+                    except error.UnificationFailed, e:
+                        pass
+                    except error.CatchableError, e:
+                        sig = self.innercont.body.signature().string()
+                        self.engine.tracewrapper.write("Error: err/1: Undefined procedure: "+sig+"\n")
+                        raise e
+                    fcont = fcont.trace_wrap(self.depth, scont=self)
+                    fcont.fail(heap)
+                    raise e
+            else:
+                nextcont, fcont, heap = self.innercont.activate(fcont, heap)
             nextcont = nextcont.trace_wrap(self.depth)
             fcont = nextcont.make_next_fcont(fcont)
             return nextcont, fcont, heap
@@ -760,7 +781,7 @@ class TraceSuccessContinuation(Continuation):
         """ Prepend an element to fcont-chain for fail output, if innercont fails. """
         nextc = self.innercont
         if isinstance(nextc, RuleContinuation) or (isinstance(nextc, BuiltinContinuation) and
-                    nextc.builtin.should_trace) or isinstance(nextc, BodyContinuation):
+                    nextc.builtin.should_trace):
             fcont = fcont.trace_wrap(self.depth, scont=self)
         return fcont
 

@@ -353,7 +353,6 @@ def test_trace_fact():
     e.run(parse_query_term("trace, f(2)."), e.modulewrapper.user_module)
     assert order == ["Call: (1) f(2) ?", "creep\n", "Exit: (1) f(2) ?", "creep\n"]
     
-@py.test.mark.xfail
 def test_trace_fact_fail():
     e = get_engine("""
        f(1).
@@ -831,8 +830,6 @@ def test_trace_retry():
             "Call: (2) x=x ?","creep\n","Exit: (2) x=x ?","creep\n","Exit: (1) f(x) ?","retry\n",
             "[retry]\n","Call: (1) f(x) ?","skip\n","Exit: (1) f(x) ?","creep\n"]
 
-#XXX BodyContinuation must be wrapped to trace non-existing predicate Calls
-@py.test.mark.xfail
 def test_trace_exception():
     e = get_engine("""
     err2(X) :- err1(X).
