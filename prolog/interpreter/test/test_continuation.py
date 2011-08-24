@@ -5,7 +5,7 @@ from prolog.interpreter.parsing import parse_query_term, get_engine
 from prolog.interpreter.parsing import get_query_and_vars
 from prolog.interpreter.error import UnificationFailed, UncaughtError, CatchableError
 from prolog.interpreter.test.tool import collect_all, assert_true, assert_false
-
+import re
 
 def test_driver():
     order = []
@@ -889,3 +889,152 @@ def test_trace_leash():
     assert order == ["Call: (1) f(x) ?","Call: (2) x=1 ?","Fail: (2) x=1 ?","Call: (2) x=2 ?",
             "Fail: (2) x=2 ?","Redo: (1) f(x) ?","Call: (2) x=x ?","Exit: (2) x=x ?",
             "Exit: (1) f(x) ?"]
+
+@py.test.mark.xfail
+def test_trace_automatics():
+    routines = Routines()
+    switracecatcher = SWITraceCatcher()
+    pyrologtracecatcher = PyrologTraceCatcher()
+    for r in ["test"]:
+        routines.create_routine(r)
+        try:
+            swi = switracecatcher.run(r)
+            pyrolog = pyrologtracecatcher.run(r)
+        finally:
+            routines.delete_routine(r)
+
+        assert len(swi) == len(pyrolog)
+        for i in range(len(swi)):
+            parsed_swi = switracecatcher.parse_step(swi[i])
+            parsed_pyr = pyrologtracecatcher.parse_step(pyrolog[i])
+            assert parsed_swi == parsed_pyr
+
+# _____________________________Automated test classes
+
+class PyrologTraceCatcher():
+    def __init__(self):
+        self.engine = get_engine("")
+
+    def run(self, routine_name):
+        query = "consult(%s), leash([]), trace, %s." % (
+                routine_name, routine_name)
+        order = []
+        def g():
+            return "\n"
+        def w(s):
+            order.append(s)
+        self.engine.tracewrapper.write = w
+        self.engine.tracewrapper.getch = g
+        p = parse_query_term(query)
+        self.engine.run(p, self.engine.modulewrapper.user_module)
+        return order
+
+    # ____________________regex parsing
+    def parse_step(self, line):
+        pattern = '(Call|Exit|Redo|Fail): \((\d+)\) (.*) \?'
+        parsed = re.sub(pattern, self.swi_sub, line)
+        return parsed
+
+    def swi_sub(self, match):
+        port = match.group(1)
+        depth = int(match.group(2))
+        query = match.group(3)
+        query = re.sub('_[A-Z][0-9]+','_UNKNOWN_VAR',query)
+        return "%s: (%d) %s ?" % (port, depth, query)
+
+class SWITraceCatcher():
+    def __init__(self):
+        self.routines = Routines()
+        self.engine = get_engine("")
+
+    def run(self, routine_name):
+        from os import system
+        filename = "output.txt"
+        command = "prolog -t '[%s], leash([-exit,-call,-fail,-redo]),"
+        command +="trace, %s, notrace, halt.' > %s"
+        command = command % (routine_name, routine_name, filename)
+        system(command)
+        contents = ""
+        f = file(filename, "r")
+        try:
+            contents = f.read()
+        except ValueError:
+            pass
+        finally:
+            f.close
+            self.routines.delete_file(filename)
+        return self.parse_prolog_output(contents)
+
+    def parse_prolog_output(self, output):
+        lines = output.split("\n")
+        i = 0
+        while i < len(lines):
+            if lines[i] == "":
+                del lines[i]
+            else:
+                lines[i] = self.trim(lines[i])
+                i += 1
+        return lines
+
+    def trim(self, string):
+        if string == "":
+            return string
+        pos = 0
+        rpos = len(string) - 1
+        while string[pos] == " ":
+            pos += 1
+        while string[rpos] == " ":
+            rpos -= 1
+        return string[pos:rpos + 1]
+
+    # ____________________regex parsing
+    def parse_step(self, line):
+        pattern = '(Call|Exit|Redo|Fail): \((\d+)\) (.*)'
+        parsed = re.sub(pattern, self.swi_sub, line)
+        return parsed
+
+    def swi_sub(self, match):
+        port = match.group(1)
+        depth = int(match.group(2)) - 3
+        query = match.group(3)
+        query = re.sub('_[A-Z][0-9]+','_UNKNOWN_VAR',query)
+        return "%s: (%d) %s ?" % (port, depth, query)
+
+
+class Routines:
+
+    """
+    def start_routine(self, r):
+        self.create_routine(r)
+        solution = self.parse_prolog_output(self.get_prolog_routine_output(r))
+        self.delete_routine(r)
+        return solution
+    """
+
+    def delete_routine(self, routine):
+        filename = routine + ".pl"
+        self.delete_file(filename)
+
+    def delete_file(self, filename):
+        from os import remove
+        remove(filename)
+
+    def create_routine(self, routine):
+        func = getattr(self, "routine_"+routine)
+        prolog_code = func()
+        f = file(routine + ".pl", "w")
+        try:
+            f.write(prolog_code)
+        except ValueError:
+            pass
+        finally:
+            f.close()
+
+    def routine_test(self):
+        return """
+        test :- append([1,2,3],[4,5,6],_X).
+        append([], X, X).
+        append([H|T], X, [H|R]) :-
+            append(T, X, R).
+        """
+
