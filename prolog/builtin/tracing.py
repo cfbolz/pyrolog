@@ -7,6 +7,7 @@ from prolog.interpreter.helper import unwrap_list
 def impl_trace(engine, heap, scont, fcont):
     engine.tracewrapper.tracing = True
     scont = scont.trace_wrap(1)
+    engine.tracewrapper.info("The Debugger will first creep, showing everything (trace).\n\n")
     #if "query" in dir(scont) and scont.query is not None:
     #    import pdb; pdb.set_trace()
     #    fcont = fcont.trace_wrap(1, query=scont.query)
@@ -17,6 +18,7 @@ def impl_notrace(engine, heap, scont, fcont):
     engine.tracewrapper.tracing = False
     scont = scont.trace_unwrap()
     fcont = fcont.trace_unwrap()
+    engine.tracewrapper.info("The debugger is switched off.\n")
     return scont, fcont, heap
 
 @expose_builtin("tracing", unwrap_spec=[], trace=False)

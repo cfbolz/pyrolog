@@ -326,6 +326,7 @@ def test_trace_tracing():
         order.append(s)
     def g():
         return "\n"
+    e.tracewrapper.show_info = False
     e.tracewrapper.write = w
     e.tracewrapper.getch = g
     assert_true("trace, tracing.", e)
@@ -346,6 +347,7 @@ def test_trace_fact():
 
     e.tracewrapper.write = w
     e.tracewrapper.getch = g
+    e.tracewrapper.show_info = False
     e.run(parse_query_term("trace, f(1)."), e.modulewrapper.user_module)
     assert order == ["Call: (1) f(1) ?", "creep\n", "Exit: (1) f(1) ?", "creep\n"]
 
@@ -366,6 +368,7 @@ def test_trace_fact_fail():
 
     e.tracewrapper.write = w
     e.tracewrapper.getch = g
+    e.tracewrapper.show_info = False
 
     t = parse_query_term("trace, f(3).")
     # XXX wrap BodyContinuation to display trace
@@ -384,6 +387,7 @@ def test_trace_success():
 
     e.tracewrapper.write = w
     e.tracewrapper.getch = g
+    e.tracewrapper.show_info = False
     e.run(parse_query_term("trace, f(1)."), e.modulewrapper.user_module)
     assert order == ["Call: (1) f(1) ?", "creep\n", "Call: (2) 1=1 ?", "creep\n", "Exit: (2) 1=1 ?",
             "creep\n", "Exit: (1) f(1) ?", "creep\n"]
@@ -400,6 +404,7 @@ def test_trace_simple_fail():
 
     e.tracewrapper.write = w
     e.tracewrapper.getch = g
+    e.tracewrapper.show_info = False
     t = parse_query_term("trace, f(2).")
     py.test.raises(UnificationFailed, e.run, t, e.modulewrapper.user_module)
     #e.run(parse_query_term("trace, f(2)."), e.modulewrapper.user_module)
@@ -419,6 +424,7 @@ def test_trace_fail_success():
 
     e.tracewrapper.write = w
     e.tracewrapper.getch = g
+    e.tracewrapper.show_info = False
     e.run(parse_query_term("trace, f(2)."), e.modulewrapper.user_module)
 
     assert order == ["Call: (1) f(2) ?","creep\n","Call: (2) 2=1 ?","creep\n","Fail: (2) 2=1 ?","creep\n",
@@ -437,6 +443,7 @@ def test_trace_fail_redo():
 
     e.tracewrapper.write = w
     e.tracewrapper.getch = g
+    e.tracewrapper.show_info = False
     e.run(parse_query_term("trace, f(x)."), e.modulewrapper.user_module)
 
     assert order == ["Call: (1) f(x) ?","creep\n","Call: (2) x=1 ?","creep\n","Fail: (2) x=1 ?","creep\n",
@@ -456,6 +463,7 @@ def test_trace_redo_fail():
 
     e.tracewrapper.write = w
     e.tracewrapper.getch = g
+    e.tracewrapper.show_info = False
     t = parse_query_term("trace, f(a).")
     py.test.raises(UnificationFailed, e.run, t, e.modulewrapper.user_module)
 
@@ -478,6 +486,7 @@ def test_trace_complex():
 
     e.tracewrapper.write = w
     e.tracewrapper.getch = g
+    e.tracewrapper.show_info = False
     e.run(parse_query_term("trace, f(X,Y)."), e.modulewrapper.user_module)
     c = "creep\n"
     # XXX SWI: [Exit] [1]=..['.', 1, 1[]] ? dereference
@@ -523,6 +532,7 @@ def test_trace_skip():
 
     e.tracewrapper.write = w
     e.tracewrapper.getch = g
+    e.tracewrapper.show_info = False
     try:
         e.run(parse_query_term("trace, f(a)."), e.modulewrapper.user_module)
     except StopIteration:
@@ -577,6 +587,7 @@ def test_trace_write_print():
 
     e.tracewrapper.write = w
     e.tracewrapper.getch = g
+    e.tracewrapper.show_info = False
 
     try:
         e.run(parse_query_term("trace, f(a)."), e.modulewrapper.user_module)
@@ -604,6 +615,7 @@ def test_trace_goals():
         return gengetch.next()
     e.tracewrapper.write = w
     e.tracewrapper.getch = g
+    e.tracewrapper.show_info = False
 
     try:
         e.run(parse_query_term("trace, append([1,2],[3,4],X)."), e.modulewrapper.user_module)
@@ -639,6 +651,7 @@ def test_trace_goals_fail():
         return gengetch.next()
     e.tracewrapper.write = w
     e.tracewrapper.getch = g
+    e.tracewrapper.show_info = False
 
     t = parse_query_term("trace, append([1],[2],[1,2,3]).")
     try:
@@ -671,6 +684,7 @@ def test_trace_goals_redo():
         return gengetch.next()
     e.tracewrapper.write = w
     e.tracewrapper.getch = g
+    e.tracewrapper.show_info = False
 
     try:
         e.run(parse_query_term("trace, f(x)."), e.modulewrapper.user_module)
@@ -699,6 +713,7 @@ def test_trace_leap():
         return "l"
     e.tracewrapper.write = w
     e.tracewrapper.getch = g
+    e.tracewrapper.show_info = False
 
     e.run(parse_query_term("trace,f(2)."), e.modulewrapper.user_module)
     assert order == ["Call: (1) f(2) ?","leap\n"]
@@ -725,6 +740,7 @@ def test_trace_leap2():
         return "l"
     e.tracewrapper.write = w
     e.tracewrapper.getch = g
+    e.tracewrapper.show_info = False
 
     e.run(parse_query_term("trace, llength([1], X)."), e.modulewrapper.user_module)
     # XXX depth will start from 0 every "trace"
@@ -750,6 +766,7 @@ def test_trace_failopt():
         return gengetch.next()
     e.tracewrapper.write = w
     e.tracewrapper.getch = g
+    e.tracewrapper.show_info = False
     try:
         py.test.raises(UnificationFailed, e.run, parse_query_term("trace,list([1,2,3])."),
                 e.modulewrapper.user_module)
@@ -780,6 +797,7 @@ def test_trace_failopt2():
         return "f"
     e.tracewrapper.write = w
     e.tracewrapper.getch = g
+    e.tracewrapper.show_info = False
 
     py.test.raises(UnificationFailed, e.run, parse_query_term("trace, f(x)."), e.modulewrapper.user_module)
     assert order == ["Call: (1) f(x) ?","fail\n"]
@@ -802,6 +820,7 @@ def test_trace_retry():
         return gengetch.next()
     e.tracewrapper.write = w
     e.tracewrapper.getch = g
+    e.tracewrapper.show_info = False
 
     try:
         e.run(parse_query_term("trace, f(2)."), e.modulewrapper.user_module)
@@ -843,6 +862,7 @@ def test_trace_exception():
         return "\n"
     e.tracewrapper.write = w
     e.tracewrapper.getch = g
+    e.tracewrapper.show_info = False
 
     py.test.raises(UncaughtError, e.run, parse_query_term("trace, err2(0)."), e.modulewrapper.user_module)
     assert order == ["Call: (1) err2(0) ?","creep\n","Call: (2) err1(0) ?","creep\n","Call: (3) err(0) ?",
@@ -857,11 +877,13 @@ def test_trace_leash():
     """)
     order = []
     def w(s):
-        order.append(s)
+        if s != "\n":
+            order.append(s)
     def g():
         return "\n"
     e.tracewrapper.write = w
     e.tracewrapper.getch = g
+    e.tracewrapper.show_info = False
 
     try:
         e.run(parse_query_term("leash(X)."), e.modulewrapper.user_module)
@@ -878,7 +900,6 @@ def test_trace_leash():
     except UncaughtError, err:
         assert err.term.argument_at(0).name() == "domain_error"
 
-    e.run(parse_query_term("leash([call,exit])."), e.modulewrapper.user_module)
     e.run(parse_query_term("leash([call,exit]), trace, f(x)."), e.modulewrapper.user_module)
     assert order == ["Call: (1) f(x) ?","creep\n","Call: (2) x=1 ?","creep\n","Fail: (2) x=1 ?",
             "Call: (2) x=2 ?","creep\n","Fail: (2) x=2 ?","Redo: (1) f(x) ?","Call: (2) x=x ?",
@@ -889,6 +910,8 @@ def test_trace_leash():
     assert order == ["Call: (1) f(x) ?","Call: (2) x=1 ?","Fail: (2) x=1 ?","Call: (2) x=2 ?",
             "Fail: (2) x=2 ?","Redo: (1) f(x) ?","Call: (2) x=x ?","Exit: (2) x=x ?",
             "Exit: (1) f(x) ?"]
+
+# _____________________________Automated test
 
 @py.test.mark.xfail
 def test_trace_automatics():
@@ -909,8 +932,6 @@ def test_trace_automatics():
             parsed_pyr = pyrologtracecatcher.parse_step(pyrolog[i])
             assert parsed_swi == parsed_pyr
 
-# _____________________________Automated test classes
-
 class PyrologTraceCatcher():
     def __init__(self):
         self.engine = get_engine("")
@@ -922,9 +943,11 @@ class PyrologTraceCatcher():
         def g():
             return "\n"
         def w(s):
-            order.append(s)
+            if s != "\n":
+                order.append(s)
         self.engine.tracewrapper.write = w
         self.engine.tracewrapper.getch = g
+        self.engine.tracewrapper.show_info = False
         p = parse_query_term(query)
         self.engine.run(p, self.engine.modulewrapper.user_module)
         return order

@@ -648,14 +648,6 @@ def get_goal_string(engine, query, depth):
     tm = depth, f.format(query)
     return "    [%d] %s\n" % tm
 
-
-
-# XXX
-"""
-TODO:
-- engine.throw throws exceptions, if f/1 not exists, because nextcont is missing
-"""
-
 class TraceSuccessContinuation(Continuation):
     """ Represents a trace port which can be one of: Call and Exit.
     Port can be None in case of e.g. BodyContinuation. Then, wrapping
@@ -713,6 +705,7 @@ class TraceSuccessContinuation(Continuation):
                     res = get_decision(write, getch)
                 else:
                     res = "creep"
+                    write("\n")
             else:
                 res = "creep"
 
@@ -839,6 +832,7 @@ class TraceFailureContinuation(FailureContinuation):
                     res = get_decision(write, getch)
                 else:
                     res = "creep"
+                    write("\n")
             elif not self.shall_fail:
                 res = "creep"
             if self.shall_fail:

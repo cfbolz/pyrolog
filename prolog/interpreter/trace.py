@@ -8,6 +8,7 @@ class TraceWrapper():
         self.skip_from_level = 0
         self.leash_options = {
                 "call":None,"exit":None,"fail":None,"redo":None,"exception":None}
+        self.show_info = True
 
     def skip(self, depth, port):
         if self.skip_from_level > 0:
@@ -17,3 +18,7 @@ class TraceWrapper():
             return True
         else:
             return False
+
+    def info(self, string):
+        if self.show_info:
+            self.write(string)
