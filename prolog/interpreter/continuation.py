@@ -758,6 +758,17 @@ class TraceSuccessContinuation(Continuation):
 
         return nextcont, fcont, heap
 
+    # XXX neccessary?
+    def dereference(self, query, heap):
+        query = query.dereference(heap)
+        if "Generic" in query.__class__.__name__:
+            args = query.arguments()
+            for i in range(len(args)):
+                args[i] = self.dereference(args[i], heap)
+                setattr(query, "val_%d" % (i,), args[i])
+        return query
+
+
     def write_goals(self, write):
         if self.port == "Call":
             cont = self.innercont.nextcont
