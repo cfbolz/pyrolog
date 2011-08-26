@@ -701,7 +701,7 @@ class TraceSuccessContinuation(Continuation):
         while 1:
             if not skip:
                 print_trace_step(self.engine, self.port, self.query, write, self.depth)
-                if self.port.lower() in self.engine.tracewrapper.leash_options:
+                if self.engine.tracewrapper.is_leashed(self.port.lower()):
                     res = get_decision(write, getch)
                 else:
                     res = "creep"
@@ -839,7 +839,7 @@ class TraceFailureContinuation(FailureContinuation):
         while 1:
             if not skip and not self.shall_fail:
                 print_trace_step(self.engine, self.port, self.query, write, self.depth)
-                if self.port.lower() in self.engine.tracewrapper.leash_options:
+                if self.engine.tracewrapper.is_leashed(self.port.lower()):
                     res = get_decision(write, getch)
                 else:
                     res = "creep"

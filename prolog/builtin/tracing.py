@@ -31,18 +31,24 @@ def impl_leash(engine, heap, optionlist):
     if isinstance(optionlist, term.Var):
         error.throw_instantiation_error()
     optionlist = unwrap_list(optionlist)
-    options = {}
-    leash = []
     for o in optionlist:
-        name = o.name()
-        if not name in ['call','exit','fail','redo','exception']:
-            error.throw_domain_error('One of call,exit,fail,redo,exception', o)
-        options[name] = None
-        leash.append(name)
-    engine.tracewrapper.leash_options = options
-"""
+        if not o.argument_count != 1:
+            error.throw_domain_error('One of (+|-) all,call,exit,fail,redo,exception', o)
+        op = o.name()
+        if not op in "+-":
+            error.throw_domain_error('One of modifier +,-', o)
+        name = o.val_0.name()
+        if not name in ['all','call','exit','fail','redo','exception']:
+            error.throw_domain_error('One of (+|-) all,call,exit,fail,redo,exception', o)
+        if op == "+":
+            engine.tracewrapper.add_leash_option(name)
+        elif op == "-":
+            engine.tracewrapper.remove_leash_option(name)
+    leash = list(engine.tracewrapper.leash_options)
     if leash == []:
-        write("No leashing")
+        engine.tracewrapper.info("No leashing\n")
     else:
-        write("Using leashing stopping at "+repr(leash)+" ports")
-"""
+        engine.tracewrapper.info("Using leashing stopping at "+repr(leash)+" ports\n")
+
+
+

@@ -747,7 +747,7 @@ def test_trace_leap2():
     assert order == ["Call: (1) llength([1], _G0) ?","leap\n","Call: (2) _G0is_G1+1 ?","leap\n"]
     assert e.tracewrapper.tracing == False
 
-def test_trace_failopt():
+def test_trace_failoption():
     e = get_engine("""
     list([]).
     list([_|R]) :- list(R).
@@ -784,7 +784,7 @@ def test_trace_failopt():
     assert order == ["Call: (1) f(x) ?","creep\n","Call: (2) x=1 ?","fail\n","Call: (2) x=2 ?","creep\n",
             "Fail: (2) x=2 ?","fail\n","Redo: (1) f(x) ?","fail\n"]
 
-def test_trace_failopt2():
+def test_trace_failoption2():
     e = get_engine("""
     f(X) :- X=1;X=2.
     f(X) :- X=x.
@@ -896,20 +896,33 @@ def test_trace_leash():
         assert err.term.argument_at(0).name() == "domain_error"
 
     try:
-        e.run(parse_query_term("leash([call,foo])."), e.modulewrapper.user_module)
+        e.run(parse_query_term("leash([+call,+foo])."), e.modulewrapper.user_module)
     except UncaughtError, err:
         assert err.term.argument_at(0).name() == "domain_error"
 
-    e.run(parse_query_term("leash([call,exit]), trace, f(x)."), e.modulewrapper.user_module)
+    try:
+        e.run(parse_query_term("leash([])."), e.modulewrapper.user_module)
+    except UncaughtError, err:
+        assert err.term.argument_at(0).name() == "domain_error"
+
+    e.run(parse_query_term("leash([+all])."), e.modulewrapper.user_module)
+
+    e.run(parse_query_term("leash([-all]), leash([+call,+exit]), trace, f(x)."), e.modulewrapper.user_module)
     assert order == ["Call: (1) f(x) ?","creep\n","Call: (2) x=1 ?","creep\n","Fail: (2) x=1 ?",
             "Call: (2) x=2 ?","creep\n","Fail: (2) x=2 ?","Redo: (1) f(x) ?","Call: (2) x=x ?",
             "creep\n","Exit: (2) x=x ?","creep\n","Exit: (1) f(x) ?","creep\n"]
 
     order = []
-    e.run(parse_query_term("leash([]), trace, f(x)."), e.modulewrapper.user_module)
+    e.run(parse_query_term("leash([-all]), trace, f(x)."), e.modulewrapper.user_module)
     assert order == ["Call: (1) f(x) ?","Call: (2) x=1 ?","Fail: (2) x=1 ?","Call: (2) x=2 ?",
             "Fail: (2) x=2 ?","Redo: (1) f(x) ?","Call: (2) x=x ?","Exit: (2) x=x ?",
             "Exit: (1) f(x) ?"]
+
+    order = []
+    e.run(parse_query_term("leash([+all]), trace, f(x)."), e.modulewrapper.user_module)
+    assert order == ["Call: (1) f(x) ?","creep\n","Call: (2) x=1 ?","creep\n","Fail: (2) x=1 ?","creep\n",
+            "Call: (2) x=2 ?","creep\n","Fail: (2) x=2 ?","creep\n","Redo: (1) f(x) ?",
+            "creep\n","Call: (2) x=x ?","creep\n","Exit: (2) x=x ?","creep\n","Exit: (1) f(x) ?","creep\n"]
 
 # _____________________________Automated test
 
