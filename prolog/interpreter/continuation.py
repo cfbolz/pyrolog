@@ -808,7 +808,8 @@ class TraceSuccessContinuation(Continuation):
         return self
 
     def __repr__(self):
-        return "<TraceSuccessContinuation %s depth=%d innercont=%s>" % (self.port, self.depth, self.innercont)
+        return "<TraceSuccessContinuation %s depth=%d innercont=%s>" % (
+                self.port, self.depth, self.innercont)
 
     _dot = _dot
 
@@ -825,20 +826,24 @@ class TraceFailureContinuation(FailureContinuation):
         if scont is None:
             query = self.innerfcont.query
         self.query = scont.query
+        self.undoheap = self.innerfcont.undoheap
+        self.orig_fcont = self.innerfcont.orig_fcont
 
     def is_done(self):
         return False
 
     # XXX optimize
     def fail(self, heap):
-        """ Innerfcont contains the query for -Fail- and -Redo- output. Nextcont is the failure continuation."""
+        """ Innerfcont contains the query for -Fail- and -Redo- output.
+        Nextcont is the failure continuation."""
         skip = self.engine.tracewrapper.skip(self.depth, self.port)
 
         write = self.engine.tracewrapper.write
         getch = self.engine.tracewrapper.getch
         while 1:
             if not skip and not self.shall_fail:
-                print_trace_step(self.engine, self.port, self.query, write, self.depth)
+                print_trace_step(self.engine, self.port, self.query,
+                        write, self.depth)
                 if self.engine.tracewrapper.is_leashed(self.port.lower()):
                     res = get_decision(write, getch)
                 else:

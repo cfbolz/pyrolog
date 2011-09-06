@@ -924,6 +924,34 @@ def test_trace_leash():
             "Call: (2) x=2 ?","creep\n","Fail: (2) x=2 ?","creep\n","Redo: (1) f(x) ?",
             "creep\n","Call: (2) x=x ?","creep\n","Exit: (2) x=x ?","creep\n","Exit: (1) f(x) ?","creep\n"]
 
+@py.test.mark.xfail
+def test_trace_complex2():
+    e = get_engine("""
+    append(X, Y, Y) :-
+        X = [].
+    append([H|T], X, [H|R]) :-
+        append(T, X, R).
+    """)
+    order = []
+    def w(s):
+        if s != "\n":
+            order.append(s)
+    def g():
+        return "\n"
+    e.tracewrapper.write = w
+    e.tracewrapper.getch = g
+    e.tracewrapper.show_info = False
+    e.run(parse_query_term("trace,append(X, [3,4], [1,2,3,4])."), e.modulewrapper.user_module)
+    assert order == [
+            "Call: (1) append(_G0, [3, 4], [1, 2, 3, 4]) ?","creep\n",
+            "Call: (2) append(_G0, [3, 4], [2, 3, 4]) ?",   "creep\n",
+            "Call: (3) append(_G0, [3, 4], [3, 4]) ?",      "creep\n",
+            "Call: (4) _G0 = [] ?", "creep\n",
+            "Exit: (4) _G0 = [] ?", "creep\n",
+            "Exit: (5) append(_G0, [3, 4], [3, 4]) ?",      "creep\n",
+            "Exit: (6) append(_G0, [3, 4], [2, 3, 4]) ?",   "creep\n",
+            "Exit: (7) append(_G0, [3, 4], [1, 2, 3, 4]) ?","creep\n"]
+
 # _____________________________Automated test
 
 @py.test.mark.xfail
@@ -931,7 +959,7 @@ def test_trace_automatics():
     routines = Routines()
     switracecatcher = SWITraceCatcher()
     pyrologtracecatcher = PyrologTraceCatcher()
-    for r in ["test"]:
+    for r in ["fib1","fib2"]:
         routines.create_routine(r)
         try:
             swi = switracecatcher.run(r)
@@ -950,7 +978,7 @@ class PyrologTraceCatcher():
         self.engine = get_engine("")
 
     def run(self, routine_name):
-        query = "consult(%s), leash([]), trace, %s." % (
+        query = "consult(%s), leash([-all]), trace, %s." % (
                 routine_name, routine_name)
         order = []
         def g():
@@ -968,14 +996,17 @@ class PyrologTraceCatcher():
     # ____________________regex parsing
     def parse_step(self, line):
         pattern = '(Call|Exit|Redo|Fail): \((\d+)\) (.*) \?'
-        parsed = re.sub(pattern, self.swi_sub, line)
+        parsed = re.sub(pattern, self.pyr_sub, line)
         return parsed
 
-    def swi_sub(self, match):
+    def pyr_sub(self, match):
         port = match.group(1)
         depth = int(match.group(2))
         query = match.group(3)
         query = re.sub('_[A-Z][0-9]+','_UNKNOWN_VAR',query)
+        op_is = '(-?_UNKNOWN_VAR|-?[1-9][0-9]*)'
+        pat = op_is + 'is' + op_is + "(\-)?\+?" + op_is
+        query = re.sub(pat, '\\1 is \\2+ \\3\\4', query)
         return "%s: (%d) %s ?" % (port, depth, query)
 
 class SWITraceCatcher():
@@ -986,7 +1017,7 @@ class SWITraceCatcher():
     def run(self, routine_name):
         from os import system
         filename = "output.txt"
-        command = "prolog -t '[%s], leash([-exit,-call,-fail,-redo]),"
+        command = "prolog -t '[%s], leash([-all]),"
         command +="trace, %s, notrace, halt.' > %s"
         command = command % (routine_name, routine_name, filename)
         system(command)
@@ -1025,7 +1056,7 @@ class SWITraceCatcher():
 
     # ____________________regex parsing
     def parse_step(self, line):
-        pattern = '(Call|Exit|Redo|Fail): \((\d+)\) (.*)'
+        pattern = '\^?\s*(Call|Exit|Redo|Fail): \((\d+)\) (.*)'
         parsed = re.sub(pattern, self.swi_sub, line)
         return parsed
 
@@ -1034,6 +1065,9 @@ class SWITraceCatcher():
         depth = int(match.group(2)) - 3
         query = match.group(3)
         query = re.sub('_[A-Z][0-9]+','_UNKNOWN_VAR',query)
+        op_is = '(-?_UNKNOWN_VAR|-?[1-9][0-9]*)'
+        pat = op_is + ' is ' + op_is + '\+' + op_is
+        query = re.sub(pat, '\\1 is \\2+ \\3', query)
         return "%s: (%d) %s ?" % (port, depth, query)
 
 
@@ -1068,9 +1102,29 @@ class Routines:
 
     def routine_test(self):
         return """
-        test :- append([1,2,3],[4,5,6],_X).
+        test :- append([1,2,3],[4,5,6],[1,2,3,4,5,6]).
         append([], X, X).
         append([H|T], X, [H|R]) :-
             append(T, X, R).
         """
 
+    def routine_fib1(self):
+        return """
+        fib1 :- fib(10, 89).
+        fib(0,1) :- !.
+        fib(1,1) :- !.
+        fib(N,W) :- N1 is N-1,fib(N1,W1),
+                    N2 is N-2,fib(N2,W2),
+                    W is W1+W2.
+        """
+
+    def routine_fib2(self):
+        return """
+        fib2 :- fib(10, 89).
+        fib(0,1).
+        fib(1,1).
+        fib(N,F) :- N > 1,
+            N1 is N-1,N2 is N-2,
+            fib(N1,F1),fib(N2,F2),
+            F is F1+F2.
+        """
