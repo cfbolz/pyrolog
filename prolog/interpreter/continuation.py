@@ -462,7 +462,6 @@ class BodyContinuation(ContinuationWithModule):
         return "<BodyContinuation %r>" % (self.body, )
 
     def trace_wrap(self, depth, query=None):
-        # XXX If predicate throws errors no Call is shown
         return TraceSuccessContinuation(None, self, depth, query=self.body)
 
 class BuiltinContinuation(ContinuationWithModule):
@@ -482,8 +481,10 @@ class BuiltinContinuation(ContinuationWithModule):
     def trace_wrap(self, depth, query=None):
         if self.builtin.should_trace:
             # XXX let Exit and Call Wrapper point to the same innercont
-            nextcont = TraceSuccessContinuation("Exit", self, depth, query=self.query, nextcont=self.nextcont)
-            self = BuiltinContinuation(self.engine, self.module, nextcont, self.builtin, self.query)
+            nextcont = TraceSuccessContinuation("Exit", self, depth, query=self.query,
+                    nextcont=self.nextcont)
+            self = BuiltinContinuation(self.engine, self.module, nextcont, self.builtin,
+                    self.query)
             return TraceSuccessContinuation("Call", self, depth)
         return TraceSuccessContinuation(None, self, depth)
 
@@ -639,13 +640,13 @@ def get_decision(write, getch):
 def print_trace_step(engine, port, query, write, depth):
     from prolog.builtin import formatting
     f = formatting.TermFormatter(engine, quoted=True, max_depth=20)
-    tm = port, depth, f.format(query)
+    tm = port, depth, f.format(query.getvalue(None))
     write("%s: (%d) %s ?" % tm)
 
 def get_goal_string(engine, query, depth):
     from prolog.builtin import formatting
     f = formatting.TermFormatter(engine, quoted=True, max_depth=20)
-    tm = depth, f.format(query)
+    tm = depth, f.format(query.getvalue(None))
     return "    [%d] %s\n" % tm
 
 class TraceSuccessContinuation(Continuation):
@@ -666,6 +667,7 @@ class TraceSuccessContinuation(Continuation):
     def is_done(self):
         return False
 
+    # XXX foreach builtin control make a test
     # XXX optimize
     def activate(self, fcont, heap):
         skip = self.engine.tracewrapper.skip(self.depth, self.port)
@@ -681,11 +683,13 @@ class TraceSuccessContinuation(Continuation):
                             self.innercont, self.depth, query=self.innercont.body)
                     try:
                         scont.activate(fcont, heap)
+                        assert 0, "unreachable"
                     except error.UnificationFailed, e:
                         pass
                     except error.CatchableError, e:
                         sig = self.innercont.body.signature().string()
-                        self.engine.tracewrapper.write("Error: err/1: Undefined procedure: "+sig+"\n")
+                        self.engine.tracewrapper.write(
+                                "Error: err/1: Undefined procedure: "+sig+"\n")
                         raise e
                     fcont = fcont.trace_wrap(self.depth, scont=self)
                     fcont.fail(heap)
@@ -709,11 +713,13 @@ class TraceSuccessContinuation(Continuation):
             else:
                 res = "creep"
 
+            # XXX put options in method with prefix action_X
             if res == "abort":
                 nextcont = DoneSuccessContinuation(self.engine)
                 write("Execution aborted\n")
                 break
             if res == "skip":
+                # XXX try to activate innercont without trace wrapping
                 self.engine.tracewrapper.skip_from_level = self.depth
                 res = "creep"
             elif res == "retry":
@@ -747,7 +753,7 @@ class TraceSuccessContinuation(Continuation):
             elif res == "goals":
                 self.write_goals(write)
             elif res == "print" or res == "write":
-                pass
+                pass # XXX add comment why this works
             elif res == "leap":
                 # XXX Call notrace
                 self.engine.tracewrapper.tracing = False
@@ -759,7 +765,7 @@ class TraceSuccessContinuation(Continuation):
         return nextcont, fcont, heap
 
     # XXX neccessary?
-    def dereference(self, query, heap):
+    def dereference_dep(self, query, heap):
         query = query.dereference(heap)
         if "Generic" in query.__class__.__name__:
             args = query.arguments()
@@ -767,7 +773,6 @@ class TraceSuccessContinuation(Continuation):
                 args[i] = self.dereference(args[i], heap)
                 setattr(query, "val_%d" % (i,), args[i])
         return query
-
 
     def write_goals(self, write):
         if self.port == "Call":

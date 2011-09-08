@@ -91,6 +91,7 @@ def run(query, var_to_pos, engine):
     try:
         if query is None:
             return
+        # XXX wrap for tracing via engine.run_tracing
         engine.run(query, engine.modulewrapper.current_module, 
                 ContinueContinuation(engine, var_to_pos, printmessage))
     except error.UnificationFailed:

@@ -492,9 +492,9 @@ def test_trace_complex():
     # XXX SWI: [Exit] [1]=..['.', 1, 1[]] ? dereference
     # XXX SWI: h([], _G0) ? global variable numerization
     assert order == ["Call: (1) f(_G0, _G1) ?",c,"Call: (2) g(_G0) ?",c,
-            "Call: (3) _G0=..['.', 1, []] ?",c,"Exit: (3) _G0=..['.', 1, []] ?",
-            c,"Exit: (2) g(_G0) ?",c,"Call: (2) h(_G0, _G1) ?",c,"Call: (3) h([], _G0) ?",
-            c,"Exit: (3) h([], _G0) ?",c,"Exit: (2) h(_G0, _G1) ?",c,"Exit: (1) f(_G0, _G1) ?",c]
+            "Call: (3) _G0=..['.', 1, []] ?",c,"Exit: (3) [1]=..['.', 1, []] ?",
+            c,"Exit: (2) g([1]) ?",c,"Call: (2) h([1], _G0) ?",c,"Call: (3) h([], _G0) ?",
+            c,"Exit: (3) h([], []) ?",c,"Exit: (2) h([1], [1]) ?",c,"Exit: (1) f([1], [1]) ?",c]
 
 def test_trace_skip():
     e = get_engine("""
@@ -623,16 +623,21 @@ def test_trace_goals():
         pass
 
     c = "creep\n"
-    g1 = "    [1] append([1, 2], [3, 4], _G0)\n"
-    g2 = "    [2] append([2], [3, 4], _G0)\n"
-    g3 = "    [3] append([], [3, 4], _G0)\n"
-    assert order == ["Call: (1) append([1, 2], [3, 4], _G0) ?","goals\n",g1,
+    g1 = "    [1] append([1, 2], [3, 4], %s)\n"
+    g2 = "    [2] append([2], [3, 4], %s)\n"
+    g3 = "    [3] append([], [3, 4], %s)\n"
+    g11= "    [1] append([1, 2], [3, 4], [1, 2, 3, 4])\n"
+    g21= "    [2] append([2], [3, 4], [2, 3, 4])\n"
+    g31= "    [3] append([], [3, 4], [3, 4])\n"
+    assert order == ["Call: (1) append([1, 2], [3, 4], _G0) ?","goals\n",g1%("_G0",),
             "Call: (1) append([1, 2], [3, 4], _G0) ?",c,
-            "Call: (2) append([2], [3, 4], _G0) ?","goals\n",g2,g1,"Call: (2) append([2], [3, 4], _G0) ?",c,
-            "Call: (3) append([], [3, 4], _G0) ?","goals\n",g3,g2,g1,"Call: (3) append([], [3, 4], _G0) ?",c,
-            "Exit: (3) append([], [3, 4], _G0) ?","goals\n",g3,g2,g1,"Exit: (3) append([], [3, 4], _G0) ?",c,
-            "Exit: (2) append([2], [3, 4], _G0) ?","goals\n",g2,g1,"Exit: (2) append([2], [3, 4], _G0) ?",c,
-            "Exit: (1) append([1, 2], [3, 4], _G0) ?","goals\n",g1,"Exit: (1) append([1, 2], [3, 4], _G0) ?",c]
+            "Call: (2) append([2], [3, 4], _G0) ?","goals\n",g2%("_G0",),g1%("[1|_G0]",),
+            "Call: (2) append([2], [3, 4], _G0) ?",c,
+            "Call: (3) append([], [3, 4], _G0) ?","goals\n",g3%("_G0",),g2%("[2|_G0]",),g1%("[1, 2|_G0]",),
+            "Call: (3) append([], [3, 4], _G0) ?",c,
+            "Exit: (3) append([], [3, 4], [3, 4]) ?","goals\n",g31,g21,g11,"Exit: (3) append([], [3, 4], [3, 4]) ?",c,
+            "Exit: (2) append([2], [3, 4], [2, 3, 4]) ?","goals\n",g21,g11,"Exit: (2) append([2], [3, 4], [2, 3, 4]) ?",c,
+            "Exit: (1) append([1, 2], [3, 4], [1, 2, 3, 4]) ?","goals\n",g11,"Exit: (1) append([1, 2], [3, 4], [1, 2, 3, 4]) ?",c]
 
 def test_trace_goals_fail():
     e = get_engine("""
@@ -744,7 +749,7 @@ def test_trace_leap2():
 
     e.run(parse_query_term("trace, llength([1], X)."), e.modulewrapper.user_module)
     # XXX depth will start from 0 every "trace"
-    assert order == ["Call: (1) llength([1], _G0) ?","leap\n","Call: (2) _G0is_G1+1 ?","leap\n"]
+    assert order == ["Call: (1) llength([1], _G0) ?","leap\n","Call: (2) _G0is0+1 ?","leap\n"]
     assert e.tracewrapper.tracing == False
 
 def test_trace_failoption():
@@ -836,18 +841,18 @@ def test_trace_retry():
     except StopIteration:
         pass
     assert order == ["Call: (1) f(x) ?","creep\n","Call: (2) x=1 ?","creep\n","Fail: (2) x=1 ?","creep\n",
-            "Call: (2) x=2 ?","creep\n","Fail: (2) x=2 ?","creep\n","Redo: (1) f(x) ?","retry\n","[retry]\n",
-            "Call: (1) f(x) ?","skip\n","Exit: (1) f(x) ?","creep\n"]
+               "Call: (2) x=2 ?","creep\n","Fail: (2) x=2 ?","creep\n","Redo: (1) f(x) ?","retry\n","[retry]\n","Call: (1) f(x) ?","skip\n","Exit: (1) f(x) ?","creep\n"]
 
     order = []
     try:
         e.run(parse_query_term("trace, f(x)."), e.modulewrapper.user_module)
     except StopIteration:
         pass
-    assert order == ["Call: (1) f(x) ?","creep\n","Call: (2) x=1 ?","creep\n","Fail: (2) x=1 ?","creep\n",
-            "Call: (2) x=2 ?","creep\n","Fail: (2) x=2 ?","creep\n","Redo: (1) f(x) ?","creep\n",
-            "Call: (2) x=x ?","creep\n","Exit: (2) x=x ?","creep\n","Exit: (1) f(x) ?","retry\n",
-            "[retry]\n","Call: (1) f(x) ?","skip\n","Exit: (1) f(x) ?","creep\n"]
+    assert order == ["Call: (1) f(x) ?","creep\n","Call: (2) x=1 ?","creep\n",
+            "Fail: (2) x=1 ?","creep\n","Call: (2) x=2 ?","creep\n","Fail: (2) x=2 ?",
+            "creep\n","Redo: (1) f(x) ?","creep\n","Call: (2) x=x ?","creep\n",
+            "Exit: (2) x=x ?","creep\n","Exit: (1) f(x) ?","retry\n","[retry]\n",
+            "Call: (1) f(x) ?","skip\n","Exit: (1) f(x) ?","creep\n"]
 
 def test_trace_exception():
     e = get_engine("""
@@ -864,11 +869,14 @@ def test_trace_exception():
     e.tracewrapper.getch = g
     e.tracewrapper.show_info = False
 
-    py.test.raises(UncaughtError, e.run, parse_query_term("trace, err2(0)."), e.modulewrapper.user_module)
-    assert order == ["Call: (1) err2(0) ?","creep\n","Call: (2) err1(0) ?","creep\n","Call: (3) err(0) ?",
-            "creep\n","Call: (4) 0<1 ?","creep\n","Exit: (4) 0<1 ?","creep\n","Call: (4) not_exists(0) ?",
-            "creep\n","Error: err/1: Undefined procedure: not_exists/1\n","Exception: (3) err(0) ?","creep\n",
-            "Exception: (2) err1(0) ?","creep\n","Exception: (1) err2(0) ?","creep\n"]
+    py.test.raises(UncaughtError, e.run, parse_query_term("trace, err2(0)."),
+            e.modulewrapper.user_module)
+    assert order == ["Call: (1) err2(0) ?","creep\n","Call: (2) err1(0) ?","creep\n",
+            "Call: (3) err(0) ?","creep\n","Call: (4) 0<1 ?","creep\n","Exit: (4) 0<1 ?",
+            "creep\n","Call: (4) not_exists(0) ?","creep\n",
+            "Error: err/1: Undefined procedure: not_exists/1\n","Exception: (3) err(0) ?",
+            "creep\n","Exception: (2) err1(0) ?","creep\n","Exception: (1) err2(0) ?",
+            "creep\n"]
 
 def test_trace_leash():
     e = get_engine("""
@@ -907,24 +915,27 @@ def test_trace_leash():
 
     e.run(parse_query_term("leash([+all])."), e.modulewrapper.user_module)
 
-    e.run(parse_query_term("leash([-all]), leash([+call,+exit]), trace, f(x)."), e.modulewrapper.user_module)
-    assert order == ["Call: (1) f(x) ?","creep\n","Call: (2) x=1 ?","creep\n","Fail: (2) x=1 ?",
-            "Call: (2) x=2 ?","creep\n","Fail: (2) x=2 ?","Redo: (1) f(x) ?","Call: (2) x=x ?",
-            "creep\n","Exit: (2) x=x ?","creep\n","Exit: (1) f(x) ?","creep\n"]
+    e.run(parse_query_term("leash([-all]), leash([+call,+exit]), trace, f(x)."),
+            e.modulewrapper.user_module)
+    assert order == ["Call: (1) f(x) ?","creep\n","Call: (2) x=1 ?","creep\n",
+            "Fail: (2) x=1 ?","Call: (2) x=2 ?","creep\n","Fail: (2) x=2 ?",
+            "Redo: (1) f(x) ?","Call: (2) x=x ?","creep\n","Exit: (2) x=x ?",
+            "creep\n","Exit: (1) f(x) ?","creep\n"]
 
     order = []
     e.run(parse_query_term("leash([-all]), trace, f(x)."), e.modulewrapper.user_module)
-    assert order == ["Call: (1) f(x) ?","Call: (2) x=1 ?","Fail: (2) x=1 ?","Call: (2) x=2 ?",
-            "Fail: (2) x=2 ?","Redo: (1) f(x) ?","Call: (2) x=x ?","Exit: (2) x=x ?",
-            "Exit: (1) f(x) ?"]
+    assert order == ["Call: (1) f(x) ?","Call: (2) x=1 ?","Fail: (2) x=1 ?",
+            "Call: (2) x=2 ?","Fail: (2) x=2 ?","Redo: (1) f(x) ?","Call: (2) x=x ?",
+            "Exit: (2) x=x ?","Exit: (1) f(x) ?"]
 
     order = []
     e.run(parse_query_term("leash([+all]), trace, f(x)."), e.modulewrapper.user_module)
-    assert order == ["Call: (1) f(x) ?","creep\n","Call: (2) x=1 ?","creep\n","Fail: (2) x=1 ?","creep\n",
-            "Call: (2) x=2 ?","creep\n","Fail: (2) x=2 ?","creep\n","Redo: (1) f(x) ?",
-            "creep\n","Call: (2) x=x ?","creep\n","Exit: (2) x=x ?","creep\n","Exit: (1) f(x) ?","creep\n"]
+    assert order == ["Call: (1) f(x) ?","creep\n","Call: (2) x=1 ?","creep\n",
+            "Fail: (2) x=1 ?","creep\n","Call: (2) x=2 ?","creep\n","Fail: (2) x=2 ?",
+            "creep\n","Redo: (1) f(x) ?","creep\n","Call: (2) x=x ?","creep\n",
+            "Exit: (2) x=x ?","creep\n","Exit: (1) f(x) ?","creep\n"]
 
-@py.test.mark.xfail
+#@py.test.mark.xfail
 def test_trace_complex2():
     e = get_engine("""
     append(X, Y, Y) :-
@@ -944,13 +955,15 @@ def test_trace_complex2():
     e.run(parse_query_term("trace,append(X, [3,4], [1,2,3,4])."), e.modulewrapper.user_module)
     assert order == [
             "Call: (1) append(_G0, [3, 4], [1, 2, 3, 4]) ?","creep\n",
+            "Redo: (1) append(_G0, [3, 4], [1, 2, 3, 4]) ?","creep\n",
             "Call: (2) append(_G0, [3, 4], [2, 3, 4]) ?",   "creep\n",
+            "Redo: (2) append(_G0, [3, 4], [2, 3, 4]) ?",   "creep\n",
             "Call: (3) append(_G0, [3, 4], [3, 4]) ?",      "creep\n",
-            "Call: (4) _G0 = [] ?", "creep\n",
-            "Exit: (4) _G0 = [] ?", "creep\n",
-            "Exit: (5) append(_G0, [3, 4], [3, 4]) ?",      "creep\n",
-            "Exit: (6) append(_G0, [3, 4], [2, 3, 4]) ?",   "creep\n",
-            "Exit: (7) append(_G0, [3, 4], [1, 2, 3, 4]) ?","creep\n"]
+            "Call: (4) _G0=[] ?", "creep\n",
+            "Exit: (4) []=[] ?", "creep\n",
+            "Exit: (3) append([], [3, 4], [3, 4]) ?",      "creep\n",
+            "Exit: (2) append([2], [3, 4], [2, 3, 4]) ?",   "creep\n",
+            "Exit: (1) append([1, 2], [3, 4], [1, 2, 3, 4]) ?","creep\n"]
 
 # _____________________________Automated test
 
