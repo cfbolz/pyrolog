@@ -1,5 +1,5 @@
 from pypy.rlib import jit, objectmodel, debug
-from prolog.interpreter.term import Callable
+from prolog.interpreter.term import Callable, Term
 from prolog.interpreter.continuation import view
 # a Callable implementation that tries to save memory
 
@@ -143,6 +143,8 @@ class SharingShape(Shape):
 # _____________________________________________________________________
 
 class ShapedCallable(Callable):
+    TYPE_STANDARD_ORDER = Term.TYPE_STANDARD_ORDER
+
     def __init__(self, shape, storage):
         assert isinstance(shape, SharingShape)
         self.shape = shape
@@ -178,7 +180,6 @@ def make_standardizer(w_obj):
     memo = []
     shape = term_with_numbered_vars_to_shape(w_obj, memo)
     return Standardizer(shape, memo)
-
 
 def term_with_numbered_vars_to_shape(w_obj, memo):
     from prolog.interpreter import term
