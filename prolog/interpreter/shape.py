@@ -143,7 +143,6 @@ class SharingShape(Shape):
 # _____________________________________________________________________
 
 class ShapedCallable(Callable):
-    _immutable_fields_ = ["shape", "storage[*]"]
     def __init__(self, shape, storage):
         assert isinstance(shape, SharingShape)
         self.shape = shape
@@ -167,6 +166,12 @@ class ShapedCallable(Callable):
                 self.storage[i].unify(other.storage[i], heap, occurs_check)
             return
         return Callable.basic_unify(self, other, heap, occurs_check)
+
+    def replace_child(self, i, obj):
+        assert isinstance(obj, ShapedCallable)
+        self.storage = self.storage[:i] + obj.storage + self.storage[i + 1:]
+        self.shape = self.shape.replace(i, obj.shape)
+
 # _____________________________________________________________________
 
 def make_standardizer(w_obj):

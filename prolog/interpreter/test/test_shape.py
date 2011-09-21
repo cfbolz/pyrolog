@@ -111,6 +111,23 @@ def test_replace():
     s4 = s3.replace(3, nil)
     s4b = b(sig, [X, b(sig, [X, b(sig, [X, nil])])])
 
+def test_shaped_callable_replace_child():
+    sig = signature.Signature.getsignature(".", 2)
+    build = shape.SharingShape.build
+    X = shape.InStorageShape.build()
+    s1 = build(sig, [X, X])
+    a = term.Callable.build("a")
+    b = term.Callable.build("b")
+    nil = term.Callable.build("[]")
+    c1 = shape.ShapedCallable(s1, [a, None])
+    c2 = shape.ShapedCallable(s1, [b, nil])
+    c1.replace_child(1, c2)
+    assert c1.storage == [a, b, nil]
+
+    c1 = shape.ShapedCallable(s1, [None, a])
+    c2 = shape.ShapedCallable(s1, [b, nil])
+    c1.replace_child(0, c2)
+    assert c1.storage == [b, nil, a]
 
 def test_shaped_callable_unify():
     from prolog.interpreter import heap
