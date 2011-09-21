@@ -62,6 +62,8 @@ def test_make_standardizer():
     assert s.children[1].w_obj.num == 12
     assert isinstance(s.children[2], shape.InStorageShape)
     assert isinstance(s.children[3], shape.InStorageShape)
+    w_obj = std.make_shaped_callable([4, 5], None)
+    assert w_obj.storage == [4, 5]
 
 
     w_obj = term.Callable.build("f", [term.Callable.build("a"),
@@ -70,6 +72,8 @@ def test_make_standardizer():
     s = std.shape
     assert isinstance(s, shape.WrapShape)
     assert s.w_obj.signature().name == "f"
+    w_obj = std.make_shaped_callable([], None)
+    assert w_obj is s.w_obj
 
     w_obj = term.Callable.build("f", [term.NumberedVar(0),
                                       term.NumberedVar(0),
@@ -83,6 +87,11 @@ def test_make_standardizer():
     assert isinstance(s.children[2], shape.InStorageShape)
     assert isinstance(s.children[3], shape.InStorageShape)
     assert std.memo == [0, 0, 1, -1]
+    class FakeHeap(object):
+        def newvar(self):
+            return 7
+    w_obj = std.make_shaped_callable([4, 5], FakeHeap())
+    assert w_obj.storage == [4, 4, 5, 7]
 
 def test_shaped_callable_unify():
     from prolog.interpreter import heap
