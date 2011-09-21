@@ -11,7 +11,7 @@ prefixsig = Signature.getsignature(":", 2)
 class Rule(object):
     _immutable_ = True
     _immutable_fields_ = ["headargs[*]"]
-    _attrs_ = ['next', 'head', 'headargs', 'contains_cut', 'body', 'size_env', 'signature', 'module']
+    _attrs_ = ['next', 'head', 'headargs', 'contains_cut', 'body', 'size_env', 'signature', 'module', 'body_standardizer']
     unrolling_attrs = unroll.unrolling_iterable(_attrs_)
     
     def __init__(self, head, body, module, next = None):
@@ -28,8 +28,10 @@ class Rule(object):
             body = body.dereference(None)
             body = helper.ensure_callable(body)
             self.body = body.enumerate_vars(memo)
+            self.body_standardizer = shape.make_standardizer(self.body)
         else:
             self.body = None
+            self.body_standardizer = None
         self.size_env = memo.size()
         self.signature = head.signature()        
         self._does_contain_cut()
@@ -63,7 +65,7 @@ class Rule(object):
         body = self.body
         if body is None:
             return None
-        return body.copy_standardize_apart(heap, env)
+        return self.body_standardizer.make_shaped_callable(env, heap)
 
     def __repr__(self):
         if self.body is None:
