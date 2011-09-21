@@ -93,6 +93,14 @@ def test_make_standardizer():
             return 7
     w_obj = std.make_shaped_callable([4, 5], FakeHeap())
     assert w_obj.storage == [4, 4, 5, 7]
+    w_obj = std.make_shaped_callable([4, None], FakeHeap())
+    assert w_obj.storage == [4, 4, 7, 7]
+
+    class FakeHeap(object):
+        def newvar(self):
+            return object()
+    w_obj = std.make_shaped_callable([None, None], FakeHeap())
+    assert w_obj.storage[0] is w_obj.storage[1]
 
 def test_replace():
     sig = signature.Signature.getsignature(".", 2)

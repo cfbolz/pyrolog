@@ -196,17 +196,19 @@ class Standardizer(object):
         self.shape = shape
         self.memo = memo
 
-    def make_shaped_callable(self, storage, heap):
-        new_storage = [None] * len(self.memo)
+    def make_shaped_callable(self, env, heap):
+        storage = [None] * len(self.memo)
         for i in range(len(self.memo)):
             index = self.memo[i]
             if index < 0:
                 # XXX
                 obj = heap.newvar()
             else:
-                obj = storage[index]
-            new_storage[i] = obj
-        return self.shape.resolve(new_storage, 0)
+                obj = env[index]
+                if obj is None:
+                    obj = env[index] = heap.newvar()
+            storage[i] = obj
+        return self.shape.resolve(storage, 0)
 
 # _____________________________________________________________________
 
