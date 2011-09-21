@@ -1,4 +1,5 @@
 from prolog.interpreter import shape, term, signature
+from prolog.interpreter.continuation import view
 
 def test_instorage_build():
     assert shape.InStorageShape.build() is shape.InStorageShape.build()
@@ -92,6 +93,24 @@ def test_make_standardizer():
             return 7
     w_obj = std.make_shaped_callable([4, 5], FakeHeap())
     assert w_obj.storage == [4, 4, 5, 7]
+
+def test_replace():
+    sig = signature.Signature.getsignature(".", 2)
+    b = shape.SharingShape.build
+    X = shape.InStorageShape.build()
+    s1 = b(sig, [X, X])
+    s2 = s1.replace(1, s1)
+    s2b = b(sig, [X, s1])
+    assert s2 is s2b
+
+    s3 = s2.replace(2, s1)
+    s3b = b(sig, [X, s2])
+    assert s3 is s3b
+
+    nil = shape.WrapShape(term.Atom.build("[]"))
+    s4 = s3.replace(3, nil)
+    s4b = b(sig, [X, b(sig, [X, b(sig, [X, nil])])])
+
 
 def test_shaped_callable_unify():
     from prolog.interpreter import heap

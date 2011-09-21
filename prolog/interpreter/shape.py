@@ -24,6 +24,9 @@ class WrapShape(Shape):
     def resolve(self, storage, index):
         return self.w_obj
 
+    def replace(self, i, shape):
+        assert 0, "cannot happen"
+
     def __repr__(self):
         return "%s(%r)" % (self.__class__.__name__, self.w_obj)
 
@@ -41,6 +44,10 @@ class InStorageShape(Shape):
 
     def num_storage_vars(self):
         return 1
+
+    def replace(self, i, shape):
+        assert i == 0
+        return shape
 
     def __repr__(self):
         return self.__class__.__name__ + "()"
@@ -103,6 +110,20 @@ class SharingShape(Shape):
 
     def num_storage_vars(self):
         return self._num_storage_vars
+
+    def replace(self, i, shape):
+        for j in range(len(self.children)):
+            child = self.children[j]
+            num = child.num_storage_vars()
+            if i < num:
+                child = child.replace(i, shape)
+                break
+            else:
+                i -= num
+        else:
+            assert 0, "cannot happen"
+        children = self.children[:j] + [child] + self.children[j + 1:]
+        return SharingShape.build(self.signature, children)
 
     def __repr__(self):
         return "%s(%r, %r)" % (self.__class__.__name__, self.signature, self.children)
