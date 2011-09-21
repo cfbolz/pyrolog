@@ -1,22 +1,17 @@
 from pypy.rlib import jit, objectmodel, debug
 from prolog.interpreter.term import Callable
+from prolog.interpreter.continuation import view
 # a Callable implementation that tries to save memory
 
 class Shape(object):
     def __init__(self):
         pass
 
-    def resolve(self, storage):
+    def resolve(self, storage, index):
         raise NotImplementedError("abstract base class")
 
-    def resolve_at(self, argnum, storage):
-        w_obj = self.resolve(storage)
-        if isinstance(w_obj, Callable):
-            return w_obj.argument_at(argnum)
-        raise TypeError
-
-    def _compute_new_shape(self, memo):
-        raise NotImplementedError("abstract base class")
+    def num_storage_vars(self):
+        return 0
 
     from prolog.interpreter.continuation import _dot
 
@@ -26,41 +21,31 @@ class WrapShape(Shape):
         Shape.__init__(self)
         self.w_obj = w_obj
 
-    def resolve(self, storage):
+    def resolve(self, storage, index):
         return self.w_obj
-
-    def _compute_new_shape(self, memo):
-        return self
 
     def __repr__(self):
         return "%s(%r)" % (self.__class__.__name__, self.w_obj)
 
 class InStorageShape(Shape):
-    _immutable_fields_ = ["num"]
-    _cache = {}
 
-    def __init__(self, num):
+    def __init__(self):
         Shape.__init__(self)
-        self.num = num
 
     @staticmethod
-    def build(num):
-        res = InStorageShape._cache.get(num, None)
-        if res is None:
-            InStorageShape._cache[num] = res = InStorageShape(num)
-        return res
+    def build():
+        return InStorageShape._singleton
 
-    def resolve(self, storage):
-        return storage[self.num]
+    def resolve(self, storage, index):
+        return storage[index]
 
-    def _compute_new_shape(self, memo):
-        num = memo.setdefault(self.num, len(memo))
-        if num == self.num:
-            return self
-        return InStorageShape.build(num)
+    def num_storage_vars(self):
+        return 1
 
     def __repr__(self):
-        return "%s(%r)" % (self.__class__.__name__, self.num)
+        return self.__class__.__name__ + "()"
+
+InStorageShape._singleton = InStorageShape()
 
 def shape_eq((sig1, children1), (sig2, children2)):
     return sig1 is sig2 and children1 == children2
@@ -74,17 +59,18 @@ def shape_hash((sig, children)):
     return x
 
 class SharingShape(Shape):
-    _immutable_fields_ = ["signature", "children[*]", "reshaper"]
+    _immutable_fields_ = ["signature", "children[*]"]
     _cache = objectmodel.r_dict(shape_eq, shape_hash)
-
-    transitions = None
 
     def __init__(self, signature, children):
         Shape.__init__(self)
         self.signature = signature
         self.children = children
         children = debug.make_sure_not_resized(children)
-        self.reshaper = make_reshaper(self)
+        _num_storage_vars = 0
+        for child in self.children:
+            _num_storage_vars += child.num_storage_vars()
+        self._num_storage_vars = _num_storage_vars
 
     @staticmethod
     def build(signature, children):
@@ -94,19 +80,15 @@ class SharingShape(Shape):
             SharingShape._cache[key] = res = SharingShape(signature, children)
         return res
 
-    def _get_transition(self, i, shape):
-        if self.transitions is None:
-            return None
-        return self.transitions.get((i, shape))
-
-    def resolve(self, storage):
-        if self.reshaper is not None:
-            return self.reshaper.reshape(storage)
-        else:
-            return ShapedCallable(self, storage)
+    def resolve(self, storage, index):
+        storage = storage[index:index + self.num_storage_vars()]
+        return ShapedCallable(self, storage)
 
     def resolve_at(self, i, storage):
-        return self.children[i].resolve(storage)
+        index = 0
+        for j in range(i):
+            index += self.children[j].num_storage_vars()
+        return self.children[i].resolve(storage, index)
 
     @staticmethod
     def build_potentially_wrap(signature, children):
@@ -119,16 +101,8 @@ class SharingShape(Shape):
         return WrapShape(Callable.build(signature.name, unwrapped,
                                         signature=signature))
 
-    def _compute_new_shape(self, memo):
-        children = [None] * len(self.children)
-        reuse = True
-        for i in range(len(self.children)):
-            child = self.children[i]._compute_new_shape(memo)
-            children[i] = child
-            reuse = reuse and child is self.children[i]
-        if reuse:
-            return self
-        return SharingShape.build(self.signature, children)
+    def num_storage_vars(self):
+        return self._num_storage_vars
 
     def __repr__(self):
         return "%s(%r, %r)" % (self.__class__.__name__, self.signature, self.children)
@@ -143,30 +117,6 @@ class SharingShape(Shape):
             for line in child._dot(seen):
                 yield line
 
-
-def make_reshaper(shape):
-    memo = {}
-    newshape = shape._compute_new_shape(memo)
-    if newshape is shape:
-        return None
-    storage_shaper = [-1] * len(memo)
-    for key, value in memo.iteritems():
-        storage_shaper[value] = key
-    return Reshaper(storage_shaper, newshape)
-
-class Reshaper(object):
-    _immutable_fields_ = ["newshape", "storage_shaper[*]"]
-    def __init__(self, storage_shaper, newshape):
-        assert newshape.reshaper is None
-        self.newshape = newshape
-        storage_shaper = debug.make_sure_not_resized(storage_shaper)
-        self.storage_shaper = storage_shaper
-
-    def reshape(self, storage):
-        newstorage = [None] * len(self.storage_shaper)
-        for i in range(len(self.storage_shaper)):
-            newstorage[i] = storage[self.storage_shaper[i]]
-        return ShapedCallable(self.newshape, newstorage)
 
 
 # _____________________________________________________________________
@@ -198,37 +148,27 @@ class ShapedCallable(Callable):
         return Callable.basic_unify(self, other, heap, occurs_check)
 # _____________________________________________________________________
 
-def term_with_numbered_vars_to_shape(w_obj):
+def make_standardizer(w_obj):
+    memo = []
+    shape = term_with_numbered_vars_to_shape(w_obj, memo)
+    return Standardizer(shape, memo)
+
+
+def term_with_numbered_vars_to_shape(w_obj, memo):
     from prolog.interpreter import term
     if isinstance(w_obj, term.NumberedVar):
-        return InStorageShape.build(w_obj.num)
+        memo.append(w_obj.num)
+        return InStorageShape.build()
     elif isinstance(w_obj, Callable):
-        argshapes = [term_with_numbered_vars_to_shape(w_arg)
+        argshapes = [term_with_numbered_vars_to_shape(w_arg, memo)
                         for w_arg in w_obj.arguments()]
         return SharingShape.build_potentially_wrap(w_obj.signature(), argshapes)
     return WrapShape(w_obj)
 
-@jit.unroll_safe
-def build(shape, args):
-    assert len(args) != 0
-    assert len(shape.children) == len(args)
-    storage = []
-    shapeargs = []
-    storeindex = 0
-    for i in range(len(args)):
-        arg = args[i]
-        if isinstance(arg, ShapedCallable):
-            newshape = shape._get_transition(storeindex, arg.shape)
-            if newshape:
-                storeindex += len(arg.storage)
-                shapeargs += arg.storage
-                shape = newshape
-                continue
-        shapeargs.append(InStorageShape.build(storeindex))
-        storeindex += 1
-        shapeargs.append(arg)
-    return ShapedCallable(shape, shapeargs)
-
+class Standardizer(object):
+    def __init__(self, shape, memo):
+        self.shape = shape
+        self.memo = memo
 
 # _____________________________________________________________________
 

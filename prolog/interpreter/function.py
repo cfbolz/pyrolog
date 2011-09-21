@@ -26,7 +26,6 @@ class Rule(object):
         if body is not None:
             body = helper.ensure_callable(body)
             self.body = body.enumerate_vars(memo)
-            self.body_shape = shape.term_with_numbered_vars_to_shape(self.body)
         else:
             self.body = None
         self.size_env = memo.size()
