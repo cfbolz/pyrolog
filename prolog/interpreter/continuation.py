@@ -4,7 +4,7 @@ from pypy.rlib import jit
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from prolog.interpreter import error
 from prolog.interpreter import helper
-from prolog.interpreter.term import Term, Atom, Var, Callable
+from prolog.interpreter.term import Term, Atom, BindingVar, Callable, Var
 from prolog.interpreter.function import Function, Rule
 from prolog.interpreter.heap import Heap
 from prolog.interpreter.signature import Signature
@@ -77,23 +77,28 @@ def driver(scont, fcont, heap):
 
 @jit.unroll_safe
 def _process_hooks(scont, fcont, heap):
-    if heap.hooks.last:
+    if heap.hook:
         e = scont.engine
-        hookcell = heap.hooks.last
-        heap.hooks.clear()
+        hookcell = heap.hook
+        heap.hook = None
         while hookcell:
-            hook = hookcell.hook
-            for module, val in hook.atts.iteritems():
-                query = Callable.build("attr_unify_hook", [val, hook.getvalue(heap)])
+            attvar = hookcell.attvar
+            attmap = jit.hint(attvar.attmap, promote=True)
+            for i in range(len(attvar.value_list)):
+                val = attvar.value_list[i]
+                if val is None:
+                    continue
+                module = attmap.get_attname_at_index(i)
+                query = Callable.build("attr_unify_hook", [val, attvar])
                 try:
                     mod = e.modulewrapper.get_module(module, query)
                 except error.CatchableError, err:
                     scont, fcont, heap = scont.engine.throw(err.term, scont, fcont, heap)
                     break
                 scont, fcont, heap = e.call(query, mod, scont, fcont, heap)
-                heap.add_trail_atts(hook, module)
+                heap.add_trail_atts(attvar, module)
             hookcell = hookcell.next
-            hook.atts.clear() # remove attributes from unified attvar
+            attvar.value_list = None # XXX?
     return scont, fcont, heap
 
 class Engine(object):
@@ -108,6 +113,9 @@ class Engine(object):
         self.clocks = Clocks()
         self.clocks.startup()
         self.streamwrapper = StreamWrapper()
+
+    def _freeze_(self):
+        return True
 
     # _____________________________________________________
     # database functionality
@@ -136,7 +144,7 @@ class Engine(object):
         if old_modname is not None:
             self.switch_module(old_modname)
 
-    @jit.purefunction_promote("0")
+    @jit.elidable_promote('all')
     def get_builtin(self, signature):
         from prolog import builtin # for the side-effects
         return signature.get_extra("builtin")
@@ -146,6 +154,7 @@ class Engine(object):
     # parsing-related functionality
 
     def _build_and_run(self, tree):
+        assert self is not None # for the annotator (!)
         from prolog.interpreter.parsing import TermBuilder
         builder = TermBuilder()
         term = builder.build_query(tree)
@@ -157,15 +166,15 @@ class Engine(object):
 
     def _term_expand(self, term):
         if self.modulewrapper.system is not None:
-            v = Var()
+            v = BindingVar()
             call = Callable.build("term_expand", [term, v])
             try:
                 self.run(call, self.modulewrapper.current_module)
             except error.UnificationFailed:
-                v = Var()
+                v = BindingVar()
                 call = Callable.build("term_expand", [term, v])
                 self.run(call, self.modulewrapper.system)
-            term = v.getvalue(None)
+            term = v.dereference(None)
         self.add_rule(term)
 
     def runstring(self, s):
@@ -215,7 +224,7 @@ class Engine(object):
         rulechain = startrulechain.find_applicable_rule(query)
         if rulechain is None:
             raise error.UnificationFailed
-        scont, fcont, heap = _make_rule_conts(self, module, scont, fcont, heap, query, rulechain)
+        scont, fcont, heap = _make_rule_conts(self, scont, fcont, heap, query, rulechain)
         return scont, fcont, heap
 
     def _get_function(self, signature, module, query): 
@@ -229,15 +238,6 @@ class Engine(object):
 
     # _____________________________________________________
     # module handling
-
-    def add_module(self, name, exports = []):
-        m = self.modulewrapper
-        mod = Module(name)
-        for export in exports:
-            mod.exports.append(Signature.getsignature(
-                    *unwrap_predicate_indicator(export)))
-        m.current_module = mod
-        m.modules[name] = mod
 
     def switch_module(self, modulename):
         m = self.modulewrapper
@@ -275,17 +275,17 @@ class Engine(object):
     def __freeze__(self):
         return True
 
-def _make_rule_conts(engine, module, scont, fcont, heap, query, rulechain):
+def _make_rule_conts(engine, scont, fcont, heap, query, rulechain):
     rule = jit.hint(rulechain, promote=True)
     if rule.contains_cut:
         scont = CutScopeNotifier.insert_scope_notifier(
                 engine, scont, fcont)
     restchain = rule.find_next_applicable_rule(query)
     if restchain is not None:
-        fcont = UserCallContinuation(engine, module, scont, fcont, heap, query, restchain)
+        fcont = UserCallContinuation(engine, scont, fcont, heap, query, restchain)
         heap = heap.branch()
 
-    scont = RuleContinuation(engine, module, scont, rule, query)
+    scont = RuleContinuation(engine, scont, rule, query)
     return scont, fcont, heap
 
 # ___________________________________________________________________
@@ -443,15 +443,14 @@ class BuiltinContinuation(ContinuationWithModule):
 
 
 class UserCallContinuation(FailureContinuation):
-    def __init__(self, engine, module, nextcont, orig_fcont, heap, query, rulechain):
+    def __init__(self, engine, nextcont, orig_fcont, heap, query, rulechain):
         FailureContinuation.__init__(self, engine, nextcont, orig_fcont, heap)
         self.query = query
         self.rulechain = rulechain
-        self.module = module
 
     def fail(self, heap):
         heap = heap.revert_upto(self.undoheap, discard_choicepoint=True)
-        return _make_rule_conts(self.engine, self.module, self.nextcont, self.orig_fcont,
+        return _make_rule_conts(self.engine, self.nextcont, self.orig_fcont,
                                 heap, self.query, self.rulechain)
 
 
@@ -460,15 +459,15 @@ class UserCallContinuation(FailureContinuation):
                 self.query, self.rulechain)
     
 
-class RuleContinuation(ContinuationWithModule):
+class RuleContinuation(Continuation):
     """ A Continuation that represents the application of a rule, i.e.:
         - standardizing apart of the rule
         - unifying the rule head with the query
         - calling the body of the rule
     """
 
-    def __init__(self, engine, module, nextcont, rule, query):
-        ContinuationWithModule.__init__(self, engine, module, nextcont)
+    def __init__(self, engine, nextcont, rule, query):
+        Continuation.__init__(self, engine, nextcont)
         self._rule = rule
         self.query = query
 

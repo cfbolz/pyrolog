@@ -31,7 +31,7 @@ class ContinueContinuation(Continuation):
         while 1:
             if isinstance(fcont, DoneFailureContinuation):
                 self.write("\n")
-                return DoneSuccessContinuation(None), fcont, heap
+                return DoneSuccessContinuation(self.engine), fcont, heap
             res = getch()
             if res in "\r\x04\n":
                 self.write("\n")
@@ -51,7 +51,7 @@ def var_representation(var_to_pos, engine, write, heap):
     for var, real_var in var_to_pos.iteritems():
         if var.startswith("_"):
             continue
-        value = real_var.getvalue(heap)
+        value = real_var.dereference(heap)
         val = f.format(value)
         if isinstance(value, term.AttVar):
             write("%s\n" % val)

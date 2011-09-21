@@ -6,11 +6,12 @@ from pypy.rlib.objectmodel import we_are_translated, UnboxedValue
 from pypy.rlib.objectmodel import compute_unique_id
 from pypy.rlib.objectmodel import specialize
 from pypy.rlib.debug import make_sure_not_resized
-from pypy.rlib import jit
+from pypy.rlib import jit, debug
 from pypy.tool.pairtype import extendabletype
 from pypy.rlib.rbigint import rbigint
 
 DEBUG = False
+OPTIMIZED_TERM_SIZE_MAX = 10
 
 def debug_print(*args):
     if DEBUG and not we_are_translated():
@@ -20,10 +21,7 @@ def debug_print(*args):
 class PrologObject(object):
     __slots__ = ()
     __metaclass__ = extendabletype
-    
-    def getvalue(self, heap):
-        return self
-    
+
     def dereference(self, heap):
         raise NotImplementedError("abstract base class")
     
@@ -32,7 +30,10 @@ class PrologObject(object):
     
     def copy_standardize_apart(self, heap, env):
         raise NotImplementedError("abstract base class")
-    
+
+    def copy_standardize_apart_as_child_of(self, heap, env, parent, index):
+        return self.copy_standardize_apart(heap, env)
+
     def unify_and_standardize_apart(self, other, heap, env):
         raise NotImplementedError("abstract base class")
     
@@ -61,29 +62,34 @@ class PrologObject(object):
 
 class Var(PrologObject):
     TYPE_STANDARD_ORDER = 0
-    __slots__ = ("binding", "created_after_choice_point")
-    
+    __slots__ = ("created_after_choice_point", )
+
     def __init__(self):
-        self.binding = None
         self.created_after_choice_point = None
-    
+        assert type(self) is not Var, "abstract base class"
+
     @specialize.arg(3)
     @jit.unroll_safe
     def unify(self, other, heap, occurs_check=False):
         other = other.dereference(heap)
-        next = self.binding
+        next = self.getbinding()
         while isinstance(next, Var):
             self = next
-            next = next.binding
+            next = next.getbinding()
         if next is None:
             assert isinstance(self, Var)
             return self._unify_derefed(other, heap, occurs_check)
         else:
-            assert isinstance(next, NonVar)
-            if next is not other:
-                if isinstance(other, NonVar):
-                    self.setvalue(other, heap)
-                next._unify_derefed(other, heap, occurs_check)
+            self._unify_potential_recursion(next, other, heap, occurs_check)
+
+    @specialize.arg(4)
+    def _unify_potential_recursion(self, next, other, heap, occurs_check):
+        assert isinstance(next, NonVar)
+        if next is not other:
+            next._unify_derefed(other, heap, occurs_check)
+
+    def getbinding(self):
+        raise NotImplementedError
 
     @specialize.arg(3)
     def _unify_derefed(self, other, heap, occurs_check=False):
@@ -95,7 +101,7 @@ class Var(PrologObject):
             self.setvalue(other, heap)
     
     def dereference(self, heap):
-        next = self.binding
+        next = self.getbinding()
         if next is None:
             return self
         else:
@@ -104,17 +110,7 @@ class Var(PrologObject):
                 # do path compression
                 self.setvalue(result, heap)
             return result
-    
-    def getvalue(self, heap):
-        res = self.dereference(heap)
-        if not isinstance(res, Var):
-            return res.getvalue(heap)
-        return res
-    
-    def setvalue(self, value, heap):
-        heap.add_trail(self)
-        self.binding = value
-    
+
     def copy(self, heap, memo):
         self = self.dereference(heap)
         if isinstance(self, Var):
@@ -127,8 +123,11 @@ class Var(PrologObject):
         return self.copy(heap, memo)
     
     def enumerate_vars(self, memo):
-        return memo.get(self)
-    
+        self = self.dereference(None)
+        if isinstance(self, Var):
+            return memo.get(self)
+        return self.enumerate_vars(memo)
+
     def contains_var(self, var, heap):
         self = self.dereference(heap)
         if self is var:
@@ -136,21 +135,14 @@ class Var(PrologObject):
         if not isinstance(self, Var):
             return self.contains_var(var, heap)
         return False
-    
-    def __repr__(self):
-        return "Var(%s)" % (self.binding, )
 
-    
-    def __eq__(self, other):
-        # for testing
-        # XXX delete
-        return self is other
-    
+    def __repr__(self):
+        return "Var(%s)" % (self.getbinding(), )
+
     def eval_arithmetic(self, engine):
         self = self.dereference(None)
         if isinstance(self, Var):
             error.throw_instantiation_error()
-        
         return self.eval_arithmetic(engine)
     
     @jit.dont_look_inside
@@ -158,12 +150,117 @@ class Var(PrologObject):
         assert isinstance(other, Var)
         return rcmp(compute_unique_id(self), compute_unique_id(other))
 
-class AttVar(Var):
-    __slots__ = ("binding", "atts", "created_after_choice_point")
+class BindingVar(Var):
+    __slots__ = ("binding", "created_after_choice_point")
 
     def __init__(self):
         Var.__init__(self)
-        self.atts = {} # mapping from modules to values
+        self.binding = None
+
+    def getbinding(self):
+        return self.binding
+
+    def setvalue(self, value, heap):
+        heap.add_trail(self)
+        self.binding = value
+
+    @specialize.arg(4)
+    def _unify_potential_recursion(self, next, other, heap, occurs_check):
+        assert isinstance(next, NonVar)
+        if next is not other:
+            if isinstance(other, NonVar):
+                self.setvalue(other, heap)
+            next._unify_derefed(other, heap, occurs_check)
+
+
+class VarInTerm(Var):
+    def __init__(self, parent):
+        raise NotImplementedError("abstract base class")
+
+    def init(self, parent):
+        assert isinstance(parent, MutableCallable)
+        self.parent_or_binding = parent
+        self.bound = False
+
+    def getbinding(self):
+        if self.bound:
+            return self.parent_or_binding
+        return None
+
+    def dereference(self, heap):
+        # makes no sense to do path compression here
+        next = self.getbinding()
+        if next is None:
+            return self
+        return next.dereference(heap)
+
+    def setvalue(self, value, heap):
+        # this is true because setvalues on bound VarInTerms don't happen
+        assert not self.bound
+        if heap is not self.created_after_choice_point:
+            var = self.created_after_choice_point.newvar()
+            var.setvalue(value, heap)
+            value = var
+        self._setvalue_in_parent(value)
+        self.bound = True
+        self.parent_or_binding = value
+
+    def _setvalue_in_parent(self, value):
+        raise NotImplementedError("abstract base class")
+
+    def __repr__(self):
+        if self.getbinding():
+            return "%s(%s)" % (self.__class__.__name__, self.getbinding())
+        return "%s(%s)" % (self.__class__.__name__, self.parent_or_binding.signature())
+
+def make_var_in_term_class(index):
+    class VarInTermN(VarInTerm):
+        def __init__(self, parent):
+            self.init(parent)
+
+        def _setvalue_in_parent(self, value):
+            self.parent_or_binding.set_argument_at(index, value)
+    VarInTermN.__name__ = "VarInTerm%s" % index
+    return VarInTermN
+
+var_in_term_classes = [make_var_in_term_class(i)
+                            for i in range(OPTIMIZED_TERM_SIZE_MAX)]
+
+
+
+
+class AttMap(object):
+    def __init__(self):
+        self.indexes = {}
+        self.attnames_in_order = []
+        self.other_maps = {}
+        self.last_name = None
+
+    @jit.elidable
+    def get_index(self, attname):
+        return self.indexes.get(attname, -1)
+
+    @jit.elidable
+    def with_extra_attribute(self, attname):
+        if attname not in self.other_maps:
+            new_map = AttMap()
+            new_map.last_name = attname
+            new_map.indexes.update(self.indexes)
+            new_map.indexes[attname] = len(self.indexes)
+            new_map.attnames_in_order = self.attnames_in_order + [attname]
+            self.other_maps[attname] = new_map
+        return self.other_maps[attname]
+
+    @jit.elidable
+    def get_attname_at_index(self, index):
+        return self.attnames_in_order[index]
+
+class AttVar(BindingVar):
+    attmap = AttMap()
+
+    def __init__(self):
+        BindingVar.__init__(self)
+        self.value_list = debug.make_sure_not_resized([])
 
     @specialize.arg(3)
     def _unify_derefed(self, other, heap, occurs_check=False):
@@ -176,14 +273,19 @@ class AttVar(Var):
         return self.setvalue(other, heap)
 
     def setvalue(self, value, heap):
-        heap.add_hook(self)
-        Var.setvalue(self, value, heap)
+        if self.value_list is not None:
+            heap.add_hook(self)
+        BindingVar.setvalue(self, value, heap)
 
     def __repr__(self):
         attrs = []
-        for key, val in self.atts.iteritems():
-            attrs.append("%s=%s" % (key, val))
-        return "AttVar(%s, %s)" % (self.binding, "[" + ", ".join(attrs) + "]")
+        attmap = jit.hint(self.attmap, promote=True)
+        if self.value_list is not None:
+            for key, index in attmap.indexes.iteritems():
+                value = self.value_list[index]
+                if value is not None:
+                    attrs.append("%s=%s" % (key, value))
+        return "AttVar(%s, %s)" % (self.getbinding(), "[" + ", ".join(attrs) + "]")
 
     def copy(self, heap, memo):
         self = self.dereference(heap)
@@ -192,11 +294,68 @@ class AttVar(Var):
             if res is not None:
                 return res
             newvar = heap.new_attvar()
-            for key, val in self.atts.iteritems():
-                newvar.atts[key] = val.copy(heap, memo)
+            own_list = self.value_list
+            newvar.attmap = self.attmap
+            if own_list is None:
+                newvar.value_list = None
+            else:
+                length = len(own_list)
+                new_values = [None] * length
+                for i in range(length):
+                    if own_list[i] is None:
+                        new_values[i] = None
+                    else:
+                        new_values[i] = own_list[i].copy(heap, memo)
+                newvar.value_list = new_values
+
             memo.set(self, newvar)
             return newvar
         return self.copy(heap, memo)
+
+    def add_attribute(self, attname, attribute):
+        attmap = jit.hint(self.attmap, promote=True)
+        index = attmap.get_index(attname)
+        if index != -1:
+            self.value_list[index] = attribute
+            return
+        self.attmap = attmap.with_extra_attribute(attname)
+        self.value_list = self.value_list + [attribute]
+
+    def del_attribute(self, attname):
+        attmap = jit.hint(self.attmap, promote=True)
+        index = attmap.get_index(attname)
+        if self.value_list is not None:
+            self.value_list[index] = None
+
+    def get_attribute(self, attname):
+        if self.value_list is None:
+            return None, -1
+        attmap = jit.hint(self.attmap, promote=True)
+        index = attmap.get_index(attname)
+        if index == -1:
+            return None, -1
+        return self.value_list[index], index
+
+    def reset_field(self, index, value):
+        if self.value_list is None:
+            self.value_list = [None] * (index + 1)
+        else:
+            self.value_list = self.value_list + [None] * (
+                    index - len(self.value_list) + 1)
+        self.value_list[index] = value
+
+    def get_attribute_index(self, attname):
+        attmap = jit.hint(self.attmap, promote=True)
+        return attmap.get_index(attname)
+
+    def is_empty(self):
+        if self.value_list is None:
+            return True
+        for elem in self.value_list:
+            if elem is not None:
+                return False
+        return True
+
 
 
 class NumberedVar(PrologObject):
@@ -211,13 +370,21 @@ class NumberedVar(PrologObject):
         if res is None:
             res = env[self.num] = heap.newvar()
         return res
-    
+
+    def copy_standardize_apart_as_child_of(self, heap, env, parent, index):
+        if self.num < 0:
+            return heap.newvar_in_term(parent, index)
+        res = env[self.num]
+        if res is None:
+            res = env[self.num] = heap.newvar_in_term(parent, index)
+        return res
+
     def unify_and_standardize_apart(self, other, heap, env):
         if self.num < 0:
             return other
         res = env[self.num]
         if res is None:
-            env[self.num] = other
+            other = env[self.num] = other #.dereference(heap)
             return other
         res.unify(other, heap)
         return res
@@ -311,6 +478,7 @@ class Callable(NonVar):
         else:
             raise UnificationFailed
     
+    @jit.unroll_safe
     def copy_and_basic_unify(self, other, heap, env):
         if (isinstance(other, Callable) and
             self.signature().eq(other.signature())):
@@ -329,10 +497,7 @@ class Callable(NonVar):
     
     def enumerate_vars(self, memo):
         return self._copy_term(_term_enumerate_vars, None, memo)
-    
-    def getvalue(self, heap):
-        return self._copy_term(_term_getvalue, heap)
-    
+
     @specialize.arg(1)
     @jit.unroll_safe
     def _copy_term(self, copy_individual, heap, *extraargs):
@@ -377,8 +542,8 @@ class Callable(NonVar):
     
     def eval_arithmetic(self, engine):
         from prolog.interpreter.arithmetic import get_arithmetic_function
-        
         func = get_arithmetic_function(self.signature())
+        jit.promote(func)
         if func is None:
             error.throw_type_error("evaluable", self.get_prolog_signature())
         return func(engine, self)
@@ -394,9 +559,9 @@ class Callable(NonVar):
             # already and cannot be backtracked
             for i in range(len(args)):
                 arg = args[i]
-                if (isinstance(arg, Var) and arg.binding is not None and
+                if (isinstance(arg, Var) and arg.getbinding() is not None and
                         arg.created_after_choice_point is heap):
-                    args[i] = arg.binding
+                    args[i] = arg.getbinding()
         if len(args) == 0:
             if cache:
                 return Atom.newatom(term_name)
@@ -418,9 +583,9 @@ class Callable(NonVar):
             if cls is not None:
                 return cls(term_name, args, signature)
             return Term(term_name, args, signature)
-    
+
     @staticmethod
-    @jit.purefunction
+    @jit.elidable
     def _find_specialized_class(term_name, numargs):
         return specialized_term_classes.get((term_name, numargs), None)
 
@@ -441,6 +606,10 @@ class Callable(NonVar):
             if not self.argument_at(i).quick_unify_check(other.argument_at(i)):
                 return False
         return True
+
+class MutableCallable(Callable):
+    def set_argument_at(self, i, arg):
+        raise NotImplementedError
 
 
 class Atom(Callable):
@@ -632,9 +801,6 @@ def _term_copy_standardize_apart(obj, i, heap, env):
 def _term_enumerate_vars(obj, i, _, memo):
     return obj.enumerate_vars(memo)
 
-def _term_getvalue(obj, i, heap):
-    return obj.getvalue(heap)
-
 def _term_unify_and_standardize_apart(obj, i, heap, other, memo):
     obj.unify_and_standardize_apart(other.argument_at(i), heap, memo)
 
@@ -688,15 +854,16 @@ def cmp_standard_order(obj1, obj2, heap):
         return c
     return obj1.cmp_standard_order(obj2, heap)
 
-def generate_class(cname, fname, n_args):
+def generate_class(cname, fname, n_args, immutable=True):
     from pypy.rlib.unroll import unrolling_iterable
     arg_iter = unrolling_iterable(range(n_args))
     parent = callables['Abstract', n_args]
+    if not immutable:
+        parent = parent.mutable_version
     assert parent is not None
     signature = Signature.getsignature(fname, n_args)
-    
-    class cls(parent):
-        _immutable_ = True
+
+    class specific_class(parent):
         if n_args == 0:
             TYPE_STANDARD_ORDER = Atom.TYPE_STANDARD_ORDER
         else:
@@ -714,16 +881,33 @@ def generate_class(cname, fname, n_args):
             return signature
 
         def _make_new(self, name, signature):
+            cls = specific_class
             return cls(name, None, signature)
-    
-    cls.__name__ = cname
-    return cls
 
-def generate_abstract_class(n_args):
+        if immutable:
+            def _make_new_mutable(self, name, signature):
+                cls = mutable_version
+                return cls(name, None, signature)
+        else:
+            _make_new_mutable = _make_new
+    if immutable:
+        mutable_version = specific_class.mutable_version = generate_class(
+                cname, fname, n_args, False)
+    specific_class.__name__ = cname + "Mutable" * (not immutable)
+    return specific_class
+
+def generate_abstract_class(n_args, immutable=True):
     from pypy.rlib.unroll import unrolling_iterable
     arg_iter = unrolling_iterable(range(n_args))
-    class abstract_callable(Callable):
-        _immutable_ = True
+    if immutable:
+        base = Callable
+    else:
+        base = MutableCallable
+    class abstract_callable(base):
+
+        if immutable:
+            _immutable_fields_ = ["val_%d" % x for x in arg_iter]
+
         def __init__(self, term_name, args, signature):
             raise NotImplementedError
 
@@ -733,9 +917,10 @@ def generate_abstract_class(n_args):
             for x in arg_iter:
                 setattr(self, 'val_%d' % x, args[x])
 
-        def _make_new(self, name, signature):
+        def _make_new(self, name, signature, mutable=False):
             raise NotImplementedError("abstract base class")
-        
+        _make_new_mutable = _make_new
+
         def arguments(self):
             result = [None] * n_args
             for x in arg_iter:
@@ -747,7 +932,15 @@ def generate_abstract_class(n_args):
                 if x == i:
                     return getattr(self, 'val_%d' % x)
             raise IndexError
-        
+
+        if not immutable:
+            def set_argument_at(self, i, arg):
+                for x in arg_iter:
+                    if x == i:
+                        setattr(self, 'val_%d' % x, arg)
+                        return
+                raise IndexError
+
         def argument_count(self):
             return n_args
 
@@ -779,6 +972,24 @@ def generate_abstract_class(n_args):
             else:
                 raise UnificationFailed
 
+        def copy_standardize_apart(self, heap, env):
+            result = self._make_new_mutable(self.name(), self.signature())
+            newinstance = False
+            needmutable = False
+            i = 0
+            for i in arg_iter:
+                arg = getattr(self, 'val_%d' % i)
+                cloned = arg.copy_standardize_apart_as_child_of(heap, env, result, i)
+                newinstance = newinstance | (cloned is not arg)
+                needmutable = needmutable | isinstance(arg, VarInTerm)
+                setattr(result, 'val_%d' % i, cloned)
+                i += 1
+            if newinstance:
+                # XXX what about the variable shunting in Callable.build
+                return result
+            else:
+                return self
+
         @specialize.arg(3)
         @jit.dont_look_inside
         def basic_unify(self, other, heap, occurs_check=False):
@@ -808,17 +1019,22 @@ def generate_abstract_class(n_args):
                 return result
             else:
                 return self
-    
-    abstract_callable.__name__ = 'Abstract'+str(n_args)
+    if immutable:
+        abstract_callable.mutable_version = generate_abstract_class(n_args, immutable=False)
+    else:
+        abstract_callable.mutable_version = abstract_callable
+
+    abstract_callable.__name__ = 'Abstract'+str(n_args) + "Mutable" * (not immutable)
     return abstract_callable
 
-def generate_generic_class(n_args):
+def generate_generic_class(n_args, immutable=True):
     parent = callables['Abstract', n_args]
     assert parent is not None
-    
+    if not immutable:
+        parent = parent.mutable_version
+
     class generic_callable(parent):
-        _immutable_ = True
-        _immutable_fields_ = ["signature"]
+        _immutable_fields_ = ["_signature"]
         TYPE_STANDARD_ORDER = Term.TYPE_STANDARD_ORDER
         
         def __init__(self, term_name, args, signature):
@@ -827,20 +1043,29 @@ def generate_generic_class(n_args):
             assert args is None or len(args) == n_args
             assert self.name() == term_name
 
-        def _make_new(self, name, signature):
-            return generic_callable(name, None, signature)
-        
+        def _make_new(self, name, signature, mutable=False):
+            cls = generic_callable
+            return cls(name, None, signature)
+
+        if immutable:
+            def _make_new_mutable(self, name, signature, mutable=False):
+                cls = mutable_version
+                return cls(name, None, signature)
+        else:
+            _make_new_mutable = _make_new
+
         def signature(self):
             return self._signature
-        
-    generic_callable.__name__ = 'Generic'+str(n_args)
+    if immutable:
+        mutable_version = generic_callable.mutable_version = generate_generic_class(n_args, False)
+    generic_callable.__name__ = 'Generic'+str(n_args) + "Mutable" * (not immutable)
     return generic_callable
-    
+
 
 specialized_term_classes = {}
 callables = {}
 
-for numargs in range(1, 10):
+for numargs in range(1, OPTIMIZED_TERM_SIZE_MAX):
     callables['Abstract', numargs] = generate_abstract_class(numargs)
 
 classes = [('Cons', '.', 2), ('Or', ';', 2), ('And', ',', 2)]

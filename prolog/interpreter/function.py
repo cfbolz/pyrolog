@@ -16,6 +16,7 @@ class Rule(object):
     
     def __init__(self, head, body, module, next = None):
         from prolog.interpreter import helper, shape
+        head = head.dereference(None)
         assert isinstance(head, Callable)
         memo = EnumerationMemo()
         self.head = h = head.enumerate_vars(memo)
@@ -24,6 +25,7 @@ class Rule(object):
         else:
             self.headargs = None
         if body is not None:
+            body = body.dereference(None)
             body = helper.ensure_callable(body)
             self.body = body.enumerate_vars(memo)
         else:
@@ -119,6 +121,7 @@ class Rule(object):
 
 
 class Function(object):
+    _immutable_fields_ = ["rulechain?", "meta_args?"]
     def __init__(self):
         self.meta_args = None
         self.rulechain = self.last = None
