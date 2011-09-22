@@ -118,6 +118,7 @@ def test_replace():
     nil = shape.WrapShape(term.Atom.build("[]"))
     s4 = s3.replace(3, nil)
     s4b = b(sig, [X, b(sig, [X, b(sig, [X, nil])])])
+    assert s4b is s4
 
 def test_shaped_callable_replace_child():
     sig = signature.Signature.getsignature(".", 2)
@@ -136,6 +137,57 @@ def test_shaped_callable_replace_child():
     c2 = shape.ShapedCallable(s1, [b, nil])
     c1.replace_child(0, c2)
     assert c1.storage == [b, nil, a]
+
+def test_depth():
+    sig = signature.Signature.getsignature(".", 2)
+    b = shape.SharingShape.build
+    X = shape.InStorageShape.build()
+    s1 = b(sig, [X, X])
+    assert s1.depth() == 2
+    s = s1
+    for i in range(10):
+        s = s.replace(i, s1)
+        assert s.depth() == 3 + i
+
+def test_get_transition():
+    sig = signature.Signature.getsignature(".", 2)
+    b = shape.SharingShape.build
+    X = shape.InStorageShape.build()
+    s1 = b(sig, [X, X])
+
+    s2 = s1.get_transition(1, s1)
+    assert s2 is None
+    s2 = s1.get_transition(1, s1)
+    s2b = b(sig, [X, s1])
+    assert s2 is s2b
+
+    s3 = s2.get_transition(2, s1)
+    assert s3 is None
+    s3 = s2.get_transition(2, s1)
+    s3b = b(sig, [X, s2])
+    assert s3 is s3b
+
+    nil = shape.WrapShape(term.Atom.build("[]"))
+    s4 = s3.get_transition(3, nil)
+    assert s4 is None
+    s4 = s3.get_transition(3, nil)
+    s4b = b(sig, [X, b(sig, [X, b(sig, [X, nil])])])
+    assert s4 is s4b
+
+def test_get_transition_inefficient():
+    sig = signature.Signature.getsignature(".", 2)
+    b = shape.SharingShape.build
+    X = shape.InStorageShape.build()
+    s1 = b(sig, [X, X])
+    s = s1
+    for i in range(8):
+        s.get_transition(i, s1)
+        s = s.get_transition(i, s1)
+    assert s is None
+    sig10 = signature.Signature.getsignature(".", 10)
+    s10 = b(sig10, [X] * 10)
+    s10.get_transition(5, s1)
+    assert s10.get_transition(5, s1) is None
 
 def test_shaped_callable_unify():
     from prolog.interpreter import heap

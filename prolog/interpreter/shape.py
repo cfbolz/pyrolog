@@ -3,6 +3,10 @@ from prolog.interpreter.term import Callable, Term
 from prolog.interpreter.continuation import view
 # a Callable implementation that tries to save memory
 
+# XXX tune this
+MAX_DEPTH = 10
+MAX_SIZE = 10
+
 class Shape(object):
     def __init__(self):
         pass
@@ -13,7 +17,13 @@ class Shape(object):
     def num_storage_vars(self):
         return 0
 
+    def depth(self):
+        return 1
+
     from prolog.interpreter.continuation import _dot
+
+INEFFICIENT = Shape()
+SEEN_ONCE = Shape()
 
 class WrapShape(Shape):
     _immutable_fields_ = ["w_obj"]
@@ -68,6 +78,7 @@ def shape_hash((sig, children)):
 class SharingShape(Shape):
     _immutable_fields_ = ["signature", "children[*]"]
     _cache = objectmodel.r_dict(shape_eq, shape_hash)
+    _transitions = None
 
     def __init__(self, signature, children):
         Shape.__init__(self)
@@ -124,6 +135,32 @@ class SharingShape(Shape):
             assert 0, "cannot happen"
         children = self.children[:j] + [child] + self.children[j + 1:]
         return SharingShape.build(self.signature, children)
+
+    def depth(self):
+        depth = 0
+        for child in self.children:
+            depth = max(depth, child.depth())
+        return depth + 1
+
+    def get_transition(self, i, shape):
+        if self._transitions is None:
+            self._transitions = {}
+        key = (i, shape)
+        newshape = self._transitions.get(key, None)
+        if newshape is None:
+            self._transitions[key] = SEEN_ONCE
+            return None
+        elif newshape is SEEN_ONCE:
+            newshape = self.replace(i, shape)
+            if (newshape.depth() < MAX_DEPTH and
+                    newshape.num_storage_vars() < MAX_SIZE):
+                self._transitions[key] = newshape
+            else:
+                self._transitions[key] = INEFFICIENT
+                return None
+        elif newshape is INEFFICIENT:
+            return None
+        return newshape
 
     def __repr__(self):
         return "%s(%r, %r)" % (self.__class__.__name__, self.signature, self.children)
