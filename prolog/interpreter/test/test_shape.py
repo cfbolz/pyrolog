@@ -130,12 +130,14 @@ def test_shaped_callable_replace_child():
     nil = term.Callable.build("[]")
     c1 = shape.ShapedCallable(s1, [a, None])
     c2 = shape.ShapedCallable(s1, [b, nil])
-    c1.replace_child(1, c2)
+    newshape = s1.replace(1, s1)
+    c1.replace_child(1, c2, newshape)
     assert c1.storage == [a, b, nil]
 
     c1 = shape.ShapedCallable(s1, [None, a])
     c2 = shape.ShapedCallable(s1, [b, nil])
-    c1.replace_child(0, c2)
+    newshape = s1.replace(0, s1)
+    c1.replace_child(0, c2, newshape)
     assert c1.storage == [b, nil, a]
 
 def test_depth():

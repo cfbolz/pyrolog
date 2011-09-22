@@ -206,10 +206,11 @@ class ShapedCallable(Callable):
             return
         return Callable.basic_unify(self, other, heap, occurs_check)
 
-    def replace_child(self, i, obj):
+    def replace_child(self, i, obj, new_shape):
         assert isinstance(obj, ShapedCallable)
         self.storage = self.storage[:i] + obj.storage + self.storage[i + 1:]
-        self.shape = self.shape.replace(i, obj.shape)
+        assert len(self.storage) == new_shape.num_storage_vars()
+        self.shape = new_shape
 
 # _____________________________________________________________________
 
