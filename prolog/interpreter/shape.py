@@ -147,6 +147,7 @@ class SharingShape(Shape):
             self._transitions = {}
         key = (i, shape)
         newshape = self._transitions.get(key, None)
+        # XXX tune heuristics
         if newshape is None:
             self._transitions[key] = SEEN_ONCE
             return None
@@ -174,7 +175,6 @@ class SharingShape(Shape):
             yield "%s -> %s [label=%s]" % (id(self), id(child), i)
             for line in child._dot(seen):
                 yield line
-
 
 
 # _____________________________________________________________________
