@@ -191,6 +191,26 @@ def test_get_transition_inefficient():
     s10.get_transition(5, s1)
     assert s10.get_transition(5, s1) is None
 
+def test_shaped_callable_build():
+    sig = signature.Signature.getsignature(".", 2)
+    b = shape.SharingShape
+    X = shape.InStorageShape.build()
+    s1 = b(sig, [X, X])
+    s1.get_transition(1, s1)
+    s2 = s1.get_transition(1, s1)
+    s2.get_transition(2, s1)
+    s3 = s2.get_transition(2, s1)
+    nilsig = signature.Signature.getsignature("[]", 0)
+    nilshape = b(nilsig, [])
+    nil = shape.ShapedCallable(nilshape, [])
+    c1 = shape.ShapedCallable(s1, [2, nil])
+    c2 = shape.ShapedCallable(s1, [3, c1])
+    c3 = shape.ShapedCallable.build(s1, [4, c2])
+    assert c3.shape is s3
+    assert c3.storage == [4, 3, 2, nil]
+    c4 = shape.ShapedCallable.build(s1, [4, c2])
+    assert c4.storage == [4, 3, 2]
+
 def test_shaped_callable_unify():
     from prolog.interpreter import heap
     a = term.Callable.build("a")

@@ -212,6 +212,20 @@ class ShapedCallable(Callable):
         assert len(self.storage) == new_shape.num_storage_vars()
         self.shape = new_shape
 
+    @staticmethod
+    def build(shape, children):
+        result = ShapedCallable(shape, children)
+        i = 0
+        while i < len(result.storage):
+            child = result.storage[i]
+            if isinstance(child, ShapedCallable):
+                new_shape = result.shape.get_transition(i, child.shape)
+                if new_shape is not None:
+                    result.replace_child(i, child, new_shape)
+                    continue
+            i += 1
+        return result
+
 # _____________________________________________________________________
 
 def make_standardizer(w_obj):
