@@ -151,7 +151,7 @@ def test_depth():
 
 def test_get_transition():
     sig = signature.Signature.getsignature(".", 2)
-    b = shape.SharingShape.build
+    b = shape.SharingShape
     X = shape.InStorageShape.build()
     s1 = b(sig, [X, X])
 
@@ -159,24 +159,24 @@ def test_get_transition():
     assert s2 is None
     s2 = s1.get_transition(1, s1)
     s2b = b(sig, [X, s1])
-    assert s2 is s2b
+    assert str(s2) == str(s2b)
 
     s3 = s2.get_transition(2, s1)
     assert s3 is None
     s3 = s2.get_transition(2, s1)
     s3b = b(sig, [X, s2])
-    assert s3 is s3b
+    assert str(s3) == str(s3b)
 
     nil = shape.WrapShape(term.Atom.build("[]"))
     s4 = s3.get_transition(3, nil)
     assert s4 is None
     s4 = s3.get_transition(3, nil)
     s4b = b(sig, [X, b(sig, [X, b(sig, [X, nil])])])
-    assert s4 is s4b
+    assert str(s3) == str(s3b)
 
 def test_get_transition_inefficient():
     sig = signature.Signature.getsignature(".", 2)
-    b = shape.SharingShape.build
+    b = shape.SharingShape
     X = shape.InStorageShape.build()
     s1 = b(sig, [X, X])
     s = s1
