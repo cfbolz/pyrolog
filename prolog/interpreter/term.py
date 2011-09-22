@@ -178,7 +178,8 @@ class VarInTerm(Var):
         raise NotImplementedError("abstract base class")
 
     def init(self, parent):
-        assert isinstance(parent, MutableCallable)
+        from prolog.interpreter.shape import ShapedCallable
+        assert isinstance(parent, ShapedCallable)
         self.parent_or_binding = parent
         self.bound = False
 
@@ -219,7 +220,11 @@ def make_var_in_term_class(index):
             self.init(parent)
 
         def _setvalue_in_parent(self, value):
-            self.parent_or_binding.set_argument_at(index, value)
+            from prolog.interpreter.shape import ShapedCallable
+            obj = self.parent_or_binding
+            assert isinstance(obj, ShapedCallable)
+            if not obj.replace_child(index, value):
+                obj.storage[index] = value
     VarInTermN.__name__ = "VarInTerm%s" % index
     return VarInTermN
 
@@ -562,16 +567,22 @@ class Callable(NonVar):
                 if (isinstance(arg, Var) and arg.getbinding() is not None and
                         arg.created_after_choice_point is heap):
                     args[i] = arg.getbinding()
+
         if len(args) == 0:
             if cache:
                 return Atom.newatom(term_name)
             return Atom(term_name)
         else:
-            if signature is None:
-                if cache:
+            # XXX be less aggressive later
+            if cache:
+                from prolog.interpreter import shape
+                if signature is None:
                     signature = Signature.getsignature(term_name, len(args))
-                else:
-                    signature = Signature(term_name, len(args))
+                children = [shape.InStorageShape.build()] * len(args)
+                new_shape = shape.SharingShape.build(signature, children)
+                return shape.ShapedCallable.build(new_shape, args)
+            if signature is None:
+                signature = Signature(term_name, len(args))
             else:
                 assert signature.numargs == len(args)
             assert isinstance(signature, Signature)

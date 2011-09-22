@@ -1,6 +1,5 @@
 from pypy.rlib import jit, objectmodel, debug
-from prolog.interpreter.term import Callable, Term
-from prolog.interpreter.continuation import view
+from prolog.interpreter import term
 # a Callable implementation that tries to save memory
 
 # XXX tune this
@@ -19,8 +18,6 @@ class Shape(object):
 
     def depth(self):
         return 1
-
-    from prolog.interpreter.continuation import _dot
 
 INEFFICIENT = Shape()
 SEEN_ONCE = Shape()
@@ -116,7 +113,7 @@ class SharingShape(Shape):
             if not isinstance(child, WrapShape):
                 return SharingShape.build(signature, children)
             unwrapped[i] = child.w_obj
-        return WrapShape(Callable.build(signature.name, unwrapped,
+        return WrapShape(term.Callable.build(signature.name, unwrapped,
                                         signature=signature))
 
     def num_storage_vars(self):
@@ -179,14 +176,18 @@ class SharingShape(Shape):
 
 # _____________________________________________________________________
 
-class ShapedCallable(Callable):
-    TYPE_STANDARD_ORDER = Term.TYPE_STANDARD_ORDER
+class ShapedCallable(term.MutableCallable):
+    TYPE_STANDARD_ORDER = term.Term.TYPE_STANDARD_ORDER
 
     def __init__(self, shape, storage):
         assert isinstance(shape, SharingShape)
         self.shape = shape
         storage = debug.make_sure_not_resized(storage)
         self.storage = storage
+        assert shape.num_storage_vars() == len(storage)
+
+    # _____________________________________________________________________
+    # callable interface
 
     def signature(self):
         return self.shape.signature
@@ -204,13 +205,81 @@ class ShapedCallable(Callable):
             for i in range(len(self.storage)):
                 self.storage[i].unify(other.storage[i], heap, occurs_check)
             return
-        return Callable.basic_unify(self, other, heap, occurs_check)
+        return term.Callable.basic_unify(self, other, heap, occurs_check)
 
-    def replace_child(self, i, obj, new_shape):
+    @jit.unroll_safe
+    def copy_and_basic_unify(self, other, heap, env):
+        if (isinstance(other, ShapedCallable) and
+                self.shape is other.shape):
+            for i in range(len(self.storage)):
+                self.storage[i].unify_and_standardize_apart(other.storage[i], heap, env)
+            return
+        return term.Callable.copy_and_basic_unify(self, other, heap, env)
+
+    def copy(self, heap, memo):
+        from prolog.interpreter.term import _term_copy
+        return self._copy_term(_term_copy, heap, memo)
+
+    def copy_standardize_apart(self, heap, env):
+        storage = [None] * len(self.storage)
+        result = ShapedCallable(self.shape, storage)
+        newinstance = False
+        needmutable = False
+        i = 0
+        for i in range(len(self.storage)):
+            arg = self.storage[i]
+            cloned = arg.copy_standardize_apart_as_child_of(heap, env, result, i)
+            newinstance = newinstance | (isinstance(arg, term.NumberedVar) or cloned is not arg)
+            storage[i] = cloned
+        if newinstance:
+            return result
+        else:
+            return self
+
+    def enumerate_vars(self, memo):
+        from prolog.interpreter.term import _term_enumerate_vars
+        return self._copy_term(_term_enumerate_vars, None, memo)
+
+    @objectmodel.specialize.arg(1)
+    @jit.unroll_safe
+    def _copy_term(self, copy_individual, heap, *extraargs):
+        args = [None] * len(self.storage)
+        newinstance = False
+        i = 0
+        while i < len(self.storage):
+            arg = self.storage[i]
+            cloned = copy_individual(arg, i, heap, *extraargs)
+            newinstance = newinstance | (cloned is not arg)
+            args[i] = cloned
+            i += 1
+        if newinstance:
+            # XXX what about the variable shunting in Callable.build?
+            return ShapedCallable(self.shape, args)
+        else:
+            return self
+
+    def contains_var(self, var, heap):
+        for arg in self.storage:
+            if arg.contains_var(var, heap):
+                return True
+        return False
+
+    # _____________________________________________________________________
+    # shape-specific interface
+
+    def _replace_child(self, i, obj, new_shape):
         assert isinstance(obj, ShapedCallable)
         self.storage = self.storage[:i] + obj.storage + self.storage[i + 1:]
         assert len(self.storage) == new_shape.num_storage_vars()
         self.shape = new_shape
+
+    def replace_child(self, i, obj):
+        if isinstance(obj, ShapedCallable):
+            new_shape = self.shape.get_transition(i, obj.shape)
+            if new_shape is not None:
+                self._replace_child(i, obj, new_shape)
+                return True
+        return False
 
     @staticmethod
     def build(shape, children):
@@ -218,13 +287,12 @@ class ShapedCallable(Callable):
         i = 0
         while i < len(result.storage):
             child = result.storage[i]
-            if isinstance(child, ShapedCallable):
-                new_shape = result.shape.get_transition(i, child.shape)
-                if new_shape is not None:
-                    result.replace_child(i, child, new_shape)
-                    continue
-            i += 1
+            if not result.replace_child(i, child):
+                i += 1
+        assert result.shape.num_storage_vars() == len(result.storage)
         return result
+
+
 
 # _____________________________________________________________________
 
@@ -238,7 +306,7 @@ def term_with_numbered_vars_to_shape(w_obj, memo):
     if isinstance(w_obj, term.NumberedVar):
         memo.append(w_obj.num)
         return InStorageShape.build()
-    elif isinstance(w_obj, Callable):
+    elif isinstance(w_obj, term.Callable):
         argshapes = [term_with_numbered_vars_to_shape(w_arg, memo)
                         for w_arg in w_obj.arguments()]
         return SharingShape.build_potentially_wrap(w_obj.signature(), argshapes)
