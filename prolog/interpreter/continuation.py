@@ -668,14 +668,18 @@ class TraceSuccessContinuation(Continuation):
         return False
 
     # XXX foreach builtin control make a test
+    # XXX refactor translatedmain, see todo marks
     # XXX optimize
     def activate(self, fcont, heap):
+        if not self.port in ["Call", "Exit", "Exception", None]:
+            raise NotImplementedError("Port '"+str(self.port)+"' is not supported")
+
         skip = self.engine.tracewrapper.skip(self.depth, self.port)
 
         if self.port is None:
             if isinstance(self.innercont, BodyContinuation):
                 # Call BodyContinuation in-a-box, show trace output if it fails
-                # XXX refactor
+                # XXX refactor - how?
                 try:
                     nextcont, fcont, heap = self.innercont.activate(fcont, heap)
                 except (error.UnificationFailed, error.UncaughtError, error.CatchableError):
@@ -703,88 +707,84 @@ class TraceSuccessContinuation(Continuation):
         write = self.engine.tracewrapper.write
         getch = self.engine.tracewrapper.getch
         while 1:
+            res = "creep"
             if not skip:
                 print_trace_step(self.engine, self.port, self.query, write, self.depth)
                 if self.engine.tracewrapper.is_leashed(self.port.lower()):
                     res = get_decision(write, getch)
                 else:
-                    res = "creep"
                     write("\n")
-            else:
-                res = "creep"
 
-            # XXX put options in method with prefix action_X
-            if res == "abort":
-                nextcont = DoneSuccessContinuation(self.engine)
-                write("Execution aborted\n")
-                break
-            if res == "skip":
-                # XXX try to activate innercont without trace wrapping
-                self.engine.tracewrapper.skip_from_level = self.depth
-                res = "creep"
-            elif res == "retry":
-                if self.port == "Call":
-                    write("Can't retry at this point\n")
-                    res = "creep"
-                elif self.port == "Exit":
-                    # XXX output like "retrying frame 153 running f(2)" possible?
-                    write("[retry]\n")
-                    nextcont = self.innercont.trace_wrap(self.depth)
-                    break
-            if res == "creep":
-                if self.port == "Exit":
-                    nextcont = self.nextcont
-                    depth = self.depth
-                elif self.port == "Call":
-                    # XXX exception causing call wont be displayed -> wrap BodyContinuation
-                    nextcont, fcont, heap = self.innercont.activate(fcont, heap)
-                    depth = self.depth + 1
-                elif self.port == "Exception":
-                    nextcont = self.nextcont
-                    depth = self.depth
-                nextcont = nextcont.trace_wrap(depth)
-                fcont = nextcont.make_next_fcont(fcont)
-                nextcont = nextcont.trace_wrap(depth)
-                break
-            elif res == "fail":
-                if isinstance(fcont, TraceFailureContinuation):
-                    fcont.shall_fail = True
-                raise error.UnificationFailed
-            elif res == "goals":
-                self.write_goals(write)
-            elif res == "print" or res == "write":
-                pass # XXX add comment why this works
-            elif res == "leap":
-                # XXX Call notrace
-                self.engine.tracewrapper.tracing = False
-                self = self.trace_unwrap()
-                fcont = fcont.trace_unwrap()
-                nextcont, fcont, heap = self.activate(fcont, heap)
-                break
+            decision = getattr(self, "action_"+res)
+            ans = decision(fcont, heap)
+            if ans is not None:
+                scont, fcont, heap = ans # raise if not compatible
+                return scont, fcont, heap
 
+    # __________Action methods
+
+    def action_creep(self, fcont, heap):
+        nextcont = self.nextcont
+        depth = self.depth
+        if self.port == "Call":
+            nextcont, fcont, heap = self.innercont.activate(fcont, heap)
+            depth += 1
+        nextcont = nextcont.trace_wrap(depth)
+        fcont = nextcont.make_next_fcont(fcont)
         return nextcont, fcont, heap
 
-    # XXX neccessary?
-    def dereference_dep(self, query, heap):
-        query = query.dereference(heap)
-        if "Generic" in query.__class__.__name__:
-            args = query.arguments()
-            for i in range(len(args)):
-                args[i] = self.dereference(args[i], heap)
-                setattr(query, "val_%d" % (i,), args[i])
-        return query
+    def action_fail(self, fcont, heap):
+        if isinstance(fcont, TraceFailureContinuation):
+            fcont.shall_fail = True
+        raise error.UnificationFailed
 
-    def write_goals(self, write):
+    def action_retry(self, fcont, heap):
+        write = self.engine.tracewrapper.write
+        if self.port == "Call":
+            write("Can't retry at this point\n")
+            return self.action_creep(fcont, heap)
+        elif self.port == "Exit":
+            write("[retry]\n")
+            nextcont = self.innercont.trace_wrap(self.depth)
+        return nextcont, fcont, heap
+
+    def action_goals(self, fcont, heap):
         if self.port == "Call":
             cont = self.innercont.nextcont
         elif self.port == "Exit":
             cont = self
+        write = self.engine.tracewrapper.write
         while not isinstance(cont, DoneSuccessContinuation):
             if isinstance(cont, TraceSuccessContinuation):
                 write(get_goal_string(cont.engine, cont.query, cont.depth))
                 cont = cont.innercont
             cont = cont.nextcont
+        return self, fcont, heap
 
+    def action_skip(self, fcont, heap):
+        self.engine.tracewrapper.skip_from_level = self.depth
+        return self.action_creep(fcont, heap)
+
+    def action_print(self, fcont, heap):
+        return self.action_write(fcont, heap)
+
+    def action_write(self, fcont, heap):
+        # do continue printing the query in loop
+        return
+
+    def action_leap(self, fcont, heap):
+        # XXX Call notrace
+        self.engine.tracewrapper.tracing = False
+        self = self.trace_unwrap()
+        fcont = fcont.trace_unwrap()
+        return self.activate(fcont, heap)
+
+    def action_abort(self, fcont, heap):
+        nextcont = DoneSuccessContinuation(self.engine)
+        write("Execution aborted\n")
+        return nextcont, fcont, heap
+
+    # __________Helper methods
 
     def make_next_fcont(self, fcont):
         """ Prepend an element to fcont-chain for fail output, if innercont fails. """
@@ -841,10 +841,14 @@ class TraceFailureContinuation(FailureContinuation):
     def fail(self, heap):
         """ Innerfcont contains the query for -Fail- and -Redo- output.
         Nextcont is the failure continuation."""
+        if not self.port in ["Fail", "Redo", None]:
+            raise NotImplementedError("Port '"+str(self.port)+"' is not supported")
+
         skip = self.engine.tracewrapper.skip(self.depth, self.port)
 
         write = self.engine.tracewrapper.write
         getch = self.engine.tracewrapper.getch
+
         while 1:
             if not skip and not self.shall_fail:
                 print_trace_step(self.engine, self.port, self.query,
@@ -856,55 +860,76 @@ class TraceFailureContinuation(FailureContinuation):
                     write("\n")
             elif not self.shall_fail:
                 res = "creep"
+
             if self.shall_fail:
                 res = "fail"
-            if res == "skip":
-                self.engine.tracewrapper.skip_from_level = self.depth
-                res = "creep"
-            if res == "fail":
-                if self.port == "Fail":
-                    res = "creep"
-                else:
-                    raise error.UnificationFailed
-            if res == "creep":
-                if self.port == "Fail":
-                    nextcont, fcont, heap = self.innerfcont.fail(heap)
-                    nextcont = nextcont.trace_wrap(self.depth)
-                elif self.port == "Redo":
-                    nextcont, fcont, heap = self.innerfcont.fail(heap)
-                    nextcont = nextcont.trace_wrap(self.depth)
-                    nextcont.port = None
-                    fcont = nextcont.make_next_fcont(fcont)
-                    nextcont.depth += 1
-                break
-            elif res == "goals":
-                self.write_goals(write)
-            elif res == "retry":
-                write("[retry]\n")
-                if self.port == "Fail":
-                    nextcont = self.scont.trace_wrap(self.depth)
-                    fcont = nextcont.make_next_fcont(self.innerfcont)
-                    break
-                elif self.port == "Redo":
-                    nextcont = self.scont
-                    fcont = self
-                    break
-            elif res == "leap":
-                self.engine.tracewrapper.tracing = False
-                self = self.trace_unwrap()
-                nextcont, fcont, heap = self.fail(heap)
-                break
 
+            decision = getattr(self, "action_"+res)
+            ans = decision(heap)
+            if ans is not None:
+                scont, fcont, heap = ans # raise if not compatible
+                return scont, fcont, heap
+
+    # __________Action methods
+
+    def action_creep(self, heap):
+        nextcont, fcont, heap = self.innerfcont.fail(heap)
+        nextcont = nextcont.trace_wrap(self.depth)
+        if self.port == "Redo":
+            nextcont.port = None
+            fcont = nextcont.make_next_fcont(fcont)
+            nextcont.depth += 1
         return nextcont, fcont, heap
 
-    def write_goals(self, write):
+    def action_fail(self, heap):
+        if self.port == "Fail":
+            return self.action_creep(heap)
+        else:
+            raise error.UnificationFailed
+
+    def action_retry(self, heap):
+        self.engine.tracewrapper.write("[retry]\n")
+        if self.port == "Fail":
+            nextcont = self.scont.trace_wrap(self.depth)
+            fcont = nextcont.make_next_fcont(self.innerfcont)
+        elif self.port == "Redo":
+            nextcont = self.scont
+            fcont = self
+        return nextcont, fcont, heap
+
+    def action_goals(self, heap):
         cont = self
         while not isinstance(cont, DoneFailureContinuation):
             if isinstance(cont, TraceFailureContinuation):
+                write = self.engine.tracewrapper.write
                 write(get_goal_string(cont.engine, cont.query, cont.depth))
                 cont = cont.innerfcont
             else:
                 break
+        return
+
+    def action_skip(self, heap):
+        self.engine.tracewrapper.skip_from_level = self.depth
+        return self.action_creep(heap)
+
+    def action_print(self, heap):
+        return self.action_write(heap)
+
+    def action_write(self, heap):
+        # do continue printing the query in loop
+        return
+
+    def action_leap(self, heap):
+        self.engine.tracewrapper.tracing = False
+        self = self.trace_unwrap()
+        nextcont, fcont, heap = self.fail(heap)
+        return nextcont, fcont, heap
+
+    def action_abort(self, heap):
+        self.engine.tracewrapper.write("Execution aborted\n")
+        return DoneSuccessContinuation(self.engine), None, heap
+
+    # __________Helper methods
 
     def trace_wrap(self, depth, scont=None):
         return TraceFailureContinuation("Fail", self, depth, scont=scont)
