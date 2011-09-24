@@ -97,6 +97,7 @@ class SharingShape(Shape):
 
     def resolve(self, storage, index):
         storage = storage[index:index + self.num_storage_vars()]
+        # XXX
         return ShapedCallable(self, storage)
 
     def resolve_at(self, i, storage):
@@ -176,8 +177,22 @@ class SharingShape(Shape):
 
 # _____________________________________________________________________
 
-class ShapedCallable(term.MutableCallable):
+class ShapedCallableBase(term.Callable):
+    def get_shape(self):
+        raise NotImplementedError("abstract base class")
+
+    def get_storage(self, i):
+        raise NotImplementedError("abstract base class")
+
+    def size_storage(self):
+        raise NotImplementedError("abstract base class")
+
+    def new(self, shape, storage):
+        raise NotImplementedError("abstract base class")
+
+class ShapedCallableMixin:
     TYPE_STANDARD_ORDER = term.Term.TYPE_STANDARD_ORDER
+    _mixin_ = True
 
     def __init__(self, shape, storage):
         assert isinstance(shape, SharingShape)
@@ -185,6 +200,15 @@ class ShapedCallable(term.MutableCallable):
         storage = debug.make_sure_not_resized(storage)
         self.storage = storage
         assert shape.num_storage_vars() == len(storage)
+
+    def get_shape(self):
+        return self.shape
+
+    def get_storage(self, i):
+        return self.storage[i]
+
+    def size_storage(self):
+        return len(self.storage)
 
     # _____________________________________________________________________
     # callable interface
@@ -200,19 +224,20 @@ class ShapedCallable(term.MutableCallable):
 
     @objectmodel.specialize.arg(3)
     def basic_unify(self, other, heap, occurs_check=False):
-        if (isinstance(other, ShapedCallable) and
-                self.shape is other.shape):
-            for i in range(len(self.storage)):
-                self.storage[i].unify(other.storage[i], heap, occurs_check)
+        if (isinstance(other, ShapedCallableBase) and
+                self.shape is other.get_shape()):
+            for i in range(self.size_storage()):
+                self.get_storage(i).unify(other.get_storage(i), heap, occurs_check)
             return
         return term.Callable.basic_unify(self, other, heap, occurs_check)
 
     @jit.unroll_safe
     def copy_and_basic_unify(self, other, heap, env):
-        if (isinstance(other, ShapedCallable) and
-                self.shape is other.shape):
-            for i in range(len(self.storage)):
-                self.storage[i].unify_and_standardize_apart(other.storage[i], heap, env)
+        if (isinstance(other, ShapedCallableBase) and
+                self.shape is other.get_shape()):
+            for i in range(self.size_storage()):
+                self.get_storage(i).unify_and_standardize_apart(
+                        other.get_storage(i), heap, env)
             return
         return term.Callable.copy_and_basic_unify(self, other, heap, env)
 
@@ -222,7 +247,7 @@ class ShapedCallable(term.MutableCallable):
 
     def copy_standardize_apart(self, heap, env):
         storage = [None] * len(self.storage)
-        result = ShapedCallable(self.shape, storage)
+        result = ShapedCallableMutable(self.shape, storage)
         newinstance = False
         needmutable = False
         i = 0
@@ -230,8 +255,11 @@ class ShapedCallable(term.MutableCallable):
             arg = self.storage[i]
             cloned = arg.copy_standardize_apart_as_child_of(heap, env, result, i)
             newinstance = newinstance | (isinstance(arg, term.NumberedVar) or cloned is not arg)
+            needmutable = needmutable | isinstance(cloned, term.VarInTerm)
             storage[i] = cloned
         if newinstance:
+            if not needmutable:
+                return result._make_immutable()
             return result
         else:
             return self
@@ -254,7 +282,7 @@ class ShapedCallable(term.MutableCallable):
             i += 1
         if newinstance:
             # XXX what about the variable shunting in Callable.build?
-            return ShapedCallable(self.shape, args)
+            return self.new(self.shape, args)
         else:
             return self
 
@@ -268,30 +296,69 @@ class ShapedCallable(term.MutableCallable):
     # shape-specific interface
 
     def _replace_child(self, i, obj, new_shape):
-        assert isinstance(obj, ShapedCallable)
-        self.storage = self.storage[:i] + obj.storage + self.storage[i + 1:]
-        assert len(self.storage) == new_shape.num_storage_vars()
+        assert isinstance(obj, ShapedCallableBase)
+        assert obj.size_storage() + self.size_storage() - 1 == new_shape.num_storage_vars()
+        objstorage = [obj.get_storage(j) for j in range(obj.size_storage())]
+        self.storage = self.storage[:i] + objstorage + self.storage[i + 1:]
         self.shape = new_shape
 
     def replace_child(self, i, obj):
-        if isinstance(obj, ShapedCallable):
-            new_shape = self.shape.get_transition(i, obj.shape)
+        if isinstance(obj, ShapedCallableBase):
+            new_shape = self.shape.get_transition(i, obj.get_shape())
             if new_shape is not None:
+                old_length = len(self.storage)
                 self._replace_child(i, obj, new_shape)
-                return True
-        return False
+                # XXX whew, subtle logic here
+                for i in range(obj.size_storage()):
+                    old_child = obj.get_storage(i)
+                    if isinstance(old_child, term.VarInTerm):
+                        newi = i + old_length - 1
+                        heap = old_child.created_after_choice_point
+                        new_child = heap.newvar_in_term(self, newi)
+                        self.storage[newi] = new_child
+                        old_child.parent_or_binding = new_child
+                        old_child.bound = True
+                        obj.storage[i] = new_child
+                        self = self._make_mutable()
+                return self
+        return None
 
     @staticmethod
-    def build(shape, children):
-        result = ShapedCallable(shape, children)
+    def build(shape, storage):
+        if isinstance(shape, WrapShape):
+            assert not storage
+            return shape.w_obj
+        result = ShapedCallable(shape, storage)
         i = 0
         while i < len(result.storage):
             child = result.storage[i]
-            if not result.replace_child(i, child):
+            newresult = result.replace_child(i, child)
+            if not newresult:
                 i += 1
+            else:
+                result = newresult
         assert result.shape.num_storage_vars() == len(result.storage)
         return result
 
+class ShapedCallableMutable(ShapedCallableMixin, ShapedCallableBase):
+    def _make_immutable(self):
+        return ShapedCallable(self.shape, self.storage)
+
+    def _make_mutable(self):
+        return self
+
+    def new(self, shape, storage):
+        return ShapedCallableMutable(shape, storage)
+
+
+class ShapedCallable(ShapedCallableMixin, ShapedCallableBase):
+    _immutable_fields_ = ["shape", "storage[*]"]
+
+    def _make_mutable(self):
+        return ShapedCallableMutable(self.shape, self.storage)
+
+    def new(self, shape, storage):
+        return ShapedCallable(shape, storage)
 
 
 # _____________________________________________________________________
@@ -329,7 +396,7 @@ class Standardizer(object):
                 if obj is None:
                     obj = env[index] = heap.newvar()
             storage[i] = obj
-        return self.shape.resolve(storage, 0)
+        return ShapedCallable.build(self.shape, storage)
 
 # _____________________________________________________________________
 

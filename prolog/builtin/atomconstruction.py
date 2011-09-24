@@ -2,7 +2,6 @@ import py
 from prolog.interpreter import helper, term, error
 from prolog.interpreter import continuation
 from prolog.builtin.register import expose_builtin
-from prolog.interpreter.term import specialized_term_classes
 from prolog.interpreter.term import Callable
 import re
 

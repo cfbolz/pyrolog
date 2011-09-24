@@ -178,8 +178,8 @@ class VarInTerm(Var):
         raise NotImplementedError("abstract base class")
 
     def init(self, parent):
-        from prolog.interpreter.shape import ShapedCallable
-        assert isinstance(parent, ShapedCallable)
+        from prolog.interpreter.shape import ShapedCallableMutable
+        assert isinstance(parent, ShapedCallableMutable)
         self.parent_or_binding = parent
         self.bound = False
 
@@ -202,11 +202,11 @@ class VarInTerm(Var):
             var = self.created_after_choice_point.newvar()
             var.setvalue(value, heap)
             value = var
-        self._setvalue_in_parent(value)
+        self._setvalue_in_parent(value, heap)
         self.bound = True
         self.parent_or_binding = value
 
-    def _setvalue_in_parent(self, value):
+    def _setvalue_in_parent(self, value, heap):
         raise NotImplementedError("abstract base class")
 
     def __repr__(self):
@@ -219,10 +219,10 @@ def make_var_in_term_class(index):
         def __init__(self, parent):
             self.init(parent)
 
-        def _setvalue_in_parent(self, value):
-            from prolog.interpreter.shape import ShapedCallable
+        def _setvalue_in_parent(self, value, heap):
+            from prolog.interpreter.shape import ShapedCallableMutable
             obj = self.parent_or_binding
-            assert isinstance(obj, ShapedCallable)
+            assert isinstance(obj, ShapedCallableMutable)
             if not obj.replace_child(index, value):
                 obj.storage[index] = value
     VarInTermN.__name__ = "VarInTerm%s" % index
@@ -587,18 +587,7 @@ class Callable(NonVar):
                 assert signature.numargs == len(args)
             assert isinstance(signature, Signature)
 
-            cls = Callable._find_specialized_class(term_name, len(args))
-            if cls is not None:
-                return cls(term_name, args, signature)
-            cls = Callable._find_specialized_class('Term', len(args))
-            if cls is not None:
-                return cls(term_name, args, signature)
             return Term(term_name, args, signature)
-
-    @staticmethod
-    @jit.elidable
-    def _find_specialized_class(term_name, numargs):
-        return specialized_term_classes.get((term_name, numargs), None)
 
     def __repr__(self):
         return "%s(%s, %r)" % (self.__class__.__name__, self.name(),
@@ -617,11 +606,6 @@ class Callable(NonVar):
             if not self.argument_at(i).quick_unify_check(other.argument_at(i)):
                 return False
         return True
-
-class MutableCallable(Callable):
-    def set_argument_at(self, i, arg):
-        raise NotImplementedError
-
 
 class Atom(Callable):
     TYPE_STANDARD_ORDER = 1
@@ -864,226 +848,3 @@ def cmp_standard_order(obj1, obj2, heap):
     if c != 0:
         return c
     return obj1.cmp_standard_order(obj2, heap)
-
-def generate_class(cname, fname, n_args, immutable=True):
-    from pypy.rlib.unroll import unrolling_iterable
-    arg_iter = unrolling_iterable(range(n_args))
-    parent = callables['Abstract', n_args]
-    if not immutable:
-        parent = parent.mutable_version
-    assert parent is not None
-    signature = Signature.getsignature(fname, n_args)
-
-    class specific_class(parent):
-        if n_args == 0:
-            TYPE_STANDARD_ORDER = Atom.TYPE_STANDARD_ORDER
-        else:
-            TYPE_STANDARD_ORDER = Term.TYPE_STANDARD_ORDER
-        
-        def __init__(self, term_name, args, signature):
-            parent._init_values(self, args)
-            assert self.name() == term_name
-            assert args is None or len(args) == n_args
-                
-        def name(self):
-            return fname
-        
-        def signature(self):
-            return signature
-
-        def _make_new(self, name, signature):
-            cls = specific_class
-            return cls(name, None, signature)
-
-        if immutable:
-            def _make_new_mutable(self, name, signature):
-                cls = mutable_version
-                return cls(name, None, signature)
-        else:
-            _make_new_mutable = _make_new
-    if immutable:
-        mutable_version = specific_class.mutable_version = generate_class(
-                cname, fname, n_args, False)
-    specific_class.__name__ = cname + "Mutable" * (not immutable)
-    return specific_class
-
-def generate_abstract_class(n_args, immutable=True):
-    from pypy.rlib.unroll import unrolling_iterable
-    arg_iter = unrolling_iterable(range(n_args))
-    if immutable:
-        base = Callable
-    else:
-        base = MutableCallable
-    class abstract_callable(base):
-
-        if immutable:
-            _immutable_fields_ = ["val_%d" % x for x in arg_iter]
-
-        def __init__(self, term_name, args, signature):
-            raise NotImplementedError
-
-        def _init_values(self, args):
-            if args is None:
-                return
-            for x in arg_iter:
-                setattr(self, 'val_%d' % x, args[x])
-
-        def _make_new(self, name, signature, mutable=False):
-            raise NotImplementedError("abstract base class")
-        _make_new_mutable = _make_new
-
-        def arguments(self):
-            result = [None] * n_args
-            for x in arg_iter:
-                result[x] = getattr(self, 'val_%d' % x)
-            return result
-        
-        def argument_at(self, i):
-            for x in arg_iter:
-                if x == i:
-                    return getattr(self, 'val_%d' % x)
-            raise IndexError
-
-        if not immutable:
-            def set_argument_at(self, i, arg):
-                for x in arg_iter:
-                    if x == i:
-                        setattr(self, 'val_%d' % x, arg)
-                        return
-                raise IndexError
-
-        def argument_count(self):
-            return n_args
-
-        def quick_unify_check(self, other):
-            other = other.dereference(None)
-            if isinstance(other, Var):
-                return True
-            if not isinstance(other, Callable):
-                return False
-            if not self.signature().eq(other.signature()):
-                return False
-            if not isinstance(other, abstract_callable):
-                return Callable.quick_unify_check(self, other)
-            for x in arg_iter:
-                a = getattr(self, 'val_%d' % x)
-                b = getattr(other, 'val_%d' % x)
-                if not a.quick_unify_check(b):
-                    return False
-            return True
-
-        def copy_and_basic_unify(self, other, heap, env):
-            if not isinstance(other, abstract_callable):
-                return Callable.copy_and_basic_unify(self, other, heap, env)
-            if self.signature().eq(other.signature()):
-                for x in arg_iter:
-                    a = getattr(self, 'val_%d' % x)
-                    b = getattr(other, 'val_%d' % x)
-                    a.unify_and_standardize_apart(b, heap, env)
-            else:
-                raise UnificationFailed
-
-        def copy_standardize_apart(self, heap, env):
-            result = self._make_new_mutable(self.name(), self.signature())
-            newinstance = False
-            needmutable = False
-            i = 0
-            for i in arg_iter:
-                arg = getattr(self, 'val_%d' % i)
-                cloned = arg.copy_standardize_apart_as_child_of(heap, env, result, i)
-                newinstance = newinstance | (cloned is not arg)
-                needmutable = needmutable | isinstance(arg, VarInTerm)
-                setattr(result, 'val_%d' % i, cloned)
-                i += 1
-            if newinstance:
-                # XXX what about the variable shunting in Callable.build
-                return result
-            else:
-                return self
-
-        @specialize.arg(3)
-        @jit.dont_look_inside
-        def basic_unify(self, other, heap, occurs_check=False):
-            if not isinstance(other, abstract_callable):
-                return Callable.basic_unify(self, other, heap, occurs_check)
-            if self.signature().eq(other.signature()):
-                for x in arg_iter:
-                    a = getattr(self, 'val_%d' % x)
-                    b = getattr(other, 'val_%d' % x)
-                    a.unify(b, heap, occurs_check)
-            else:
-                raise UnificationFailed
-
-        @specialize.arg(1)
-        def _copy_term(self, copy_individual, heap, *extraargs):
-            result = self._make_new(self.name(), self.signature())
-            newinstance = False
-            i = 0
-            for i in arg_iter:
-                arg = getattr(self, 'val_%d' % i)
-                cloned = copy_individual(arg, i, heap, *extraargs)
-                newinstance = newinstance | (cloned is not arg)
-                setattr(result, 'val_%d' % i, cloned)
-                i += 1
-            if newinstance:
-                # XXX what about the variable shunting in Callable.build
-                return result
-            else:
-                return self
-    if immutable:
-        abstract_callable.mutable_version = generate_abstract_class(n_args, immutable=False)
-    else:
-        abstract_callable.mutable_version = abstract_callable
-
-    abstract_callable.__name__ = 'Abstract'+str(n_args) + "Mutable" * (not immutable)
-    return abstract_callable
-
-def generate_generic_class(n_args, immutable=True):
-    parent = callables['Abstract', n_args]
-    assert parent is not None
-    if not immutable:
-        parent = parent.mutable_version
-
-    class generic_callable(parent):
-        _immutable_fields_ = ["_signature"]
-        TYPE_STANDARD_ORDER = Term.TYPE_STANDARD_ORDER
-        
-        def __init__(self, term_name, args, signature):
-            parent._init_values(self, args)
-            self._signature = signature
-            assert args is None or len(args) == n_args
-            assert self.name() == term_name
-
-        def _make_new(self, name, signature, mutable=False):
-            cls = generic_callable
-            return cls(name, None, signature)
-
-        if immutable:
-            def _make_new_mutable(self, name, signature, mutable=False):
-                cls = mutable_version
-                return cls(name, None, signature)
-        else:
-            _make_new_mutable = _make_new
-
-        def signature(self):
-            return self._signature
-    if immutable:
-        mutable_version = generic_callable.mutable_version = generate_generic_class(n_args, False)
-    generic_callable.__name__ = 'Generic'+str(n_args) + "Mutable" * (not immutable)
-    return generic_callable
-
-
-specialized_term_classes = {}
-callables = {}
-
-for numargs in range(1, OPTIMIZED_TERM_SIZE_MAX):
-    callables['Abstract', numargs] = generate_abstract_class(numargs)
-
-classes = [('Cons', '.', 2), ('Or', ';', 2), ('And', ',', 2)]
-for cname, fname, numargs in classes:
-    specialized_term_classes[fname, numargs] = generate_class(
-                                                        cname, fname, numargs)
-
-for numargs in range(1, 10):
-    assert ('Term', numargs) not in specialized_term_classes
-    specialized_term_classes['Term', numargs] = generate_generic_class(numargs)

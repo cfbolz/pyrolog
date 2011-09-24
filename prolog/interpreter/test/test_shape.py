@@ -122,7 +122,7 @@ def test_replace():
 
 def test_shaped_callable_replace_child():
     sig = signature.Signature.getsignature(".", 2)
-    build = shape.SharingShape.build
+    build = shape.SharingShape
     X = shape.InStorageShape.build()
     s1 = build(sig, [X, X])
     a = term.Callable.build("a")
@@ -139,6 +139,28 @@ def test_shaped_callable_replace_child():
     newshape = s1.replace(0, s1)
     c1._replace_child(0, c2, newshape)
     assert c1.storage == [b, nil, a]
+
+def test_replace_child_fixup_varinterm():
+    from prolog.interpreter.heap import Heap
+    h = Heap()
+    sig = signature.Signature.getsignature(".", 2)
+    build = shape.SharingShape
+    X = shape.InStorageShape.build()
+    s1 = build(sig, [X, X])
+    a = term.Callable.build("a")
+    b = term.Callable.build("b")
+    nil = term.Callable.build("[]")
+    c1 = shape.ShapedCallableMutable(s1, [a, None])
+
+    c2 = shape.ShapedCallableMutable(s1, [b, None])
+    var2 = h.newvar_in_term(c2, 1)
+    c2.storage[1] = var2
+
+    s1.get_transition(1, s1)
+    res = c1.replace_child(1, c2)
+    assert res
+    assert c1.storage[2].parent_or_binding is c1
+
 
 def test_depth():
     sig = signature.Signature.getsignature(".", 2)
@@ -233,4 +255,35 @@ def test_shaped_callable_unify():
     c1.unify(c2, h)
     assert X.binding is a
 
+def test_functional_test():
+    from prolog.interpreter.continuation import Engine
+    from prolog.interpreter.test.tool import assert_true, get_engine
+    e = get_engine("""
+        append([], L, L).
+        append([H|T], L, [H|R]) :- append(T, L, R).
+        reverse([], L, L).
+        reverse([H|T], L, O) :-
+            reverse(T, [H | L], O).
+    """)
 
+    for i in range(10):
+        env = assert_true("append([1, 2, 3, 4, 5], [2, 3, 4, 5, 6], X).", e)
+    res = env['X']
+    l = []
+    while res.name() == ".":
+        l.append(res.argument_at(0).num)
+        res = res.argument_at(1)
+    assert l == [1, 2, 3, 4, 5, 2, 3, 4, 5, 6]
+    res = env['X']
+    assert len(res.storage) > 5
+
+    for i in range(10):
+        env = assert_true("reverse([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [], X).", e)
+    res = env['X']
+    l = []
+    while res.name() == ".":
+        l.append(res.argument_at(0).num)
+        res = res.argument_at(1)
+    assert l == [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
+    res = env['X']
+    assert len(res.storage) > 5
