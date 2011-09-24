@@ -10,7 +10,7 @@ class Shape(object):
     def __init__(self):
         pass
 
-    def resolve(self, storage, index):
+    def resolve(self, shaped_callable, index):
         raise NotImplementedError("abstract base class")
 
     def num_storage_vars(self):
@@ -28,7 +28,7 @@ class WrapShape(Shape):
         Shape.__init__(self)
         self.w_obj = w_obj
 
-    def resolve(self, storage, index):
+    def resolve(self, shaped_callable, index):
         return self.w_obj
 
     def replace(self, i, shape):
@@ -46,8 +46,8 @@ class InStorageShape(Shape):
     def build():
         return InStorageShape._singleton
 
-    def resolve(self, storage, index):
-        return storage[index]
+    def resolve(self, shaped_callable, index):
+        return shaped_callable.get_storage(index)
 
     def num_storage_vars(self):
         return 1
@@ -95,16 +95,17 @@ class SharingShape(Shape):
             SharingShape._cache[key] = res = SharingShape(signature, children)
         return res
 
-    def resolve(self, storage, index):
-        storage = storage[index:index + self.num_storage_vars()]
-        # XXX
-        return ShapedCallable(self, storage)
+    def resolve(self, shaped_callable, index):
+        storage = [shaped_callable.get_storage(i)
+                      for i in range(index, index + self.num_storage_vars())]
+        # XXX fix up vars in term?
+        return shaped_callable.new(self, storage)
 
-    def resolve_at(self, i, storage):
+    def resolve_at(self, i, shaped_callable):
         index = 0
         for j in range(i):
             index += self.children[j].num_storage_vars()
-        return self.children[i].resolve(storage, index)
+        return self.children[i].resolve(shaped_callable, index)
 
     @staticmethod
     def build_potentially_wrap(signature, children):
@@ -217,7 +218,7 @@ class ShapedCallableMixin:
         return self.shape.signature
 
     def argument_at(self, i):
-        return self.shape.resolve_at(i, self.storage)
+        return self.shape.resolve_at(i, self)
 
     def argument_count(self):
         return self.shape.signature.numargs
@@ -312,6 +313,7 @@ class ShapedCallableMixin:
                 for i in range(obj.size_storage()):
                     old_child = obj.get_storage(i)
                     if isinstance(old_child, term.VarInTerm):
+                        self = self._make_mutable()
                         newi = i + old_length - 1
                         heap = old_child.created_after_choice_point
                         new_child = heap.newvar_in_term(self, newi)
@@ -319,7 +321,6 @@ class ShapedCallableMixin:
                         old_child.parent_or_binding = new_child
                         old_child.bound = True
                         obj.storage[i] = new_child
-                        self = self._make_mutable()
                 return self
         return None
 

@@ -1,6 +1,13 @@
 from prolog.interpreter import shape, term, signature
 from prolog.interpreter.continuation import view
 
+class FakeShapedCallable(object):
+    def __init__(self, l):
+        self.storage = l
+
+    def get_storage(self, i):
+        return self.storage[i]
+
 def test_instorage_build():
     assert shape.InStorageShape.build() is shape.InStorageShape.build()
 
@@ -18,16 +25,16 @@ def test_sharing_build():
 
 def test_wrapshape_resolve():
     s = shape.WrapShape(term.Callable.build("a", [term.Number(1)]))
-    w_obj = s.resolve([1, 2, 3], 0)
+    w_obj = s.resolve(FakeShapedCallable([1, 2, 3]), 0)
     assert w_obj.name() == "a"
     assert w_obj.argument_at(0).num == 1
 
 
 def test_instorage_resolve():
     s = shape.InStorageShape()
-    assert s.resolve([1, 2, 3], 0) == 1
-    assert s.resolve([1, 2, 3], 1) == 2
-    assert s.resolve([1, 2, 3], 2) == 3
+    assert s.resolve(FakeShapedCallable([1, 2, 3]), 0) == 1
+    assert s.resolve(FakeShapedCallable([1, 2, 3]), 1) == 2
+    assert s.resolve(FakeShapedCallable([1, 2, 3]), 2) == 3
 
 
 def test_sharing_resolve():
@@ -36,10 +43,10 @@ def test_sharing_resolve():
         shape.WrapShape(term.Callable.build("a")),
         shape.InStorageShape()
     ])
-    assert s.resolve_at(0, [1, 2]).name() == "a"
-    assert s.resolve_at(1, [1, 2]) == 1
+    assert s.resolve_at(0, FakeShapedCallable([1, 2])).name() == "a"
+    assert s.resolve_at(1, FakeShapedCallable([1, 2])) == 1
 
-    w_obj = s.resolve([1, 2], 0)
+    w_obj = s.resolve(shape.ShapedCallable(s, [2]), 0)
     assert isinstance(w_obj, shape.ShapedCallable)
     w_obj.argument_at(0).name() == "a"
     w_obj.argument_at(1) == 2
