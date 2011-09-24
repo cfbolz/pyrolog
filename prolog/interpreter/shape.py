@@ -303,24 +303,26 @@ class ShapedCallableMixin:
         self.storage = self.storage[:i] + objstorage + self.storage[i + 1:]
         self.shape = new_shape
 
-    def replace_child(self, i, obj):
+    def replace_child(self, index, obj):
         if isinstance(obj, ShapedCallableBase):
-            new_shape = self.shape.get_transition(i, obj.get_shape())
+            new_shape = self.shape.get_transition(index, obj.get_shape())
             if new_shape is not None:
-                old_length = len(self.storage)
-                self._replace_child(i, obj, new_shape)
-                # XXX whew, subtle logic here
-                for i in range(obj.size_storage()):
-                    old_child = obj.get_storage(i)
-                    if isinstance(old_child, term.VarInTerm):
-                        self = self._make_mutable()
-                        newi = i + old_length - 1
-                        heap = old_child.created_after_choice_point
-                        new_child = heap.newvar_in_term(self, newi)
-                        self.storage[newi] = new_child
-                        old_child.parent_or_binding = new_child
-                        old_child.bound = True
-                        obj.storage[i] = new_child
+                self._replace_child(index, obj, new_shape)
+                if isinstance(obj, ShapedCallableMutable):
+                    # XXX whew, subtle logic here
+                    newi = index
+                    for i in range(obj.size_storage()):
+                        old_child = obj.get_storage(i)
+                        assert self.get_storage(newi) is old_child
+                        if isinstance(old_child, term.VarInTerm) and not old_child.bound:
+                            self = self._make_mutable()
+                            heap = old_child.created_after_choice_point
+                            new_child = heap.newvar_in_term(self, newi)
+                            self.storage[newi] = new_child
+                            old_child.parent_or_binding = new_child
+                            old_child.bound = True
+                            obj.storage[i] = new_child
+                        newi += 1
                 return self
         return None
 

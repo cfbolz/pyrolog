@@ -150,24 +150,34 @@ def test_shaped_callable_replace_child():
 def test_replace_child_fixup_varinterm():
     from prolog.interpreter.heap import Heap
     h = Heap()
-    sig = signature.Signature.getsignature(".", 2)
+    sig = signature.Signature.getsignature(".", 3)
     build = shape.SharingShape
     X = shape.InStorageShape.build()
-    s1 = build(sig, [X, X])
+    s1 = build(sig, [X, X, X])
     a = term.Callable.build("a")
     b = term.Callable.build("b")
+    c = term.Callable.build("c")
     nil = term.Callable.build("[]")
-    c1 = shape.ShapedCallableMutable(s1, [a, None])
+    c1 = shape.ShapedCallableMutable(s1, [a, None, c])
 
-    c2 = shape.ShapedCallableMutable(s1, [b, None])
+    c2 = shape.ShapedCallableMutable(s1, [b, None, c])
     var2 = h.newvar_in_term(c2, 1)
     c2.storage[1] = var2
 
     s1.get_transition(1, s1)
     res = c1.replace_child(1, c2)
-    assert res
+    assert res is c1
     assert c1.storage[2].parent_or_binding is c1
 
+    c1 = shape.ShapedCallable(s1, [a, None, c])
+    c2 = shape.ShapedCallableMutable(s1, [b, None, c])
+    var2 = h.newvar_in_term(c2, 1)
+    c2.storage[1] = var2
+
+    s1.get_transition(1, s1)
+    res = c1.replace_child(1, c2)
+    assert isinstance(res, shape.ShapedCallableMutable)
+    assert res.storage[2].parent_or_binding is res
 
 def test_depth():
     sig = signature.Signature.getsignature(".", 2)

@@ -223,8 +223,11 @@ def make_var_in_term_class(index):
             from prolog.interpreter.shape import ShapedCallableMutable
             obj = self.parent_or_binding
             assert isinstance(obj, ShapedCallableMutable)
-            if not obj.replace_child(index, value):
+            newobj = obj.replace_child(index, value)
+            if newobj is None:
                 obj.storage[index] = value
+            else:
+                assert newobj is obj
     VarInTermN.__name__ = "VarInTerm%s" % index
     return VarInTermN
 
