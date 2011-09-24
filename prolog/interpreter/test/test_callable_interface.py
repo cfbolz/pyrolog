@@ -1,6 +1,6 @@
 from prolog.interpreter.parsing import parse_file, TermBuilder
 from prolog.interpreter.term import Atom, Number, Term, Callable, \
-        specialized_term_classes, NumberedVar, MutableCallable
+        NumberedVar, MutableCallable
 from prolog.interpreter.test.tool import parse
 from prolog.interpreter.heap import Heap
 import py
@@ -84,27 +84,3 @@ def test_callable_factory_for_term():
     r = Callable.build('foo', [1, 2])
     assert isinstance(r, Callable)
     assert r.signature().string() == 'foo/2'
-
-def test_callable_factory_for_cons():
-    py.test.skip("shapes are different")
-    r = Callable.build('.', [1, Callable.build('[]')])
-    assert isinstance(r, specialized_term_classes['.', 2])
-    assert r.signature().string() == './2'
-    assert r.name() == '.'
-    assert r.argument_count() == 2
-    assert r.arguments() == [1, Callable.build('[]')]
-    assert r.argument_at(0) == 1
-    assert r.argument_at(1) == Callable.build('[]')
-
-def test_callable_mutable():
-    py.test.skip("shapes are different")
-    for name in [".", "f"]:
-        t = Callable.build(name, [NumberedVar(0), NumberedVar(1)])
-        res = t.copy_standardize_apart(Heap(), [None, None])
-        assert isinstance(res, MutableCallable)
-        res.set_argument_at(0, 1)
-        assert res.argument_at(0) == 1
-        res.set_argument_at(1, 7)
-        assert res.argument_at(0) == 1
-        assert res.argument_at(1) == 7
-
