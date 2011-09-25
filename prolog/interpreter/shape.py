@@ -145,7 +145,7 @@ class SharingShape(Shape):
             depth = max(depth, child.depth())
         return depth + 1
 
-    @jit.elidable
+    @jit.elidable_promote('all')
     def get_transition(self, i, shape):
         if self._transitions is None:
             self._transitions = {}
@@ -306,11 +306,19 @@ class ShapedCallableMixin:
     # _____________________________________________________________________
     # shape-specific interface
 
-    def _replace_child(self, i, obj, new_shape):
+    @jit.unroll_safe
+    def _replace_child(self, index, obj, new_shape):
         assert isinstance(obj, ShapedCallableBase)
-        assert obj.size_storage() + self.size_storage() - 1 == new_shape.num_storage_vars()
-        objstorage = [obj.get_storage(j) for j in range(obj.size_storage())]
-        self.storage = self.storage[:i] + objstorage + self.storage[i + 1:]
+        newsize = obj.size_storage() + self.size_storage() - 1
+        assert newsize == new_shape.num_storage_vars()
+        newstorage = [None] * newsize
+        for i in range(index):
+            newstorage[i] = self.storage[i]
+        for i in range(obj.size_storage()):
+            newstorage[i + index] = obj.get_storage(i)
+        for i in range(index + 1, self.size_storage()):
+            newstorage[i + obj.size_storage() - 1] = self.storage[i]
+        self.storage = newstorage
         self.shape = new_shape
 
     @jit.unroll_safe
@@ -320,22 +328,26 @@ class ShapedCallableMixin:
             if new_shape is not None:
                 self._replace_child(index, obj, new_shape)
                 if isinstance(obj, ShapedCallableMutable):
-                    # XXX whew, subtle logic here
-                    newi = index
-                    for i in range(obj.size_storage()):
-                        old_child = obj.get_storage(i)
-                        assert self.get_storage(newi) is old_child
-                        if isinstance(old_child, term.VarInTerm) and not old_child.bound:
-                            self = self._make_mutable()
-                            heap = old_child.created_after_choice_point
-                            new_child = heap.newvar_in_term(self, newi)
-                            self.storage[newi] = new_child
-                            old_child.parent_or_binding = new_child
-                            old_child.bound = True
-                            obj.storage[i] = new_child
-                        newi += 1
+                    self = self._fixup_var_in_term(obj, index)
                 return self
         return None
+
+    def _fixup_var_in_term(self, obj, index):
+        # XXX whew, subtle logic here
+        newi = index
+        for i in range(obj.size_storage()):
+            old_child = obj.get_storage(i)
+            assert self.get_storage(newi) is old_child
+            if isinstance(old_child, term.VarInTerm):
+                deref = old_child.getbinding()
+                if deref is None:
+                    self = self._make_mutable()
+                    old_child.parent = self
+                    old_child.index = newi
+                else:
+                    self.storage[newi] = deref
+            newi += 1
+        return self
 
     @staticmethod
     @jit.unroll_safe
@@ -399,6 +411,7 @@ class Standardizer(object):
         self.shape = shape
         self.memo = memo
 
+    @jit.unroll_safe
     def make_shaped_callable(self, env, heap):
         storage = [None] * len(self.memo)
         for i in range(len(self.memo)):

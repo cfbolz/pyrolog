@@ -8,9 +8,8 @@ def test_copy_standardize_apart():
     h = Heap()
     t = Callable.build("a", [Callable.build("b"), NumberedVar(0)])
     res = t.copy_standardize_apart(h, [None])
-    assert res.argument_at(1).parent_or_binding is res
-    assert not res.argument_at(1).bound
-    assert res.argument_at(1).__class__.__name__ == "VarInTerm1"
+    assert res.argument_at(1).parent is res
+    assert res.argument_at(1).index == 1
 
 def test_varinterm_bind():
     h = Heap()
@@ -19,8 +18,7 @@ def test_varinterm_bind():
     v = res.argument_at(1)
     v.unify(Callable.build("c"), h)
     assert res.argument_at(1).name() == "c"
-    assert v.parent_or_binding.name() == "c"
-    assert v.bound
+    assert v.getbinding().name() == "c"
 
 def test_varinterm_bind_again():
     h = Heap()

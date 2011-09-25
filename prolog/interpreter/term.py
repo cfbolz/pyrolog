@@ -174,19 +174,17 @@ class BindingVar(Var):
 
 
 class VarInTerm(Var):
-    def __init__(self, parent):
-        raise NotImplementedError("abstract base class")
-
-    def init(self, parent):
+    def __init__(self, parent, index):
         from prolog.interpreter.shape import ShapedCallableMutable
         assert isinstance(parent, ShapedCallableMutable)
-        self.parent_or_binding = parent
-        self.bound = False
+        self.parent = parent
+        self.index = index
 
     def getbinding(self):
-        if self.bound:
-            return self.parent_or_binding
-        return None
+        val = self.parent.get_storage(self.index)
+        if val is self:
+            return None
+        return val
 
     def dereference(self, heap):
         # makes no sense to do path compression here
@@ -197,43 +195,28 @@ class VarInTerm(Var):
 
     def setvalue(self, value, heap):
         # this is true because setvalues on bound VarInTerms don't happen
-        assert not self.bound
+        assert self.getbinding() is None
         if heap is not self.created_after_choice_point:
             var = self.created_after_choice_point.newvar()
             var.setvalue(value, heap)
             value = var
         self._setvalue_in_parent(value, heap)
-        self.bound = True
-        self.parent_or_binding = value
 
     def _setvalue_in_parent(self, value, heap):
-        raise NotImplementedError("abstract base class")
+        from prolog.interpreter.shape import ShapedCallableMutable
+        obj = self.parent
+        assert isinstance(obj, ShapedCallableMutable)
+        index = jit.promote(self.index)
+        newobj = obj.replace_child(index, value)
+        if newobj is None:
+            obj.storage[index] = value
+        else:
+            assert newobj is obj
 
     def __repr__(self):
         if self.getbinding():
             return "%s(%s)" % (self.__class__.__name__, self.getbinding())
-        return "%s(%s)" % (self.__class__.__name__, self.parent_or_binding.signature())
-
-def make_var_in_term_class(index):
-    class VarInTermN(VarInTerm):
-        def __init__(self, parent):
-            self.init(parent)
-
-        def _setvalue_in_parent(self, value, heap):
-            from prolog.interpreter.shape import ShapedCallableMutable
-            obj = self.parent_or_binding
-            assert isinstance(obj, ShapedCallableMutable)
-            newobj = obj.replace_child(index, value)
-            if newobj is None:
-                obj.storage[index] = value
-            else:
-                assert newobj is obj
-    VarInTermN.__name__ = "VarInTerm%s" % index
-    return VarInTermN
-
-var_in_term_classes = [make_var_in_term_class(i)
-                            for i in range(OPTIMIZED_TERM_SIZE_MAX)]
-
+        return "%s(%s, %s)" % (self.__class__.__name__, self.parent.signature(), self.index)
 
 
 

@@ -1,6 +1,6 @@
 from prolog.interpreter.parsing import parse_file, TermBuilder
 from prolog.interpreter.term import Atom, Number, Term, Callable, \
-        NumberedVar, MutableCallable
+        NumberedVar
 from prolog.interpreter.test.tool import parse
 from prolog.interpreter.heap import Heap
 import py
