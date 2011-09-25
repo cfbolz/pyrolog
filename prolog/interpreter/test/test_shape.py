@@ -51,6 +51,21 @@ def test_sharing_resolve():
     w_obj.argument_at(0).name() == "a"
     w_obj.argument_at(1) == 2
 
+
+def test_get_path():
+    sig = signature.Signature.getsignature(".", 2)
+    build = shape.SharingShape
+    X = shape.InStorageShape.build()
+    s1 = build(sig, [X, X])
+    s2 = build(sig, [X, s1])
+    p = s2.get_path(0)
+    assert p == [0]
+    p = s2.get_path(1)
+    assert p == [1, 0]
+    p = s2.get_path(2)
+    assert p == [1, 1]
+
+
 def test_build_potentially_wrap():
     sig = signature.Signature.getsignature("f", 2)
     sh = shape.SharingShape.build_potentially_wrap(

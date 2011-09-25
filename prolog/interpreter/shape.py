@@ -20,6 +20,9 @@ class Shape(object):
     def depth(self):
         return 1
 
+    def get_path(self, index):
+        raise NotImplementedError("abstract base class")
+
 INEFFICIENT = Shape()
 SEEN_ONCE = Shape()
 
@@ -33,6 +36,9 @@ class WrapShape(Shape):
         return self.w_obj
 
     def replace(self, i, shape):
+        assert 0, "cannot happen"
+
+    def get_path(self, i):
         assert 0, "cannot happen"
 
     def __repr__(self):
@@ -56,6 +62,10 @@ class InStorageShape(Shape):
     def replace(self, i, shape):
         assert i == 0
         return shape
+
+    def get_path(self, index):
+        assert index == 0
+        return []
 
     def __repr__(self):
         return self.__class__.__name__ + "()"
@@ -110,6 +120,16 @@ class SharingShape(Shape):
         for j in range(i):
             index += self.children[j].num_storage_vars()
         return self.children[i].resolve(shaped_callable, index)
+
+    def get_path(self, index):
+        for j in range(len(self.children)):
+            child = self.children[j]
+            num = child.num_storage_vars()
+            if index < num:
+                return [j] + child.get_path(index)
+            else:
+                index -= num
+        assert 0, "cannot happen"
 
     @staticmethod
     def build_potentially_wrap(signature, children):
