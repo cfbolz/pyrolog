@@ -328,7 +328,6 @@ class ShapedCallableMixin:
         self.storage = newstorage
         self.shape = new_shape
 
-    @jit.unroll_safe
     def replace_child(self, index, obj):
         if isinstance(obj, ShapedCallableBase):
             new_shape = self.get_shape().get_transition(index, obj.get_shape())
@@ -339,6 +338,7 @@ class ShapedCallableMixin:
                 return self
         return None
 
+    @jit.unroll_safe
     def _fixup_var_in_term(self, obj, index):
         # XXX whew, subtle logic here
         newi = index
