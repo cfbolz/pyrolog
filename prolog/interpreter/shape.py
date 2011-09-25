@@ -399,7 +399,7 @@ class ShapedCallable(ShapedCallableMixin, ShapedCallableBase):
 def make_standardizer(w_obj):
     memo = []
     shape = term_with_numbered_vars_to_shape(w_obj, memo)
-    return Standardizer(shape, memo)
+    return Standardizer(shape, memo[:])
 
 def term_with_numbered_vars_to_shape(w_obj, memo):
     from prolog.interpreter import term
@@ -413,6 +413,7 @@ def term_with_numbered_vars_to_shape(w_obj, memo):
     return WrapShape(w_obj)
 
 class Standardizer(object):
+    _immutable_fields_ = ["shape", "memo[*]"]
     def __init__(self, shape, memo):
         self.shape = shape
         self.memo = memo
