@@ -193,6 +193,9 @@ class ShapedCallableBase(term.Callable):
     def get_storage(self, i):
         raise NotImplementedError("abstract base class")
 
+    def set_storage(self, i, val):
+        raise NotImplementedError("abstract base class")
+
     def size_storage(self):
         raise NotImplementedError("abstract base class")
 
@@ -215,6 +218,9 @@ class ShapedCallableMixin:
 
     def get_storage(self, i):
         return self.storage[i]
+
+    def set_storage(self, i, val):
+        self.storage[i] = val
 
     def size_storage(self):
         return len(self.storage)
@@ -345,7 +351,7 @@ class ShapedCallableMixin:
                     old_child.parent = self
                     old_child.index = newi
                 else:
-                    self.storage[newi] = deref
+                    self.set_storage(newi, deref)
             newi += 1
         return self
 
