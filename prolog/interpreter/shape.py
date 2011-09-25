@@ -7,6 +7,7 @@ MAX_DEPTH = 10
 MAX_SIZE = 10
 
 class Shape(object):
+    _attrs_ = []
     def __init__(self):
         pass
 
@@ -160,6 +161,7 @@ class SharingShape(Shape):
                 return None
         elif newshape is INEFFICIENT:
             return None
+        assert isinstance(newshape, SharingShape)
         return newshape
 
     def __repr__(self):
@@ -179,6 +181,8 @@ class SharingShape(Shape):
 # _____________________________________________________________________
 
 class ShapedCallableBase(term.Callable):
+    _attrs_ = []
+
     def get_shape(self):
         raise NotImplementedError("abstract base class")
 
@@ -333,14 +337,14 @@ class ShapedCallableMixin:
             return shape.w_obj
         result = ShapedCallable(shape, storage)
         i = 0
-        while i < len(result.storage):
-            child = result.storage[i]
+        while i < result.size_storage():
+            child = result.get_storage(i)
             newresult = result.replace_child(i, child)
             if not newresult:
                 i += 1
             else:
                 result = newresult
-        assert result.shape.num_storage_vars() == len(result.storage)
+        assert result.get_shape().num_storage_vars() == result.size_storage()
         return result
 
 class ShapedCallableMutable(ShapedCallableMixin, ShapedCallableBase):
