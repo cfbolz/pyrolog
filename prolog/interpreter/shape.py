@@ -74,7 +74,7 @@ def shape_hash((sig, children)):
     return x
 
 class SharingShape(Shape):
-    _immutable_fields_ = ["signature", "children[*]"]
+    _immutable_fields_ = ["signature", "children[*]", "_num_storage_vars"]
     _cache = objectmodel.r_dict(shape_eq, shape_hash)
     _transitions = None
 
@@ -96,12 +96,14 @@ class SharingShape(Shape):
             SharingShape._cache[key] = res = SharingShape(signature, children)
         return res
 
+    @jit.unroll_safe
     def resolve(self, shaped_callable, index):
         storage = [shaped_callable.get_storage(i)
                       for i in range(index, index + self.num_storage_vars())]
         # XXX fix up vars in term?
         return shaped_callable.new(self, storage)
 
+    @jit.unroll_safe
     def resolve_at(self, i, shaped_callable):
         index = 0
         for j in range(i):
@@ -122,6 +124,7 @@ class SharingShape(Shape):
     def num_storage_vars(self):
         return self._num_storage_vars
 
+    @jit.elidable
     def replace(self, i, shape):
         for j in range(len(self.children)):
             child = self.children[j]
@@ -142,6 +145,7 @@ class SharingShape(Shape):
             depth = max(depth, child.depth())
         return depth + 1
 
+    @jit.elidable
     def get_transition(self, i, shape):
         if self._transitions is None:
             self._transitions = {}
@@ -207,7 +211,7 @@ class ShapedCallableMixin:
         assert shape.num_storage_vars() == len(storage)
 
     def get_shape(self):
-        return self.shape
+        return jit.promote(self.shape)
 
     def get_storage(self, i):
         return self.storage[i]
@@ -228,6 +232,7 @@ class ShapedCallableMixin:
         return self.shape.signature.numargs
 
     @objectmodel.specialize.arg(3)
+    @jit.unroll_safe
     def basic_unify(self, other, heap, occurs_check=False):
         if (isinstance(other, ShapedCallableBase) and
                 self.shape is other.get_shape()):
@@ -250,6 +255,7 @@ class ShapedCallableMixin:
         from prolog.interpreter.term import _term_copy
         return self._copy_term(_term_copy, heap, memo)
 
+    @jit.unroll_safe
     def copy_standardize_apart(self, heap, env):
         storage = [None] * len(self.storage)
         result = ShapedCallableMutable(self.shape, storage)
@@ -307,6 +313,7 @@ class ShapedCallableMixin:
         self.storage = self.storage[:i] + objstorage + self.storage[i + 1:]
         self.shape = new_shape
 
+    @jit.unroll_safe
     def replace_child(self, index, obj):
         if isinstance(obj, ShapedCallableBase):
             new_shape = self.shape.get_transition(index, obj.get_shape())
@@ -331,6 +338,7 @@ class ShapedCallableMixin:
         return None
 
     @staticmethod
+    @jit.unroll_safe
     def build(shape, storage):
         if isinstance(shape, WrapShape):
             assert not storage
