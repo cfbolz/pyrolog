@@ -101,6 +101,7 @@ class SharingShape(Shape):
         storage = [shaped_callable.get_storage(i)
                       for i in range(index, index + self.num_storage_vars())]
         # XXX fix up vars in term?
+        # XXX use build here?
         return shaped_callable.new(self, storage)
 
     @jit.unroll_safe
@@ -223,25 +224,25 @@ class ShapedCallableMixin:
         self.storage[i] = val
 
     def size_storage(self):
-        return len(self.storage)
+        return self.get_shape().num_storage_vars()
 
     # _____________________________________________________________________
     # callable interface
 
     def signature(self):
-        return self.shape.signature
+        return self.get_shape().signature
 
     def argument_at(self, i):
-        return self.shape.resolve_at(i, self)
+        return self.get_shape().resolve_at(i, self)
 
     def argument_count(self):
-        return self.shape.signature.numargs
+        return self.signature().numargs
 
     @objectmodel.specialize.arg(3)
     @jit.unroll_safe
     def basic_unify(self, other, heap, occurs_check=False):
         if (isinstance(other, ShapedCallableBase) and
-                self.shape is other.get_shape()):
+                self.get_shape() is other.get_shape()):
             for i in range(self.size_storage()):
                 self.get_storage(i).unify(other.get_storage(i), heap, occurs_check)
             return
@@ -250,7 +251,7 @@ class ShapedCallableMixin:
     @jit.unroll_safe
     def copy_and_basic_unify(self, other, heap, env):
         if (isinstance(other, ShapedCallableBase) and
-                self.shape is other.get_shape()):
+                self.get_shape() is other.get_shape()):
             for i in range(self.size_storage()):
                 self.get_storage(i).unify_and_standardize_apart(
                         other.get_storage(i), heap, env)
@@ -263,12 +264,12 @@ class ShapedCallableMixin:
 
     @jit.unroll_safe
     def copy_standardize_apart(self, heap, env):
-        storage = [None] * len(self.storage)
-        result = ShapedCallableMutable(self.shape, storage)
+        storage = [None] * self.size_storage()
+        result = ShapedCallableMutable(self.get_shape(), storage)
         newinstance = False
         needmutable = False
         i = 0
-        for i in range(len(self.storage)):
+        for i in range(self.size_storage()):
             arg = self.storage[i]
             cloned = arg.copy_standardize_apart_as_child_of(heap, env, result, i)
             newinstance = newinstance | (isinstance(arg, term.NumberedVar) or cloned is not arg)
@@ -288,10 +289,10 @@ class ShapedCallableMixin:
     @objectmodel.specialize.arg(1)
     @jit.unroll_safe
     def _copy_term(self, copy_individual, heap, *extraargs):
-        args = [None] * len(self.storage)
+        args = [None] * self.size_storage()
         newinstance = False
         i = 0
-        while i < len(self.storage):
+        while i < self.size_storage():
             arg = self.storage[i]
             cloned = copy_individual(arg, i, heap, *extraargs)
             newinstance = newinstance | (cloned is not arg)
@@ -299,7 +300,7 @@ class ShapedCallableMixin:
             i += 1
         if newinstance:
             # XXX what about the variable shunting in Callable.build?
-            return self.new(self.shape, args)
+            return self.new(self.get_shape(), args)
         else:
             return self
 
@@ -330,7 +331,7 @@ class ShapedCallableMixin:
     @jit.unroll_safe
     def replace_child(self, index, obj):
         if isinstance(obj, ShapedCallableBase):
-            new_shape = self.shape.get_transition(index, obj.get_shape())
+            new_shape = self.get_shape().get_transition(index, obj.get_shape())
             if new_shape is not None:
                 self._replace_child(index, obj, new_shape)
                 if isinstance(obj, ShapedCallableMutable):
@@ -375,7 +376,7 @@ class ShapedCallableMixin:
 
 class ShapedCallableMutable(ShapedCallableMixin, ShapedCallableBase):
     def _make_immutable(self):
-        return ShapedCallable(self.shape, self.storage)
+        return ShapedCallable(self.get_shape(), self.storage)
 
     def _make_mutable(self):
         return self
@@ -388,7 +389,7 @@ class ShapedCallable(ShapedCallableMixin, ShapedCallableBase):
     _immutable_fields_ = ["shape", "storage[*]"]
 
     def _make_mutable(self):
-        return ShapedCallableMutable(self.shape, self.storage)
+        return ShapedCallableMutable(self.get_shape(), self.storage)
 
     def new(self, shape, storage):
         return ShapedCallable(shape, storage)
