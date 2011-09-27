@@ -965,6 +965,45 @@ def test_trace_complex2():
             "Exit: (2) append([2], [3, 4], [2, 3, 4]) ?",   "creep\n",
             "Exit: (1) append([1, 2], [3, 4], [1, 2, 3, 4]) ?","creep\n"]
 
+def trace_init_test(database):
+    e = get_engine(database)
+    order = []
+    def w(s):
+        print s
+        if s != "\n":
+            order.append(s)
+    def g():
+        return "\n"
+    e.tracewrapper.write = w
+    e.tracewrapper.getch = g
+    e.tracewrapper.show_info = False
+    return order, e
+
+# XXX Test controls:
+# - repeat
+# - !
+# - if then else
+# - not
+
+def test_trace_repeat():
+    order, e = trace_init_test("""
+    fact(1).
+    fact(2).
+    fact(3).
+
+    all_facts :-
+        repeat,
+        fact(X),
+        X = 3.
+    """)
+    e.run(parse_query_term("trace, all_facts."), e.modulewrapper.user_module)
+    c = "creep\n"
+    assert order == ["Call: (1) all_facts ?",c,"Call: (2) repeat ?",c,"Exit: (2) repeat ?",c,
+            "Call: (2) fact(_G0) ?",c,"Exit: (2) fact(1) ?",c,"Call: (2) 1=3 ?",c,
+            "Fail: (2) 1=3 ?",c,"Call: (2) 2=3 ?",c,"Fail: (2) 2=3 ?",c,"Call: (2) 3=3 ?",c,
+            "Exit: (2) 3=3 ?",c,"Exit: (1) all_facts ?",c]
+
+
 # _____________________________Automated test
 
 @py.test.mark.xfail
