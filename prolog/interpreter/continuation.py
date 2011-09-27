@@ -706,12 +706,17 @@ class TraceSuccessContinuation(Continuation):
                                 "Error: err/1: Undefined procedure: "+sig+"\n")
                         raise e
                     self.raw_query = scont.raw_query
+                    # crop fails before BodyContinuation
+                    # XXX Unfortunately not as simple as this
+                    fcont = fcont.trace_unwrap()
                     fcont = fcont.trace_wrap(self.depth, scont=self)
                     fcont.fail(heap)
                     raise e
             else:
                 nextcont, fcont, heap = self.innercont.activate(fcont, heap)
             nextcont = nextcont.trace_wrap(self.depth)
+            # XXX Unfortunately not as simple as this
+            fcont = fcont.trace_unwrap()
             fcont = nextcont.make_next_fcont(fcont)
             return nextcont, fcont, heap
 

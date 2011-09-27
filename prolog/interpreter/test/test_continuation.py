@@ -1019,6 +1019,21 @@ def test_trace_repeat():
             "Call: (2) fact(3) ?",c,"Exit: (2) fact(3) ?",c,
             "Exit: (1) all_facts ?",c]
 
+# XXX
+def test_trace_crop_fails():
+    order, e = trace_init_test("""
+    f(1, 1).
+    f(2, 2).
+    f(3, X) :- X = 1.
+    """)
+    p = parse_query_term("trace, f(1, 1), f(2, 2), f(3, 3).")
+    py.test.raises(UnificationFailed, e.run, p, e.modulewrapper.user_module)
+    c = "creep\n"
+    assert order == ["Call: (1) f(1, 1) ?",c,"Exit: (1) f(1, 1) ?",c,
+            "Call: (1) f(2, 2) ?",c,"Exit: (1) f(2, 2) ?",c,
+            "Call: (1) f(3, 3) ?",c,"Call: (2) 3=1 ?",c,
+            "Fail: (2) 3=1 ?",c,"Fail: (1) f(3, 3) ?",c]
+
 # _____________________________Automated test
 
 @py.test.mark.xfail
