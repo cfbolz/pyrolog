@@ -637,11 +637,17 @@ def get_decision(write, getch):
     return res
 
 
-def print_trace_step(engine, port, query, write, depth):
+def print_trace_step(engine, port, query, write, depth, dereference=True):
+    if port == "Fail":
+        write("%s: (%d) %s ?" % (port, depth, query))
+        return
     from prolog.builtin import formatting
     f = formatting.TermFormatter(engine, quoted=True, max_depth=20)
-    tm = port, depth, f.format(query.getvalue(None))
+    if dereference:
+        query = query.getvalue(None)
+    tm = port, depth, f.format(query)
     write("%s: (%d) %s ?" % tm)
+    return tm[2]
 
 def get_goal_string(engine, query, depth):
     from prolog.builtin import formatting
@@ -663,6 +669,7 @@ class TraceSuccessContinuation(Continuation):
         if query is None and port is not None:
             query = self.innercont.query
         self.query = query
+        self.raw_query = ""
 
     def is_done(self):
         return False
@@ -709,7 +716,8 @@ class TraceSuccessContinuation(Continuation):
         while 1:
             res = "creep"
             if not skip:
-                print_trace_step(self.engine, self.port, self.query, write, self.depth)
+                # remember call query for fail
+                self.raw_query = print_trace_step(self.engine, self.port, self.query, write, self.depth)
                 if self.engine.tracewrapper.is_leashed(self.port.lower()):
                     res = get_decision(write, getch)
                 else:
@@ -851,8 +859,13 @@ class TraceFailureContinuation(FailureContinuation):
 
         while 1:
             if not skip and not self.shall_fail:
-                print_trace_step(self.engine, self.port, self.query,
-                        write, self.depth)
+                # use query string from Call to avoid broken var bindings
+                if self.port == "Fail":
+                    query = self.scont.raw_query
+                else:
+                    query = self.query
+                print_trace_step(self.engine, self.port, query,
+                        write, self.depth, dereference=(self.port=="Fail"))
                 if self.engine.tracewrapper.is_leashed(self.port.lower()):
                     res = get_decision(write, getch)
                 else:
@@ -864,6 +877,7 @@ class TraceFailureContinuation(FailureContinuation):
             if self.shall_fail:
                 res = "fail"
 
+            # XXX make with dict
             decision = getattr(self, "action_"+res)
             ans = decision(heap)
             if ans is not None:
