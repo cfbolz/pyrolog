@@ -641,13 +641,16 @@ def print_trace_step(engine, port, query, write, depth, dereference=True):
     if port == "Fail":
         write("%s: (%d) %s ?" % (port, depth, query))
         return
-    from prolog.builtin import formatting
-    f = formatting.TermFormatter(engine, quoted=True, max_depth=20)
     if dereference:
         query = query.getvalue(None)
-    tm = port, depth, f.format(query)
+    tm = port, depth, format_query(engine, query)
     write("%s: (%d) %s ?" % tm)
     return tm[2]
+
+def format_query(engine, query):
+    from prolog.builtin import formatting
+    f = formatting.TermFormatter(engine, quoted=True, max_depth=20)
+    return f.format(query)
 
 def get_goal_string(engine, query, depth):
     from prolog.builtin import formatting
@@ -669,7 +672,7 @@ class TraceSuccessContinuation(Continuation):
         if query is None and port is not None:
             query = self.innercont.query
         self.query = query
-        self.raw_query = ""
+        self.raw_query = format_query(self.engine, self.query)
 
     def is_done(self):
         return False
@@ -679,7 +682,7 @@ class TraceSuccessContinuation(Continuation):
     # XXX optimize
     def activate(self, fcont, heap):
         if not self.port in ["Call", "Exit", "Exception", None]:
-            raise NotImplementedError("Port '"+str(self.port)+"' is not supported")
+            raise NotImplementedError("Port "+repr(self.port)+" is not supported")
 
         skip = self.engine.tracewrapper.skip(self.depth, self.port)
 
@@ -718,7 +721,8 @@ class TraceSuccessContinuation(Continuation):
             res = "creep"
             if not skip:
                 # remember call query for fail
-                self.raw_query = print_trace_step(self.engine, self.port, self.query, write, self.depth)
+                self.raw_query = print_trace_step(
+                        self.engine, self.port, self.query, write, self.depth)
                 if self.engine.tracewrapper.is_leashed(self.port.lower()):
                     res = get_decision(write, getch)
                 else:
@@ -795,6 +799,7 @@ class TraceSuccessContinuation(Continuation):
 
     # __________Helper methods
 
+    # XXX crop processed TraceFailureContinuations
     def make_next_fcont(self, fcont):
         """ Prepend an element to fcont-chain for fail output, if innercont fails. """
         nextc = self.innercont
@@ -822,8 +827,8 @@ class TraceSuccessContinuation(Continuation):
         return self
 
     def __repr__(self):
-        return "<TraceSuccessContinuation %s depth=%d innercont=%s>" % (
-                self.port, self.depth, self.innercont)
+        return "<TraceSuccessContinuation '%s: (%d) %s ?' innercont=%s>" % (
+                self.port, self.depth, self.raw_query, self.innercont)
 
     _dot = _dot
 
@@ -850,8 +855,8 @@ class TraceFailureContinuation(FailureContinuation):
     def fail(self, heap):
         """ Innerfcont contains the query for -Fail- and -Redo- output.
         Nextcont is the failure continuation."""
-        if not self.port in ["Fail", "Redo", None]:
-            raise NotImplementedError("Port '"+str(self.port)+"' is not supported")
+        if not self.port in ["Fail", "Redo"]:
+            raise NotImplementedError("Port "+repr(self.port)+" is not supported")
 
         skip = self.engine.tracewrapper.skip(self.depth, self.port)
 
@@ -954,7 +959,8 @@ class TraceFailureContinuation(FailureContinuation):
         return self.innerfcont.trace_unwrap()
 
     def __repr__(self):
-        return "<TraceFailureContinuation %s depth=%d innerfcont=%s>" % (self.port, self.depth, self.innerfcont)
+        return "<TraceFailureContinuation '%s: (%d) %s ?' innerfcont=%s>" % (
+                self.port, self.depth, format_query(self.engine, self.query), self.innerfcont)
 
     _dot = _dot
 
