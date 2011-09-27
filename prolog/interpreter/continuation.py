@@ -702,6 +702,7 @@ class TraceSuccessContinuation(Continuation):
                         self.engine.tracewrapper.write(
                                 "Error: err/1: Undefined procedure: "+sig+"\n")
                         raise e
+                    self.raw_query = scont.raw_query
                     fcont = fcont.trace_wrap(self.depth, scont=self)
                     fcont.fail(heap)
                     raise e
@@ -891,6 +892,7 @@ class TraceFailureContinuation(FailureContinuation):
         nextcont = nextcont.trace_wrap(self.depth)
         if self.port == "Redo":
             nextcont.port = None
+            nextcont.raw_query = self.scont.raw_query
             fcont = nextcont.make_next_fcont(fcont)
             nextcont.depth += 1
         return nextcont, fcont, heap
