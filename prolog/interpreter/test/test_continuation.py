@@ -969,7 +969,6 @@ def trace_init_test(database):
     e = get_engine(database)
     order = []
     def w(s):
-        print s
         if s != "\n":
             order.append(s)
     def g():
@@ -987,22 +986,38 @@ def trace_init_test(database):
 
 def test_trace_repeat():
     order, e = trace_init_test("""
-    fact(1).
-    fact(2).
-    fact(3).
+    index(0).
 
     all_facts :-
+        abolish(fact/1),
         repeat,
-        fact(X),
-        X = 3.
+        retract(index(Y)),
+        Y1 is Y + 1,
+        assert(fact(Y1)),
+        assert(index(Y1)),
+        fact(3).
     """)
     e.run(parse_query_term("trace, all_facts."), e.modulewrapper.user_module)
     c = "creep\n"
-    assert order == ["Call: (1) all_facts ?",c,"Call: (2) repeat ?",c,"Exit: (2) repeat ?",c,
-            "Call: (2) fact(_G0) ?",c,"Exit: (2) fact(1) ?",c,"Call: (2) 1=3 ?",c,
-            "Fail: (2) 1=3 ?",c,"Call: (2) 2=3 ?",c,"Fail: (2) 2=3 ?",c,"Call: (2) 3=3 ?",c,
-            "Exit: (2) 3=3 ?",c,"Exit: (1) all_facts ?",c]
-
+    assert order == ["Call: (1) all_facts ?",c,"Call: (2) abolish(fact/1) ?",c,
+            "Exit: (2) abolish(fact/1) ?",c,"Call: (2) repeat ?",c,
+            "Exit: (2) repeat ?",c,
+            "Call: (2) retract(index(_G0)) ?",c,"Exit: (2) retract(index(0)) ?",c,
+            "Call: (2) _G0is0+1 ?",c,"Exit: (2) 1is0+1 ?",c,
+            "Call: (2) assert(fact(1)) ?",c,"Exit: (2) assert(fact(1)) ?",c,
+            "Call: (2) assert(index(1)) ?",c,"Exit: (2) assert(index(1)) ?",c,
+            "Call: (2) fact(3) ?",c,"Fail: (2) fact(3) ?",c,"Exit: (2) repeat ?",c,
+            "Call: (2) retract(index(_G0)) ?",c,"Exit: (2) retract(index(1)) ?",c,
+            "Call: (2) _G0is1+1 ?",c,"Exit: (2) 2is1+1 ?",c,
+            "Call: (2) assert(fact(2)) ?",c,"Exit: (2) assert(fact(2)) ?",c,
+            "Call: (2) assert(index(2)) ?",c,"Exit: (2) assert(index(2)) ?",c,
+            "Call: (2) fact(3) ?",c,"Fail: (2) fact(3) ?",c,"Exit: repeat ?",c,
+            "Call: (2) retract(index(_G0)) ?",c,"Exit: (2) index(2) ?",c,
+            "Call: (2) _G0is2+1 ?",c,"Exit: (2) 3is2+1 ?",c,
+            "Call: (2) assert(fact(3)) ?",c,"Exit: (2) assert(fact(3)) ?",c,
+            "Call: (2) assert(index(3)) ?",c,"Exit: (2) assert(index(3)) ?",c,
+            "Call: (2) fact(3) ?",c,"Exit: (2) fact(3) ?",c,
+            "Exit: (1) all_facts ?",c]
 
 # _____________________________Automated test
 
