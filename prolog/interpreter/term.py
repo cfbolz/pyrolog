@@ -179,7 +179,7 @@ class VarInTerm(Var):
         from prolog.interpreter.shape import ShapedCallableMutable
         assert isinstance(parent, ShapedCallableMutable)
         self.parent = parent
-        self.indicator = VarInTermIndex(index)
+        self.indicator = VarInTermIndex.build(index)
 
     def getbinding(self):
         val = self.indicator.get(self.parent)
@@ -216,7 +216,7 @@ class VarInTerm(Var):
             obj.storage[index] = value
         else:
             assert newobj is obj
-        self.indicator = VarInTermPath(path)
+        self.indicator = path
 
     def __repr__(self):
         if self.getbinding():
@@ -226,7 +226,7 @@ class VarInTerm(Var):
 class VarInTermIndicator(object):
     pass
 
-class VarInTermIndex(VarInTermIndicator): # XXX cache
+class VarInTermIndex(VarInTermIndicator):
     _immutable_fields_ = ["index"]
 
     def __init__(self, index):
@@ -235,7 +235,15 @@ class VarInTermIndex(VarInTermIndicator): # XXX cache
     def get(self, obj):
         return obj.get_storage(self.index)
 
-class VarInTermPath(VarInTermIndicator): # XXX cache
+    @staticmethod
+    def build(index):
+        if index < OPTIMIZED_TERM_SIZE_MAX:
+            return VarInTermIndex._instances[index]
+        return VarInTermIndex(index)
+
+VarInTermIndex._instances = [VarInTermIndex(i) for i in range(OPTIMIZED_TERM_SIZE_MAX)]
+
+class VarInTermPath(VarInTermIndicator):
     _immutable_fields_ = ["path[*]"]
 
     def __init__(self, path):

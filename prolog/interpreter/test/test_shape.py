@@ -58,11 +58,11 @@ def test_get_path():
     X = shape.InStorageShape.build()
     s1 = build(sig, [X, X])
     s2 = build(sig, [X, s1])
-    p = s2.get_path(0)
+    p = s2.get_path(0).path
     assert p == [0]
-    p = s2.get_path(1)
+    p = s2.get_path(1).path
     assert p == [1, 0]
-    p = s2.get_path(2)
+    p = s2.get_path(2).path
     assert p == [1, 1]
 
 

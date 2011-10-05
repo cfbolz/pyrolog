@@ -38,9 +38,6 @@ class WrapShape(Shape):
     def replace(self, i, shape):
         assert 0, "cannot happen"
 
-    def get_path(self, i):
-        assert 0, "cannot happen"
-
     def __repr__(self):
         return "%s(%r)" % (self.__class__.__name__, self.w_obj)
 
@@ -63,10 +60,6 @@ class InStorageShape(Shape):
         assert i == 0
         return shape
 
-    def get_path(self, index):
-        assert index == 0
-        return []
-
     def __repr__(self):
         return self.__class__.__name__ + "()"
 
@@ -84,7 +77,7 @@ def shape_hash((sig, children)):
     return x
 
 class SharingShape(Shape):
-    _immutable_fields_ = ["signature", "children[*]", "_num_storage_vars"]
+    _immutable_fields_ = ["signature", "children[*]", "_num_storage_vars", "paths[*]"]
     _cache = objectmodel.r_dict(shape_eq, shape_hash)
     _transitions = None
 
@@ -94,9 +87,19 @@ class SharingShape(Shape):
         self.children = children
         children = debug.make_sure_not_resized(children)
         _num_storage_vars = 0
-        for child in self.children:
+        paths = []
+        for i in range(len(children)):
+            child = children[i]
             _num_storage_vars += child.num_storage_vars()
+            if isinstance(child, InStorageShape):
+                paths.append(term.VarInTermPath([i]))
+            elif isinstance(child, SharingShape):
+                for subpath in child.paths:
+                    if subpath is not None:
+                        paths.append(term.VarInTermPath([i] + subpath.path))
         self._num_storage_vars = _num_storage_vars
+        assert len(paths) == _num_storage_vars
+        self.paths = paths[:]
 
     @staticmethod
     def build(signature, children):
@@ -122,14 +125,7 @@ class SharingShape(Shape):
         return self.children[i].resolve(shaped_callable, index)
 
     def get_path(self, index):
-        for j in range(len(self.children)):
-            child = self.children[j]
-            num = child.num_storage_vars()
-            if index < num:
-                return [j] + child.get_path(index)
-            else:
-                index -= num
-        assert 0, "cannot happen"
+        return self.paths[index]
 
     @staticmethod
     def build_potentially_wrap(signature, children):
@@ -349,7 +345,7 @@ class ShapedCallableMixin:
                 self = self._make_mutable()
                 if deref is None:
                     child.parent = self
-                    child.indicator = term.VarInTermIndex(i + index)
+                    child.indicator = term.VarInTermIndex.build(i + index)
                 else:
                     newstorage[i + index] = deref
 
@@ -361,7 +357,7 @@ class ShapedCallableMixin:
                 indicator = child.indicator
                 if (isinstance(indicator, term.VarInTermIndex) and
                         indicator.index == i):
-                    child.indicator = term.VarInTermIndex(i + offset)
+                    child.indicator = term.VarInTermIndex.build(i + offset)
         self.storage = newstorage
         self.shape = new_shape
         return self
@@ -385,7 +381,7 @@ class ShapedCallableMixin:
                 if deref is None:
                     self = self._make_mutable()
                     old_child.parent = self
-                    old_child.indicator = term.VarInTermIndex(newi)
+                    old_child.indicator = term.VarInTermIndex.build(newi)
                 else:
                     self.set_storage(newi, deref)
             newi += 1
