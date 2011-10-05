@@ -184,7 +184,7 @@ def test_fixup_var_in_term():
     self._fixup_var_in_term(obj, 1)
     assert self.storage[2] is var
     assert var.parent is self
-    assert var.index == 2
+    assert var.indicator.index == 2
 
 
     # an bound VarInTerm is shunted
@@ -196,9 +196,33 @@ def test_fixup_var_in_term():
     self._fixup_var_in_term(obj, 1)
     assert self.storage[2] is b
     assert var.parent is obj
-    assert var.index == 0
+    assert var.indicator.index == 0
 
-def test_replace_child_fixup_varinterm():
+def test_replace_child_fixup_varinterm_at_end():
+    from prolog.interpreter.heap import Heap
+    h = Heap()
+    sig = signature.Signature.getsignature(".", 3)
+    build = shape.SharingShape
+    X = shape.InStorageShape.build()
+    s1 = build(sig, [X, X, X])
+    a = term.Callable.build("a")
+    b = term.Callable.build("b")
+    c = term.Callable.build("c")
+    nil = term.Callable.build("[]")
+    c1 = shape.ShapedCallableMutable(s1, [a, None, None])
+
+    c2 = shape.ShapedCallableMutable(s1, [b, c, c])
+    var1 = h.newvar_in_term(c1, 2)
+    c1.storage[2] = var1
+
+    s1.get_transition(1, s1)
+    s2 = s1.get_transition(1, s1)
+    c1._replace_child(1, c2, s2)
+    assert c1.storage[4].parent is c1
+    assert c1.storage[4].indicator.index == 4
+
+
+def test_replace_child_fixup_varinterm_from_replacement():
     from prolog.interpreter.heap import Heap
     h = Heap()
     sig = signature.Signature.getsignature(".", 3)
@@ -219,7 +243,7 @@ def test_replace_child_fixup_varinterm():
     res = c1.replace_child(1, c2)
     assert res is c1
     assert c1.storage[2].parent is c1
-    assert c1.storage[2].index == 2
+    assert c1.storage[2].indicator.index == 2
 
     c1 = shape.ShapedCallable(s1, [a, None, c])
     c2 = shape.ShapedCallableMutable(s1, [b, None, c])
@@ -230,7 +254,7 @@ def test_replace_child_fixup_varinterm():
     res = c1.replace_child(1, c2)
     assert isinstance(res, shape.ShapedCallableMutable)
     assert res.storage[2].parent is res
-    assert res.storage[2].index == 2
+    assert res.storage[2].indicator.index == 2
 
 def test_depth():
     sig = signature.Signature.getsignature(".", 2)

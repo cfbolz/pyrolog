@@ -172,16 +172,17 @@ class BindingVar(Var):
                 self.setvalue(other, heap)
             next._unify_derefed(other, heap, occurs_check)
 
+# _____________________________________________________________________
 
 class VarInTerm(Var):
     def __init__(self, parent, index):
         from prolog.interpreter.shape import ShapedCallableMutable
         assert isinstance(parent, ShapedCallableMutable)
         self.parent = parent
-        self.index = index
+        self.indicator = VarInTermIndex(index)
 
     def getbinding(self):
-        val = self.parent.get_storage(self.index)
+        val = self.indicator.get(self.parent)
         if val is self:
             return None
         return val
@@ -206,19 +207,46 @@ class VarInTerm(Var):
         from prolog.interpreter.shape import ShapedCallableMutable
         obj = self.parent
         assert isinstance(obj, ShapedCallableMutable)
-        index = jit.promote(self.index)
+        indicator = self.indicator
+        assert isinstance(indicator, VarInTermIndex)
+        index = jit.promote(indicator.index)
+        path = obj.get_shape().get_path(index)
         newobj = obj.replace_child(index, value)
         if newobj is None:
             obj.storage[index] = value
         else:
             assert newobj is obj
+        self.indicator = VarInTermPath(path)
 
     def __repr__(self):
         if self.getbinding():
             return "%s(%s)" % (self.__class__.__name__, self.getbinding())
-        return "%s(%s, %s)" % (self.__class__.__name__, self.parent.signature(), self.index)
+        return "%s(%s, %s)" % (self.__class__.__name__, self.parent.signature(), self.indicator.index)
 
+class VarInTermIndicator(object):
+    pass
 
+class VarInTermIndex(VarInTermIndicator): # XXX cache
+    _immutable_fields_ = ["index"]
+
+    def __init__(self, index):
+        self.index = index
+
+    def get(self, obj):
+        return obj.get_storage(self.index)
+
+class VarInTermPath(VarInTermIndicator): # XXX cache
+    _immutable_fields_ = ["path[*]"]
+
+    def __init__(self, path):
+        self.path = path
+
+    def get(self, obj):
+        for i in self.path:
+            obj = obj.argument_at(i)
+        return obj
+
+# _____________________________________________________________________
 
 class AttMap(object):
     def __init__(self):

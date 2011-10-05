@@ -342,20 +342,35 @@ class ShapedCallableMixin:
         for i in range(index):
             newstorage[i] = self.storage[i]
         for i in range(obj.size_storage()):
-            newstorage[i + index] = obj.get_storage(i)
+            child = newstorage[i + index] = obj.get_storage(i)
+            if isinstance(child, term.VarInTerm):
+                indicator = child.indicator
+                deref = child.getbinding()
+                self = self._make_mutable()
+                if deref is None:
+                    child.parent = self
+                    child.indicator = term.VarInTermIndex(i + index)
+                else:
+                    newstorage[i + index] = deref
+
+        offset = obj.size_storage() - 1
         for i in range(index + 1, self.size_storage()):
-            newstorage[i + obj.size_storage() - 1] = self.storage[i]
+            child = newstorage[i + offset] = self.storage[i]
+            if isinstance(child, term.VarInTerm) and child.parent is self:
+                assert isinstance(self, ShapedCallableMutable)
+                indicator = child.indicator
+                if (isinstance(indicator, term.VarInTermIndex) and
+                        indicator.index == i):
+                    child.indicator = term.VarInTermIndex(i + offset)
         self.storage = newstorage
         self.shape = new_shape
+        return self
 
     def replace_child(self, index, obj):
         if isinstance(obj, ShapedCallableBase):
             new_shape = self.get_shape().get_transition(index, obj.get_shape())
             if new_shape is not None:
-                self._replace_child(index, obj, new_shape)
-                if isinstance(obj, ShapedCallableMutable):
-                    self = self._fixup_var_in_term(obj, index)
-                return self
+                return self._replace_child(index, obj, new_shape)
         return None
 
     @jit.unroll_safe
@@ -370,7 +385,7 @@ class ShapedCallableMixin:
                 if deref is None:
                     self = self._make_mutable()
                     old_child.parent = self
-                    old_child.index = newi
+                    old_child.indicator = term.VarInTermIndex(newi)
                 else:
                     self.set_storage(newi, deref)
             newi += 1

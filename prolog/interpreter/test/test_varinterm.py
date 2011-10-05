@@ -9,7 +9,7 @@ def test_copy_standardize_apart():
     t = Callable.build("a", [Callable.build("b"), NumberedVar(0)])
     res = t.copy_standardize_apart(h, [None])
     assert res.argument_at(1).parent is res
-    assert res.argument_at(1).index == 1
+    assert res.argument_at(1).indicator.index == 1
 
 def test_varinterm_bind():
     h = Heap()
