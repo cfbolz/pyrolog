@@ -26,6 +26,9 @@ class TestLLtype(LLJitMixin):
         nrev([],[]).
         nrev([X|Y],Z) :- nrev(Y,Z1),
                          app(Z1,[X],Z).
+        reverse([], L, L).
+        reverse([H|T], L, O) :-
+            reverse(T, [H | L], O).
 
         run(X) :- solve([X]).
         solve([]).
@@ -119,10 +122,10 @@ class TestLLtype(LLJitMixin):
         """
         )
 
-        t1 = parse_query_term("app([1, 2, 3, 4, 5, 6], [8, 9], X), X == [1, 2, 3, 4, 5, 6, 8, 9].")
+        t1 = parse_query_term("app([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], [8, 9], X), X == [1, 2, 3, 4, 5, 6, 8, 9].")
         #t2 = parse_query_term("loop_when(100).")
         t2 = parse_query_term("freeze_list(15, T).")
-        t3 = parse_query_term("nrev([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], X), X == [10, 9, 8, 7, 6, 5, 4, 3, 2, 1].")
+        t3 = parse_query_term("reverse([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [], X), X == [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1].")
         t4 = parse_query_term("run(app([1, 2, 3, 4, 5, 6, 7], [8, 9], X)), X == [1, 2, 3, 4, 5, 6, 7, 8, 9].")
         t5 = parse_query_term("map(add1, [1, 2, 3, 4, 5, 6, 7], X), X == [2, 3, 4, 5, 6, 7, 8].")
         t6 = parse_query_term("partition([6, 6, 6, 6, 6, 6, 66, 3, 6, 1, 2, 6, 8, 9, 0,4, 2, 5, 1, 106, 3, 6, 1, 2, 6, 8, 9, 0,4, 2, 5, 1, 10, 3, 6, 1, 2, 6, 8, 9, 0,4, 2, 5, 1, 10], 5, X, Y).")
@@ -149,7 +152,7 @@ class TestLLtype(LLJitMixin):
         # XXX
         #interp_w(2)
 
-        self.meta_interp(interp_w, [2], listcomp=True, backendopt=True,
+        self.meta_interp(interp_w, [1], listcomp=True, backendopt=True,
                          listops=True)
         #self.meta_interp(interp_w, [3], listcomp=True,
         #                 listops=True)

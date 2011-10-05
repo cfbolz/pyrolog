@@ -233,6 +233,9 @@ class ShapedCallableMixin:
     def get_shape(self):
         return jit.promote(self.shape)
 
+    def set_shape(self, shape):
+        self.shape = shape
+
     def get_storage(self, i):
         return self.storage[i]
 
@@ -241,6 +244,9 @@ class ShapedCallableMixin:
 
     def size_storage(self):
         return self.get_shape().num_storage_vars()
+
+    def set_full_storage(self, storage):
+        self.storage = storage
 
     # _____________________________________________________________________
     # callable interface
@@ -336,7 +342,7 @@ class ShapedCallableMixin:
         assert newsize == new_shape.num_storage_vars()
         newstorage = [None] * newsize
         for i in range(index):
-            newstorage[i] = self.storage[i]
+            newstorage[i] = self.get_storage(i)
         for i in range(obj.size_storage()):
             child = newstorage[i + index] = obj.get_storage(i)
             if isinstance(child, term.VarInTerm):
@@ -351,15 +357,15 @@ class ShapedCallableMixin:
 
         offset = obj.size_storage() - 1
         for i in range(index + 1, self.size_storage()):
-            child = newstorage[i + offset] = self.storage[i]
+            child = newstorage[i + offset] = self.get_storage(i)
             if isinstance(child, term.VarInTerm) and child.parent is self:
                 assert isinstance(self, ShapedCallableMutable)
                 indicator = child.indicator
                 if (isinstance(indicator, term.VarInTermIndex) and
                         indicator.index == i):
                     child.indicator = term.VarInTermIndex.build(i + offset)
-        self.storage = newstorage
-        self.shape = new_shape
+        self.set_full_storage(newstorage)
+        self.set_shape(new_shape)
         return self
 
     def replace_child(self, index, obj):
