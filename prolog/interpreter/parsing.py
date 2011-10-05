@@ -19,7 +19,7 @@ def make_regexes():
         ("NUMBER", parse_regex("(0|[1-9][0-9]*)")),
         ("FLOAT", parse_regex("(0|[1-9][0-9]*)(\.[0-9]+)")),
         ("IGNORE", parse_regex(
-            "[ \\n\\t]|(/\\*[^\\*]*(\\*[^/][^\\*]*)*\\*/)|(%[^\\n]*)")),
+            "[ \\n\\t\\r]|(/\\*[^\\*]*(\\*[^/][^\\*]*)*\\*/)|(%[^\\n]*)")),
         ("ATOM", parse_regex("([a-z]([a-zA-Z0-9]|_)*)|('[^']*')|\[\]|!|\+|\-|\{\}")),
         ("STRING", parse_regex('"[^"]*"')),
         ("(", parse_regex("\(")),
@@ -575,6 +575,8 @@ def recognize(runner, i):
                 state = 1
             elif char == '\n':
                 state = 1
+            elif char == '\r':
+                state = 1
             elif char == ' ':
                 state = 1
             elif char == '(':
@@ -856,9 +858,9 @@ def recognize(runner, i):
             except IndexError:
                 runner.state = 17
                 return i
-            if char == '=':
+            if char == '-':
                 state = 78
-            elif char == '-':
+            elif char == '=':
                 state = 79
             else:
                 break
@@ -1918,6 +1920,7 @@ def recognize(runner, i):
 lexer = DummyLexer(recognize, DFA(98,
  {(0, '\t'): 1,
   (0, '\n'): 1,
+  (0, '\r'): 1,
   (0, ' '): 1,
   (0, '!'): 29,
   (0, '"'): 20,
@@ -2476,8 +2479,8 @@ lexer = DummyLexer(recognize, DFA(98,
   (15, '*'): 80,
   (15, '/'): 82,
   (15, '\\'): 81,
-  (17, '-'): 79,
-  (17, '='): 78,
+  (17, '-'): 78,
+  (17, '='): 79,
   (18, ']'): 29,
   (19, '}'): 29,
   (20, '\x00'): 20,
@@ -5477,7 +5480,7 @@ lexer = DummyLexer(recognize, DFA(98,
       94,
       95,
       97]),
- ['0, 0, 0, 0, start|, 0, start|, 0, 0, 0, 0, 0, start|, 0, 0, 0, 0, 0, start|, 0, 0, 0, 0, 0, start|, 0, start|, 0, 0, start|, 0, 0, 0, 0, 0, 0, 0, start|, 0, start|, start|, 0, 0, start|, 0, start|, start|, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0',
+ ['0, 0, 0, 0, start|, 0, start|, 0, 0, 0, 0, 0, start|, 0, 0, 0, 0, 0, start|, 0, 0, 0, 0, 0, start|, 0, start|, 0, start|, 0, 0, start|, 0, 0, 0, 0, 0, 0, 0, start|, 0, start|, start|, 0, 0, start|, 0, start|, start|, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0',
   'IGNORE',
   '(',
   'ATOM',
@@ -5557,10 +5560,10 @@ lexer = DummyLexer(recognize, DFA(98,
   'STRING',
   'ATOM',
   'ATOM',
-  'final*, start*, 2, final*, 0, start|, 0, 0, final*, start*, final*, 0, final*, start*, 0, final*, 0, final|, start|, 0, 1, final*, start*, final*, 0, final*, start*, 0, final*, 0, 1, final|, start|, 0, final*, start*, final*, 0, 1, final*, 0, start|, 0, final*, start*, final*, start*, 0, final*, 0, final*, final|, final*, 0, start|, 0, final*, start*, final*, start*, 0, final*, 0, final*, 1, final|, final*, 0, final|, start|, 0, 1, final*, start*, final*, start*, 0, final*, 0, final*, 0, 1, final|, start|, 0, final*, start*, final*, start*, 0, final*, 0',
+  '0, final*, start*, 2, final*, 0, start|, 0, final*, start*, final*, 0, final*, start*, 0, final*, 0, final|, start|, 0, 1, final*, start*, final*, 0, final*, start*, 0, final*, 0, 1, final|, start|, 0, final*, start*, final*, 0, final|, 1, final*, 0, start|, 0, final*, start*, final*, start*, 0, final*, 0, final*, 1, final|, final*, 0, start|, 0, final*, start*, final*, start*, 0, final*, 0, final*, final*, 0, final|, start|, 0, 1, final*, start*, final*, start*, 0, final*, 0, final*, 0, 1, final|, start|, 0, final*, start*, final*, start*, 0, final*, 0',
   'ATOM',
   'ATOM',
-  '0, final*, 1, 0, 1, 0, start|',
+  '0, start|, 0, final*, 1, 0, 1',
   'ATOM',
   'ATOM',
   'ATOM',
