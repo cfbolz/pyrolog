@@ -182,7 +182,8 @@ class VarInTerm(Var):
         self.indicator = VarInTermIndex.build(index)
 
     def getbinding(self):
-        val = self.indicator.get(self.parent)
+        indicator = jit.promote(self.indicator)
+        val = indicator.get(self.parent)
         if val is self:
             return None
         return val
@@ -207,9 +208,9 @@ class VarInTerm(Var):
         from prolog.interpreter.shape import ShapedCallableMutable
         obj = self.parent
         assert isinstance(obj, ShapedCallableMutable)
-        indicator = self.indicator
+        indicator = jit.promote(self.indicator)
         assert isinstance(indicator, VarInTermIndex)
-        index = jit.promote(indicator.index)
+        index = indicator.index
         path = obj.get_shape().get_path(index)
         newobj = obj.replace_child(index, value)
         if newobj is None:
