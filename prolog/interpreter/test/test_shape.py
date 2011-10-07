@@ -162,42 +162,6 @@ def test_shaped_callable_replace_child():
     c1._replace_child(0, c2, newshape)
     assert c1.storage == [b, nil, a]
 
-def test_fixup_var_in_term():
-    from prolog.interpreter.heap import Heap
-    h = Heap()
-    sig = signature.Signature.getsignature(".", 2)
-    build = shape.SharingShape
-    X = shape.InStorageShape.build()
-    s1 = build(sig, [X, X])
-    s2 = s1.replace(1, s1)
-
-    a = term.Callable.build("a")
-    b = term.Callable.build("b")
-    nil = term.Callable.build("[]")
-
-    # an unbound VarInTerm is updated to point to the new parent
-    obj = shape.ShapedCallableMutable(s1, [b, None])
-    var = h.newvar_in_term(obj, 1)
-    obj.storage[1] = var
-
-    self = shape.ShapedCallableMutable(s2, [a] + obj.storage)
-    self._fixup_var_in_term(obj, 1)
-    assert self.storage[2] is var
-    assert var.parent is self
-    assert var.indicator.index == 2
-
-
-    # an bound VarInTerm is shunted
-    obj = shape.ShapedCallableMutable(s1, [b, None])
-    var = h.newvar_in_term(obj, 0)
-    obj.storage[1] = var # it happens to live at index 1, but it's bound to b
-
-    self = shape.ShapedCallableMutable(s2, [a] + obj.storage)
-    self._fixup_var_in_term(obj, 1)
-    assert self.storage[2] is b
-    assert var.parent is obj
-    assert var.indicator.index == 0
-
 def test_replace_child_fixup_varinterm_at_end():
     from prolog.interpreter.heap import Heap
     h = Heap()

@@ -369,6 +369,7 @@ class ShapedCallableMixin:
             newstorage[i] = self.get_storage(i)
         for i in range(obj.size_storage()):
             child = newstorage[i + index] = obj.get_storage(i)
+            # XXX whew, subtle logic here
             if isinstance(child, term.VarInTerm):
                 indicator = child.indicator
                 deref = child.getbinding()
@@ -382,6 +383,7 @@ class ShapedCallableMixin:
         offset = obj.size_storage() - 1
         for i in range(index + 1, self.size_storage()):
             child = newstorage[i + offset] = self.get_storage(i)
+            # XXX whew, subtle logic here
             if isinstance(child, term.VarInTerm) and child.parent is self:
                 assert isinstance(self, ShapedCallableMutable)
                 indicator = child.indicator
@@ -398,24 +400,6 @@ class ShapedCallableMixin:
             if new_shape is not None:
                 return self._replace_child(index, obj, new_shape)
         return None
-
-    @jit.unroll_safe
-    def _fixup_var_in_term(self, obj, index):
-        # XXX whew, subtle logic here
-        newi = index
-        for i in range(obj.size_storage()):
-            old_child = obj.get_storage(i)
-            assert self.get_storage(newi) is old_child
-            if isinstance(old_child, term.VarInTerm):
-                deref = old_child.getbinding()
-                if deref is None:
-                    self = self._make_mutable()
-                    old_child.parent = self
-                    old_child.indicator = term.VarInTermIndex.build(newi)
-                else:
-                    self.set_storage(newi, deref)
-            newi += 1
-        return self
 
     @staticmethod
     @jit.unroll_safe
