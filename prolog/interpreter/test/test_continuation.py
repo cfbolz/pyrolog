@@ -97,6 +97,8 @@ def test_full():
         def activate(self, fcont, heap):
             all.append((X.dereference(heap).name(), Y.dereference(heap).name()))
             raise error.UnificationFailed
+        def get_greens(self, a, b, c):
+            return a, b, c
     e.add_rule(Callable.build("f", [Callable.build("x")]), True)
     e.add_rule(Callable.build("f", [Callable.build("y")]), True)
     e.add_rule(Callable.build("g", [Callable.build("a")]), True)

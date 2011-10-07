@@ -23,6 +23,12 @@ class Shape(object):
     def get_path(self, index):
         raise NotImplementedError("abstract base class")
 
+    def str(self):
+        return ""
+
+    def __repr__(self):
+        return self.str()
+
 INEFFICIENT = Shape()
 SEEN_ONCE = Shape()
 
@@ -38,8 +44,8 @@ class WrapShape(Shape):
     def replace(self, i, shape):
         assert 0, "cannot happen"
 
-    def __repr__(self):
-        return "%s(%r)" % (self.__class__.__name__, self.w_obj)
+    def str(self):
+        return "WrapShape(%s)" % (self.w_obj, )
 
 class InStorageShape(Shape):
 
@@ -60,8 +66,8 @@ class InStorageShape(Shape):
         assert i == 0
         return shape
 
-    def __repr__(self):
-        return self.__class__.__name__ + "()"
+    def str(self):
+        return "InStorageShape()"
 
 InStorageShape._singleton = InStorageShape()
 
@@ -185,8 +191,8 @@ class SharingShape(Shape):
         assert isinstance(newshape, SharingShape)
         return newshape
 
-    def __repr__(self):
-        return "%s(%r, %r)" % (self.__class__.__name__, self.signature, self.children)
+    def str(self):
+        return "SharingShape(%s, [%s])" % (self.signature.string(), ", ".join([child.str() for child in self.children]))
 
     def _dot(self, seen):
         if self in seen:
@@ -218,6 +224,24 @@ class ShapedCallableBase(term.Callable):
 
     def new(self, shape, storage):
         raise NotImplementedError("abstract base class")
+
+    @jit.unroll_safe
+    def get_mode(self):
+        from pypy.rlib.rarithmetic import intmask
+        mode = 0x345678
+        for i in range(self.size_storage()):
+            child = self.get_storage(i)
+            y = 0
+            if isinstance(child, term.VarInTerm):
+                parent = child.parent
+                shape = parent.get_shape()
+                indicator = child.indicator
+                if isinstance(indicator, term.VarInTermIndex):
+                    y = objectmodel.compute_identity_hash(shape)
+                else:
+                    y = 0
+            mode = intmask((1000003 * mode) ^ y)
+        return mode
 
 class ShapedCallableMixin:
     TYPE_STANDARD_ORDER = term.Term.TYPE_STANDARD_ORDER

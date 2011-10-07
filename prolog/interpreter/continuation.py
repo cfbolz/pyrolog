@@ -17,11 +17,14 @@ Signature.register_extr_attr("function", engine=True)
 # ___________________________________________________________________
 # JIT stuff
 
-def get_printable_location(rule):
+def get_printable_location(mode, rule, shape):
     if rule:
         s = rule.signature.string()
     else:
         s = "No rule"
+    if shape:
+        s = "%s %s" % (s, shape.str())
+    s = "%s %s" % (s, mode)
     return s
 
 def get_jitcell_at(where, rule):
@@ -36,7 +39,7 @@ predsig = Signature.getsignature(":-", 2)
 callsig = Signature.getsignature(":-", 1)
 
 jitdriver = jit.JitDriver(
-        greens=["rule"],
+        greens=["mode", "rule", "shape"],
         reds=["scont", "fcont", "heap"],
         get_printable_location=get_printable_location,
         #get_jitcell_at=get_jitcell_at,
@@ -48,16 +51,19 @@ jitdriver = jit.JitDriver(
 
 
 def driver(scont, fcont, heap):
+    from prolog.interpreter import shape as shapemod
     rule = None
+    shape = None
+    mode = 0
     while not scont.is_done():
         #view(scont=scont, fcont=fcont, heap=heap)
+        rule, shape, mode = scont.get_greens(rule, shape, mode)
         if isinstance(scont, RuleContinuation) and scont._rule.body is not None:
-            rule = scont._rule
-            jitdriver.can_enter_jit(rule=rule, scont=scont, fcont=fcont,
-                                    heap=heap)
+            jitdriver.can_enter_jit(rule=rule, shape=shape, scont=scont, fcont=fcont,
+                                    heap=heap, mode=mode)
         try:
-            jitdriver.jit_merge_point(rule=rule, scont=scont, fcont=fcont,
-                                      heap=heap)
+            jitdriver.jit_merge_point(rule=rule, shape=shape, scont=scont, fcont=fcont,
+                                      heap=heap, mode=mode)
             oldscont = scont
             scont, fcont, heap  = scont.activate(fcont, heap)
             assert heap is not None
@@ -326,6 +332,9 @@ class Continuation(object):
     def find_end_of_cut(self):
         return self.nextcont.find_end_of_cut()
 
+    def get_greens(self, oldrule, oldshape, oldmode):
+        return oldrule, oldshape, oldmode
+
     _dot = _dot
 
 class ContinuationWithModule(Continuation):
@@ -480,6 +489,21 @@ class RuleContinuation(Continuation):
         else:
             cont = nextcont
         return cont, fcont, heap
+
+    def get_greens(self, oldrule, oldshape, oldmode):
+        from prolog.interpreter import shape
+        query = self.query
+        if isinstance(query, shape.ShapedCallableBase):
+            shape = query.get_shape()
+            mode = query.get_mode()
+        else:
+            shape = oldshape
+            mode = oldmode
+        return self._rule, shape, mode
+
+
+    def get_shape(self, oldshape):
+        return oldshape
 
     def __repr__(self):
         return "<RuleContinuation rule=%r query=%r>" % (self._rule, self.query)
