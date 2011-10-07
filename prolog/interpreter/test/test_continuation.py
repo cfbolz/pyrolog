@@ -30,6 +30,9 @@ def test_driver():
             return self, done, heap
         def discard(self):
             pass
+        def get_greens(self, a, b, c):
+            return a, b, c
+
 
     c5 = FakeC(FakeC(FakeC(FakeC(FakeC(DoneSuccessContinuation(None), 1), 2), 3), 4), 5)
     driver(c5, done, Heap())
@@ -57,6 +60,8 @@ def test_failure_continuation():
                 raise error.UnificationFailed
             order.append(self.val)
             return self.next, fcont, heap
+        def get_greens(self, a, b, c):
+            return a, b, c
 
     class FakeF(FailureContinuation):
         def __init__(self, next, count):
