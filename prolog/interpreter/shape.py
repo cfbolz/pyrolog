@@ -116,6 +116,13 @@ class SharingShape(Shape):
             SharingShape._cache[key] = res = SharingShape(signature, children)
         return res
 
+    @staticmethod
+    @jit.elidable
+    def build_flat(signature, numargs):
+        children = [InStorageShape.build()] * numargs
+        return SharingShape.build(signature, children)
+
+
     @jit.unroll_safe
     def resolve(self, shaped_callable, index):
         storage = [shaped_callable.get_storage(i)

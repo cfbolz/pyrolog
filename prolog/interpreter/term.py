@@ -250,6 +250,7 @@ class VarInTermPath(VarInTermIndicator):
     def __init__(self, path):
         self.path = path
 
+    @jit.unroll_safe
     def get(self, obj):
         for i in self.path:
             obj = obj.argument_at(i)
@@ -601,8 +602,7 @@ class Callable(NonVar):
                 from prolog.interpreter import shape
                 if signature is None:
                     signature = Signature.getsignature(term_name, len(args))
-                children = [shape.InStorageShape.build()] * len(args)
-                new_shape = shape.SharingShape.build(signature, children)
+                new_shape = shape.SharingShape.build_flat(signature, len(args))
                 return shape.ShapedCallable.build(new_shape, args)
             if signature is None:
                 signature = Signature(term_name, len(args))
