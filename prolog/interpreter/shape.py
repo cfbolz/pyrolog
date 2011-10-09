@@ -1,10 +1,11 @@
-from pypy.rlib import jit, objectmodel, debug
+from pypy.rlib import jit, objectmodel, debug, unroll
 from prolog.interpreter import term
 # a Callable implementation that tries to save memory
 
 # XXX tune this
 MAX_DEPTH = 10
 MAX_SIZE = 10
+SHAPED_CALLABLE_SIZE = 10
 
 class Shape(object):
     _attrs_ = []
@@ -243,6 +244,9 @@ class ShapedCallableBase(term.Callable):
             mode = intmask((1000003 * mode) ^ y)
         return mode
 
+unroll_n = unroll.unrolling_iterable(range(SHAPED_CALLABLE_SIZE))
+unroll_r = unroll.unrolling_iterable(range(SHAPED_CALLABLE_SIZE)[::-1])
+
 class ShapedCallableMixin:
     TYPE_STANDARD_ORDER = term.Term.TYPE_STANDARD_ORDER
     _mixin_ = True
@@ -250,9 +254,8 @@ class ShapedCallableMixin:
     def __init__(self, shape, storage):
         assert isinstance(shape, SharingShape)
         self.shape = shape
-        storage = debug.make_sure_not_resized(storage)
-        self.storage = storage
         assert shape.num_storage_vars() == len(storage)
+        self.set_full_storage(storage)
 
     def get_shape(self):
         return jit.promote(self.shape)
@@ -261,20 +264,45 @@ class ShapedCallableMixin:
         self.shape = shape
 
     def get_storage(self, i):
-        return self.storage[i]
+        for n in unroll_n:
+            if i == n:
+                return getattr(self, "a%s" % n)
+        return self.rest_storage[i - SHAPED_CALLABLE_SIZE]
 
     def set_storage(self, i, val):
-        self.storage[i] = val
+        for n in unroll_n:
+            if i == n:
+                setattr(self, "a%s" % n, val)
+                break
+        else:
+            self.rest_storage[i - SHAPED_CALLABLE_SIZE] = val
 
     def size_storage(self):
         return self.get_shape().num_storage_vars()
 
     def get_full_storage(self):
-        return self.storage
+        result = [None] * self.size_storage()
+        for i in range(len(result)):
+            result[i] = self.get_storage(i)
+        return result
 
     def set_full_storage(self, storage):
-        self.storage = storage
-
+        # this is very much over the top, but it was fun to do
+        size = self.size_storage()
+        self.rest_storage = None
+        if size == 0:
+            return
+        # the trick: "promote" size
+        for n in unroll_n:
+            if size == n + 1:
+                break
+        else:
+            self.rest_storage = storage[SHAPED_CALLABLE_SIZE:]
+            n = SHAPED_CALLABLE_SIZE - 1
+        for i in unroll_r:
+            if n == i:
+                setattr(self, "a%s" % i, storage[i])
+                n = i - 1
 
     # _____________________________________________________________________
     # callable interface
@@ -324,7 +352,7 @@ class ShapedCallableMixin:
             cloned = arg.copy_standardize_apart_as_child_of(heap, env, result, i)
             newinstance = newinstance | (isinstance(arg, term.NumberedVar) or cloned is not arg)
             needmutable = needmutable | isinstance(cloned, term.VarInTerm)
-            storage[i] = cloned
+            result.set_storage(i, cloned)
         if newinstance:
             if not needmutable:
                 return result._make_immutable()
@@ -395,8 +423,8 @@ class ShapedCallableMixin:
                 if (isinstance(indicator, term.VarInTermIndex) and
                         indicator.index == i):
                     child.indicator = term.VarInTermIndex.build(i + offset)
-        self.set_full_storage(newstorage)
         self.set_shape(new_shape)
+        self.set_full_storage(newstorage)
         return self
 
     def replace_child(self, index, obj):
@@ -436,7 +464,7 @@ class ShapedCallableMutable(ShapedCallableMixin, ShapedCallableBase):
 
 
 class ShapedCallable(ShapedCallableMixin, ShapedCallableBase):
-    _immutable_fields_ = ["shape", "storage[*]"]
+    _immutable_fields_ = ["shape", "rest_storage[*]"] + ["a%s" % i for i in range(SHAPED_CALLABLE_SIZE)]
 
     def _make_mutable(self):
         return ShapedCallableMutable(self.get_shape(), self.get_full_storage())

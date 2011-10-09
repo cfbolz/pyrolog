@@ -86,7 +86,7 @@ def test_make_standardizer():
     assert isinstance(s.children[2], shape.InStorageShape)
     assert isinstance(s.children[3], shape.InStorageShape)
     w_obj = std.make_shaped_callable([4, 5], None)
-    assert w_obj.storage == [4, 5]
+    assert w_obj.get_full_storage() == [4, 5]
 
 
     w_obj = term.Callable.build("f", [term.Callable.build("a"),
@@ -114,15 +114,15 @@ def test_make_standardizer():
         def newvar(self):
             return 7
     w_obj = std.make_shaped_callable([4, 5], FakeHeap())
-    assert w_obj.storage == [4, 4, 5, 7]
+    assert w_obj.get_full_storage() == [4, 4, 5, 7]
     w_obj = std.make_shaped_callable([4, None], FakeHeap())
-    assert w_obj.storage == [4, 4, 7, 7]
+    assert w_obj.get_full_storage() == [4, 4, 7, 7]
 
     class FakeHeap(object):
         def newvar(self):
             return object()
     w_obj = std.make_shaped_callable([None, None], FakeHeap())
-    assert w_obj.storage[0] is w_obj.storage[1]
+    assert w_obj.get_storage(0) is w_obj.get_storage(1)
 
 def test_replace():
     sig = signature.Signature.getsignature(".", 2)
@@ -154,13 +154,13 @@ def test_shaped_callable_replace_child():
     c2 = shape.ShapedCallable(s1, [b, nil])
     newshape = s1.replace(1, s1)
     c1._replace_child(1, c2, newshape)
-    assert c1.storage == [a, b, nil]
+    assert c1.get_full_storage() == [a, b, nil]
 
     c1 = shape.ShapedCallable(s1, [None, a])
     c2 = shape.ShapedCallable(s1, [b, nil])
     newshape = s1.replace(0, s1)
     c1._replace_child(0, c2, newshape)
-    assert c1.storage == [b, nil, a]
+    assert c1.get_full_storage() == [b, nil, a]
 
 def test_replace_child_fixup_varinterm_at_end():
     from prolog.interpreter.heap import Heap
@@ -177,13 +177,13 @@ def test_replace_child_fixup_varinterm_at_end():
 
     c2 = shape.ShapedCallableMutable(s1, [b, c, c])
     var1 = h.newvar_in_term(c1, 2)
-    c1.storage[2] = var1
+    c1.set_storage(2, var1)
 
     s1.get_transition(1, s1)
     s2 = s1.get_transition(1, s1)
     c1._replace_child(1, c2, s2)
-    assert c1.storage[4].parent is c1
-    assert c1.storage[4].indicator.index == 4
+    assert c1.get_storage(4).parent is c1
+    assert c1.get_storage(4).indicator.index == 4
 
 
 def test_replace_child_fixup_varinterm_from_replacement():
@@ -201,24 +201,24 @@ def test_replace_child_fixup_varinterm_from_replacement():
 
     c2 = shape.ShapedCallableMutable(s1, [b, None, c])
     var2 = h.newvar_in_term(c2, 1)
-    c2.storage[1] = var2
+    c2.set_storage(1, var2)
 
     s1.get_transition(1, s1)
     res = c1.replace_child(1, c2)
     assert res is c1
-    assert c1.storage[2].parent is c1
-    assert c1.storage[2].indicator.index == 2
+    assert c1.get_storage(2).parent is c1
+    assert c1.get_storage(2).indicator.index == 2
 
     c1 = shape.ShapedCallable(s1, [a, None, c])
     c2 = shape.ShapedCallableMutable(s1, [b, None, c])
     var2 = h.newvar_in_term(c2, 1)
-    c2.storage[1] = var2
+    c2.set_storage(1, var2)
 
     s1.get_transition(1, s1)
     res = c1.replace_child(1, c2)
     assert isinstance(res, shape.ShapedCallableMutable)
-    assert res.storage[2].parent is res
-    assert res.storage[2].indicator.index == 2
+    assert res.get_storage(2).parent is res
+    assert res.get_storage(2).indicator.index == 2
 
 def test_depth():
     sig = signature.Signature.getsignature(".", 2)
@@ -287,9 +287,9 @@ def test_shaped_callable_build():
     c2 = shape.ShapedCallable(s1, [3, c1])
     c3 = shape.ShapedCallable.build(s1, [4, c2])
     assert c3.shape is s3
-    assert c3.storage == [4, 3, 2, nil]
+    assert c3.get_full_storage() == [4, 3, 2, nil]
     c4 = shape.ShapedCallable.build(s1, [4, c2])
-    assert c4.storage == [4, 3, 2]
+    assert c4.get_full_storage() == [4, 3, 2]
 
 def test_shaped_callable_unify():
     from prolog.interpreter import heap
@@ -333,7 +333,7 @@ def test_functional_test():
         res = res.argument_at(1)
     assert l == [1, 2, 3, 4, 5, 2, 3, 4, 5, 6]
     res = env['X']
-    assert len(res.storage) > 5
+    assert len(res.get_full_storage()) > 5
 
     for i in range(10):
         env = assert_true("reverse([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [], X).", e)
@@ -344,4 +344,4 @@ def test_functional_test():
         res = res.argument_at(1)
     assert l == [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
     res = env['X']
-    assert len(res.storage) > 5
+    assert len(res.get_full_storage()) > 5
