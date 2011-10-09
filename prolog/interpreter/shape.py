@@ -269,8 +269,12 @@ class ShapedCallableMixin:
     def size_storage(self):
         return self.get_shape().num_storage_vars()
 
+    def get_full_storage(self):
+        return self.storage
+
     def set_full_storage(self, storage):
         self.storage = storage
+
 
     # _____________________________________________________________________
     # callable interface
@@ -316,7 +320,7 @@ class ShapedCallableMixin:
         needmutable = False
         i = 0
         for i in range(self.size_storage()):
-            arg = self.storage[i]
+            arg = self.get_storage(i)
             cloned = arg.copy_standardize_apart_as_child_of(heap, env, result, i)
             newinstance = newinstance | (isinstance(arg, term.NumberedVar) or cloned is not arg)
             needmutable = needmutable | isinstance(cloned, term.VarInTerm)
@@ -339,7 +343,7 @@ class ShapedCallableMixin:
         newinstance = False
         i = 0
         while i < self.size_storage():
-            arg = self.storage[i]
+            arg = self.get_storage(i)
             cloned = copy_individual(arg, i, heap, *extraargs)
             newinstance = newinstance | (cloned is not arg)
             args[i] = cloned
@@ -351,7 +355,8 @@ class ShapedCallableMixin:
             return self
 
     def contains_var(self, var, heap):
-        for arg in self.storage:
+        for i in range(self.size_storage()):
+            arg = self.get_storage(i)
             if arg.contains_var(var, heap):
                 return True
         return False
@@ -421,7 +426,7 @@ class ShapedCallableMixin:
 
 class ShapedCallableMutable(ShapedCallableMixin, ShapedCallableBase):
     def _make_immutable(self):
-        return ShapedCallable(self.get_shape(), self.storage)
+        return ShapedCallable(self.get_shape(), self.get_full_storage())
 
     def _make_mutable(self):
         return self
@@ -434,7 +439,7 @@ class ShapedCallable(ShapedCallableMixin, ShapedCallableBase):
     _immutable_fields_ = ["shape", "storage[*]"]
 
     def _make_mutable(self):
-        return ShapedCallableMutable(self.get_shape(), self.storage)
+        return ShapedCallableMutable(self.get_shape(), self.get_full_storage())
 
     def new(self, shape, storage):
         return ShapedCallable(shape, storage)
