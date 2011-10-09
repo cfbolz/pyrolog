@@ -251,6 +251,8 @@ class ShapedCallableMixin:
     TYPE_STANDARD_ORDER = term.Term.TYPE_STANDARD_ORDER
     _mixin_ = True
 
+    rest_storage = None
+
     def __init__(self, shape, storage):
         assert isinstance(shape, SharingShape)
         self.shape = shape
@@ -279,6 +281,7 @@ class ShapedCallableMixin:
 
     def size_storage(self):
         return self.get_shape().num_storage_vars()
+
 
     def get_full_storage(self):
         result = [None] * self.size_storage()
@@ -397,40 +400,53 @@ class ShapedCallableMixin:
         assert isinstance(obj, ShapedCallableBase)
         newsize = obj.size_storage() + self.size_storage() - 1
         assert newsize == new_shape.num_storage_vars()
-        newstorage = [None] * newsize
-        for i in range(index):
-            newstorage[i] = self.get_storage(i)
-        for i in range(obj.size_storage()):
-            child = newstorage[i + index] = obj.get_storage(i)
-            # XXX whew, subtle logic here
-            if isinstance(child, term.VarInTerm):
-                indicator = child.indicator
-                deref = child.getbinding()
-                self = self._make_mutable()
-                if deref is None:
-                    child.parent = self
-                    child.indicator = term.VarInTermIndex.build(i + index)
-                else:
-                    newstorage[i + index] = deref
-
         offset = obj.size_storage() - 1
-        for i in range(index + 1, self.size_storage()):
-            child = newstorage[i + offset] = self.get_storage(i)
-            # XXX whew, subtle logic here
-            if isinstance(child, term.VarInTerm) and child.parent is self:
-                assert isinstance(self, ShapedCallableMutable)
-                indicator = child.indicator
-                if (isinstance(indicator, term.VarInTermIndex) and
-                        indicator.index == i):
-                    child.indicator = term.VarInTermIndex.build(i + offset)
+        old_shape = self.shape
         self.set_shape(new_shape)
-        self.set_full_storage(newstorage)
+        # XXX code duplication
+        if offset < 0:
+            for i in range(index + 1, self.size_storage()):
+                child = self.get_storage(i)
+                self.set_storage(i + offset, child)
+                # XXX whew, subtle logic here
+                if isinstance(child, term.VarInTerm) and child.parent is self:
+                    assert isinstance(self, ShapedCallableMutable)
+                    indicator = child.indicator
+                    if (isinstance(indicator, term.VarInTermIndex) and
+                            indicator.index == i):
+                        child.indicator = term.VarInTermIndex.build(i + offset)
+        else:
+            if offset > 0:
+                for i in range(old_shape.num_storage_vars() - 1, index, -1):
+                    child = self.get_storage(i)
+                    self.set_storage(i + offset, child)
+                    # XXX whew, subtle logic here
+                    if isinstance(child, term.VarInTerm) and child.parent is self:
+                        assert isinstance(self, ShapedCallableMutable)
+                        indicator = child.indicator
+                        if (isinstance(indicator, term.VarInTermIndex) and
+                                indicator.index == i):
+                            child.indicator = term.VarInTermIndex.build(i + offset)
+            for i in range(obj.size_storage()):
+                child = obj.get_storage(i)
+                self.set_storage(i + index, child)
+                # XXX whew, subtle logic here
+                if isinstance(child, term.VarInTerm):
+                    indicator = child.indicator
+                    deref = child.getbinding()
+                    self = self._make_mutable()
+                    if deref is None:
+                        child.parent = self
+                        child.indicator = term.VarInTermIndex.build(i + index)
+                    else:
+                        self.set_storage(i + index, deref)
         return self
 
     def replace_child(self, index, obj):
         if isinstance(obj, ShapedCallableBase):
             new_shape = self.get_shape().get_transition(index, obj.get_shape())
             if new_shape is not None:
+                assert new_shape.num_storage_vars() <= SHAPED_CALLABLE_SIZE
                 return self._replace_child(index, obj, new_shape)
         return None
 
@@ -451,6 +467,9 @@ class ShapedCallableMixin:
                 result = newresult
         assert result.get_shape().num_storage_vars() == result.size_storage()
         return result
+
+for i in range(SHAPED_CALLABLE_SIZE):
+    setattr(ShapedCallableMixin, "a%s" % i, None)
 
 class ShapedCallableMutable(ShapedCallableMixin, ShapedCallableBase):
     def _make_immutable(self):
