@@ -251,8 +251,8 @@ class ShapedCallableBase(term.Callable):
             mode = intmask((1000003 * mode) ^ y)
         return mode
 
-unroll_n = unroll.unrolling_iterable(range(SHAPED_CALLABLE_SIZE))
-unroll_r = unroll.unrolling_iterable(range(SHAPED_CALLABLE_SIZE)[::-1])
+UNROLL_N = unroll.unrolling_iterable(range(SHAPED_CALLABLE_SIZE))
+UNROLL_R = unroll.unrolling_iterable(range(SHAPED_CALLABLE_SIZE)[::-1])
 
 class ShapedCallableMixin:
     TYPE_STANDARD_ORDER = term.Term.TYPE_STANDARD_ORDER
@@ -273,13 +273,13 @@ class ShapedCallableMixin:
         self.shape = shape
 
     def get_storage(self, i):
-        for n in unroll_n:
+        for n in UNROLL_N:
             if i == n:
                 return getattr(self, "a%s" % n)
         return self.rest_storage[i - SHAPED_CALLABLE_SIZE]
 
     def set_storage(self, i, val):
-        for n in unroll_n:
+        for n in UNROLL_N:
             if i == n:
                 setattr(self, "a%s" % n, val)
                 break
@@ -291,9 +291,21 @@ class ShapedCallableMixin:
 
 
     def get_full_storage(self):
-        result = [None] * self.size_storage()
-        for i in range(len(result)):
-            result[i] = self.get_storage(i)
+        # this is very much over the top, but it was fun to do
+        size = self.size_storage()
+        result = [None] * min(size, SHAPED_CALLABLE_SIZE)
+        if size == 0:
+            return result
+        for n in UNROLL_N:
+            if size == n + 1:
+                break
+        else:
+            result = result + self.rest_storage
+            n = SHAPED_CALLABLE_SIZE - 1
+        for i in UNROLL_R:
+            if n == i:
+                result[i] = getattr(self, "a%s" % i)
+                n = i - 1
         return result
 
     def set_full_storage(self, storage):
@@ -303,13 +315,13 @@ class ShapedCallableMixin:
         if size == 0:
             return
         # the trick: "promote" size
-        for n in unroll_n:
+        for n in UNROLL_N:
             if size == n + 1:
                 break
         else:
             self.rest_storage = storage[SHAPED_CALLABLE_SIZE:]
             n = SHAPED_CALLABLE_SIZE - 1
-        for i in unroll_r:
+        for i in UNROLL_R:
             if n == i:
                 setattr(self, "a%s" % i, storage[i])
                 n = i - 1
