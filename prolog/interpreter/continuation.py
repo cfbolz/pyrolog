@@ -11,6 +11,7 @@ from prolog.interpreter.signature import Signature
 from prolog.interpreter.module import Module, ModuleWrapper
 from prolog.interpreter.helper import unwrap_predicate_indicator
 from prolog.interpreter.stream import StreamWrapper
+from prolog.interpreter.graphviz import _dot, view
 
 Signature.register_extr_attr("function", engine=True)
 
@@ -297,17 +298,6 @@ def _make_rule_conts(engine, scont, fcont, heap, query, rulechain):
 # ___________________________________________________________________
 # Continuation classes
 
-def _dot(self, seen):
-    if self in seen:
-        return
-    seen.add(self)
-    yield '%s [label="%s", shape=box]' % (id(self), repr(self)[:50])
-    for key, value in self.__dict__.iteritems():
-        if hasattr(value, "_dot"):
-            yield "%s -> %s [label=%s]" % (id(self), id(value), key)
-            for line in value._dot(seen):
-                yield line
-
 
 class Continuation(object):
     """ Represents a continuation of the Prolog computation. This can be seen
@@ -344,19 +334,6 @@ class ContinuationWithModule(Continuation):
     def __init__(self, engine, module, nextcont):
         Continuation.__init__(self, engine, nextcont)
         self.module = module
-
-def view(*objects, **names):
-    from dotviewer import graphclient
-    content = ["digraph G{"]
-    seen = set()
-    for obj in list(objects) + names.values():
-        content.extend(obj._dot(seen))
-    for key, value in names.items():
-        content.append("%s -> %s" % (key, id(value)))
-    content.append("}")
-    p = py.test.ensuretemp("prolog").join("temp.dot")
-    p.write("\n".join(content))
-    graphclient.display_dot_file(str(p))
 
 
 class FailureContinuation(object):

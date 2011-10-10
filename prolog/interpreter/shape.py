@@ -1,5 +1,6 @@
 from pypy.rlib import jit, objectmodel, debug, unroll
 from prolog.interpreter import term
+from prolog.interpreter.graphviz import _dot, view
 # a Callable implementation that tries to save memory
 
 # XXX tune this
@@ -29,6 +30,8 @@ class Shape(object):
 
     def __repr__(self):
         return self.str()
+
+    _dot = _dot
 
 INEFFICIENT = Shape()
 SEEN_ONCE = Shape()
@@ -486,6 +489,8 @@ class ShapedCallableMixin:
                 result = newresult
         assert result.get_shape().num_storage_vars() == result.size_storage()
         return result
+
+    _dot = _dot
 
 for i in range(SHAPED_CALLABLE_SIZE):
     setattr(ShapedCallableMixin, "a%s" % i, None)
