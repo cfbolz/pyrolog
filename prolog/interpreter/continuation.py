@@ -706,17 +706,16 @@ class TraceSuccessContinuation(Continuation):
                                 "Error: err/1: Undefined procedure: "+sig+"\n")
                         raise e
                     self.raw_query = scont.raw_query
-                    # crop fails before BodyContinuation
-                    # XXX Unfortunately not as simple as this
-                    fcont = fcont.trace_unwrap()
+                    # XXX fix problem with and-compounded terms
+                    # fcont = fcont.trace_unwrap()
                     fcont = fcont.trace_wrap(self.depth, scont=self)
                     fcont.fail(heap)
                     raise e
             else:
                 nextcont, fcont, heap = self.innercont.activate(fcont, heap)
             nextcont = nextcont.trace_wrap(self.depth)
-            # XXX Unfortunately not as simple as this
-            fcont = fcont.trace_unwrap()
+            # XXX fix problem with and-compounded terms
+            #fcont = fcont.trace_unwrap()
             fcont = nextcont.make_next_fcont(fcont)
             return nextcont, fcont, heap
 
@@ -870,7 +869,7 @@ class TraceFailureContinuation(FailureContinuation):
 
         while 1:
             if not skip and not self.shall_fail:
-                # use query string from Call to avoid broken var bindings
+                # use query string from TraceSuccessContinuation to avoid obsolete var bindings
                 if self.port == "Fail":
                     query = self.scont.raw_query
                 else:

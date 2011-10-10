@@ -27,6 +27,9 @@ class RepeatContinuation(continuation.FailureContinuation):
         heap = heap.revert_upto(self.undoheap)
         return self.nextcont, self, heap
 
+    def trace_wrap(self, depth, scont=None):
+        return continuation.TraceFailureContinuation("Fail", self, depth, scont=scont)
+
 @expose_builtin("!", unwrap_spec=[], handles_continuation=True,trace=False)
 def impl_cut(engine, heap, scont, fcont):
     end_fcont = scont.find_end_of_cut()
