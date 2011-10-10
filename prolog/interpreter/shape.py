@@ -3,9 +3,9 @@ from prolog.interpreter import term
 # a Callable implementation that tries to save memory
 
 # XXX tune this
-MAX_DEPTH = 10
-MAX_SIZE = 10
-SHAPED_CALLABLE_SIZE = 10
+MAX_DEPTH = 6
+MAX_SIZE = 6
+SHAPED_CALLABLE_SIZE = 6
 
 class Shape(object):
     _attrs_ = []
