@@ -183,10 +183,7 @@ class VarInTerm(Var):
 
     def getbinding(self):
         indicator = jit.promote(self.indicator)
-        val = indicator.get(self.parent)
-        if val is self:
-            return None
-        return val
+        return indicator.get(self.parent)
 
     def dereference(self, heap):
         # makes no sense to do path compression here
@@ -196,8 +193,6 @@ class VarInTerm(Var):
         return next.dereference(heap)
 
     def setvalue(self, value, heap):
-        # this is true because setvalues on bound VarInTerms don't happen
-        assert self.getbinding() is None
         if heap is not self.created_after_choice_point:
             var = self.created_after_choice_point.newvar()
             var.setvalue(value, heap)
@@ -246,7 +241,7 @@ class VarInTermIndex(VarInTermIndicator):
         self.index = index
 
     def get(self, obj):
-        return obj.get_storage(self.index)
+        return None
 
     @staticmethod
     def build(index):
