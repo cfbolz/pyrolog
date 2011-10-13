@@ -432,15 +432,9 @@ class ShapedCallableMixin:
         else:
             if offset > 0:
                 for i in range(old_shape.num_storage_vars() - 1, index, -1):
-                    child = self.get_storage(i)
-                    if isinstance(child, term.VarInTerm):
-                        deref = child.getbinding()
-                        if deref is not None:
-                            self.set_storage(i, deref)
                     self.move_child(i, i + offset)
             for i in range(obj.size_storage()):
                 child = obj.get_storage(i)
-                self.set_storage(i + index, child)
                 # XXX whew, subtle logic here
                 if isinstance(child, term.VarInTerm):
                     deref = child.getbinding()
@@ -449,7 +443,8 @@ class ShapedCallableMixin:
                         child.parent = self
                         child.indicator = term.VarInTermIndex.build(i + index)
                     else:
-                        self.set_storage(i + index, deref)
+                        child = deref
+                self.set_storage(i + index, child)
         return self
 
     def move_child(self, index, newindex):
