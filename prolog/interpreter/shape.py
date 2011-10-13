@@ -381,8 +381,8 @@ class ShapedCallableMixin:
             result.set_storage(i, cloned)
         if newinstance:
             if not needmutable:
-                return result._make_immutable()
-            return result
+                result = result._make_immutable()
+            return result.compress()
         else:
             return self
 
@@ -462,22 +462,25 @@ class ShapedCallableMixin:
         return None
 
     @staticmethod
-    @jit.unroll_safe
     def build(shape, storage):
         if isinstance(shape, WrapShape):
             assert not storage
             return shape.w_obj
         result = ShapedCallable(shape, storage)
+        return result.compress()
+
+    @jit.unroll_safe
+    def compress(self):
         i = 0
-        while i < result.size_storage():
-            child = result.get_storage(i)
-            newresult = result.replace_child(i, child)
+        while i < self.size_storage():
+            child = self.get_storage(i)
+            newresult = self.replace_child(i, child)
             if not newresult:
                 i += 1
             else:
-                result = newresult
-        assert result.get_shape().num_storage_vars() == result.size_storage()
-        return result
+                self = newresult
+        assert self.get_shape().num_storage_vars() == self.size_storage()
+        return self
 
     _dot = _dot
 

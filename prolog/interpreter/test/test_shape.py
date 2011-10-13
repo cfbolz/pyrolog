@@ -1,5 +1,5 @@
 import py
-from prolog.interpreter import shape, term, signature
+from prolog.interpreter import shape, term, signature, heap
 from prolog.interpreter.continuation import view
 
 class FakeShapedCallable(object):
@@ -164,8 +164,7 @@ def test_shaped_callable_replace_child():
     assert c1.get_full_storage() == [b, nil, a]
 
 def test_replace_child_fixup_varinterm_at_end():
-    from prolog.interpreter.heap import Heap
-    h = Heap()
+    h = heap.Heap()
     sig = signature.Signature.getsignature(".", 3)
     build = shape.SharingShape
     X = shape.InStorageShape.build()
@@ -204,8 +203,7 @@ def test_replace_child_fixup_varinterm_at_end():
 
 
 def test_replace_child_fixup_varinterm_from_replacement():
-    from prolog.interpreter.heap import Heap
-    h = Heap()
+    h = heap.Heap()
     sig = signature.Signature.getsignature(".", 3)
     build = shape.SharingShape
     X = shape.InStorageShape.build()
@@ -308,8 +306,24 @@ def test_shaped_callable_build():
     c4 = shape.ShapedCallable.build(s1, [4, c2])
     assert c4.get_full_storage() == [4, 3, 2]
 
+def test_copy_standardize_apart_compresses():
+    h = heap.Heap()
+    sig = signature.Signature.getsignature(".", 2)
+    b = shape.SharingShape
+    X = shape.InStorageShape.build()
+    s1 = b(sig, [X, X])
+    s1.get_transition(1, s1)
+    s2 = s1.get_transition(1, s1)
+
+    a = term.Callable.build("a")
+    b = term.Callable.build("b")
+    c_numbered = shape.ShapedCallable(s1, [term.NumberedVar(0), term.NumberedVar(1)])
+    c1 = shape.ShapedCallable(s1, [a, b])
+    c2 = c_numbered.copy_standardize_apart(h, [a, c1])
+    assert c2.get_shape() is s2
+
+
 def test_shaped_callable_unify():
-    from prolog.interpreter import heap
     a = term.Callable.build("a")
     b = term.Callable.build("b")
     c = term.Callable.build("c")
