@@ -257,7 +257,6 @@ class VarInTermPath(VarInTermIndicator):
     def __init__(self, path):
         self.path = path
 
-    @jit.unroll_safe
     def get(self, obj):
         from prolog.interpreter.shape import ShapedCallableMutable
         return obj.get_shape().resolve_indicator(self, obj)

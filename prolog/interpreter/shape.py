@@ -145,6 +145,7 @@ class SharingShape(Shape):
         return self.children[argument_index].resolve(shaped_callable,
                 self._find_storage_index(argument_index))
 
+    @jit.unroll_safe
     def resolve_indicator(self, indicator, shaped_callable):
         storage_index = 0
         for i in indicator.path:
