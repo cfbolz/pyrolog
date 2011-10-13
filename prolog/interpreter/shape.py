@@ -148,8 +148,11 @@ class SharingShape(Shape):
     @jit.unroll_safe
     def resolve_indicator(self, indicator, shaped_callable):
         storage_index = 0
-        for i in indicator.path:
+        for j in range(len(indicator.path)):
+            # to make the JIT know that the read is constant-foldable
+            i = indicator.path[j]
             storage_index += self._find_storage_index(i)
+            assert isinstance(self, SharingShape)
             self = self.children[i]
         return self.resolve(shaped_callable, storage_index)
 
