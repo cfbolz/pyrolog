@@ -132,7 +132,7 @@ class SharingShape(Shape):
                       for i in range(index, index + self.num_storage_vars())]
         # XXX fix up vars in term?
         # XXX use build here?
-        return shaped_callable.new(self, storage)
+        return shaped_callable.new(self, storage).compress()
 
     @jit.unroll_safe
     def _find_storage_index(self, argument_index):

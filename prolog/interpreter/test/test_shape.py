@@ -347,33 +347,36 @@ def test_shaped_callable_unify():
 def test_functional_test():
     from prolog.interpreter.continuation import Engine
     from prolog.interpreter.test.tool import assert_true, get_engine
+    from prolog.interpreter.helper import unwrap_list
     e = get_engine("""
+        loop(0, []).
+        loop(X, [X0|T]) :- X > 0, X0 is X - 1, loop(X0, T).
         append([], L, L).
         append([H|T], L, [H|R]) :- append(T, L, R).
         reverse([], L, L).
         reverse([H|T], L, O) :-
             reverse(T, [H | L], O).
     """)
+    for i in range(100):
+        env = assert_true("loop(10, X).", e)
+    res = env['X']
+    assert [obj.num for obj in unwrap_list(res)] == [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
+    assert len(res.get_full_storage()) == shape.SHAPED_CALLABLE_SIZE
 
     for i in range(10):
-        env = assert_true("append([1, 2, 3, 4, 5], [2, 3, 4, 5, 6], X).", e)
+        env = assert_true("loop(100, Y), append(Y, Y, X).", e)
     res = env['X']
-    l = []
-    while res.name() == ".":
-        l.append(res.argument_at(0).num)
-        res = res.argument_at(1)
-    assert l == [1, 2, 3, 4, 5, 2, 3, 4, 5, 6]
+    l = [obj.num for obj in unwrap_list(res)]
+    assert l == range(99, -1, -1) * 2
     res = env['X']
-    assert len(res.get_full_storage()) > shape.SHAPED_CALLABLE_SIZE - 2
+    assert len(res.get_full_storage()) == shape.SHAPED_CALLABLE_SIZE
 
     for i in range(10):
-        env = assert_true("reverse([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [], X).", e)
+        env = assert_true("loop(100, Y), reverse(Y, [], X).", e)
+    res = env['Y']
+    assert len(res.get_full_storage()) == shape.SHAPED_CALLABLE_SIZE
     res = env['X']
-    l = []
-    while res.name() == ".":
-        l.append(res.argument_at(0).num)
-        res = res.argument_at(1)
-    assert l == [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
-    py.test.skip("the rest is failing atm")
+    l = [obj.num for obj in unwrap_list(res)]
+    assert l == range(100)
     res = env['X']
-    assert len(res.get_full_storage()) > shape.SHAPED_CALLABLE_SIZE - 2
+    assert len(res.get_full_storage()) == shape.SHAPED_CALLABLE_SIZE
