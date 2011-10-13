@@ -191,8 +191,8 @@ class SharingShape(Shape):
             return None
         elif newshape is SEEN_ONCE:
             newshape = self.replace(i, shape)
-            if (newshape.depth() < MAX_DEPTH and
-                    newshape.num_storage_vars() < MAX_SIZE):
+            if (newshape.depth() <= MAX_DEPTH and
+                    newshape.num_storage_vars() <= MAX_SIZE):
                 self._transitions[key] = newshape
             else:
                 self._transitions[key] = INEFFICIENT

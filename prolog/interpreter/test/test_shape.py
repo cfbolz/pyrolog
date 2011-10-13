@@ -277,7 +277,7 @@ def test_get_transition_inefficient():
     X = shape.InStorageShape.build()
     s1 = b(sig, [X, X])
     s = s1
-    for i in range(shape.SHAPED_CALLABLE_SIZE - 2):
+    for i in range(shape.SHAPED_CALLABLE_SIZE - 1):
         s.get_transition(i, s1)
         s = s.get_transition(i, s1)
     assert s is None
