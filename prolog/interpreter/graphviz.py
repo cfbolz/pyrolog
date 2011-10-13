@@ -1,3 +1,4 @@
+import py
 
 def _dot(self, seen):
     if self in seen:
