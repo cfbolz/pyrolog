@@ -186,6 +186,22 @@ def test_replace_child_fixup_varinterm_at_end():
     assert c1.get_storage(4).parent is c1
     assert c1.get_storage(4).indicator.index == 4
 
+    # if the variable is already bound, shunt it
+    c1 = shape.ShapedCallableMutable(s1, [a, None, None])
+
+    c2 = shape.ShapedCallableMutable(s1, [b, c, c])
+    var1 = h.newvar_in_term(c1, 0)
+    c1.set_storage(0, var1)
+    c1.set_storage(2, var1)
+    var1.setvalue(nil, h)
+    assert c1.get_storage(0) is nil
+    assert c1.get_storage(2) is var1
+
+    s1.get_transition(1, s1)
+    s2 = s1.get_transition(1, s1)
+    c1._replace_child(1, c2, s2)
+    assert c1.get_storage(4) is nil
+
 
 def test_replace_child_fixup_varinterm_from_replacement():
     from prolog.interpreter.heap import Heap

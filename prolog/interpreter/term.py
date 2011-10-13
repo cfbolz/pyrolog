@@ -219,6 +219,18 @@ class VarInTerm(Var):
             assert newobj is obj
         self.indicator = path
 
+    def move(self, callable, index, newindex):
+        from prolog.interpreter.shape import ShapedCallableMutable
+        indicator = jit.promote(self.indicator)
+        if isinstance(indicator, VarInTermPath):
+            return indicator.get(self.parent)
+        if self.parent is callable:
+            assert isinstance(callable, ShapedCallableMutable)
+            assert isinstance(indicator, VarInTermIndex)
+            if indicator.index == index:
+                self.indicator = VarInTermIndex.build(newindex)
+        return self
+
     def __repr__(self):
         if self.getbinding():
             return "%s(%s)" % (self.__class__.__name__, self.getbinding())

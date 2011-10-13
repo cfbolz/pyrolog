@@ -282,6 +282,7 @@ class ShapedCallableMixin:
         return self.rest_storage[i - SHAPED_CALLABLE_SIZE]
 
     def set_storage(self, i, val):
+        assert val is not None
         for n in UNROLL_N:
             if i == n:
                 setattr(self, "a%s" % n, val)
@@ -425,44 +426,37 @@ class ShapedCallableMixin:
         offset = obj.size_storage() - 1
         old_shape = self.shape
         self.set_shape(new_shape)
-        # XXX code duplication
         if offset < 0:
             for i in range(index + 1, self.size_storage()):
-                child = self.get_storage(i)
-                self.set_storage(i + offset, child)
-                # XXX whew, subtle logic here
-                if isinstance(child, term.VarInTerm) and child.parent is self:
-                    assert isinstance(self, ShapedCallableMutable)
-                    indicator = child.indicator
-                    if (isinstance(indicator, term.VarInTermIndex) and
-                            indicator.index == i):
-                        child.indicator = term.VarInTermIndex.build(i + offset)
+                self.move_child(i, i + offset)
         else:
             if offset > 0:
                 for i in range(old_shape.num_storage_vars() - 1, index, -1):
                     child = self.get_storage(i)
-                    self.set_storage(i + offset, child)
-                    # XXX whew, subtle logic here
-                    if isinstance(child, term.VarInTerm) and child.parent is self:
-                        assert isinstance(self, ShapedCallableMutable)
-                        indicator = child.indicator
-                        if (isinstance(indicator, term.VarInTermIndex) and
-                                indicator.index == i):
-                            child.indicator = term.VarInTermIndex.build(i + offset)
+                    if isinstance(child, term.VarInTerm):
+                        deref = child.getbinding()
+                        if deref is not None:
+                            self.set_storage(i, deref)
+                    self.move_child(i, i + offset)
             for i in range(obj.size_storage()):
                 child = obj.get_storage(i)
                 self.set_storage(i + index, child)
                 # XXX whew, subtle logic here
                 if isinstance(child, term.VarInTerm):
-                    indicator = child.indicator
                     deref = child.getbinding()
-                    self = self._make_mutable()
                     if deref is None:
+                        self = self._make_mutable()
                         child.parent = self
                         child.indicator = term.VarInTermIndex.build(i + index)
                     else:
                         self.set_storage(i + index, deref)
         return self
+
+    def move_child(self, index, newindex):
+        child = self.get_storage(index)
+        if isinstance(child, term.VarInTerm):
+            child = child.move(self, index, newindex)
+        self.set_storage(newindex, child)
 
     def replace_child(self, index, obj):
         if isinstance(obj, ShapedCallableBase):
