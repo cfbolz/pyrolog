@@ -135,11 +135,22 @@ class SharingShape(Shape):
         return shaped_callable.new(self, storage)
 
     @jit.unroll_safe
-    def resolve_at(self, i, shaped_callable):
-        index = 0
-        for j in range(i):
-            index += self.children[j].num_storage_vars()
-        return self.children[i].resolve(shaped_callable, index)
+    def _find_storage_index(self, argument_index):
+        storage_index = 0
+        for j in range(argument_index):
+            storage_index += self.children[j].num_storage_vars()
+        return storage_index
+
+    def resolve_at(self, argument_index, shaped_callable):
+        return self.children[argument_index].resolve(shaped_callable,
+                self._find_storage_index(argument_index))
+
+    def resolve_indicator(self, indicator, shaped_callable):
+        storage_index = 0
+        for i in indicator.path:
+            storage_index += self._find_storage_index(i)
+            self = self.children[i]
+        return self.resolve(shaped_callable, storage_index)
 
     def get_path(self, index):
         return self.paths[index]

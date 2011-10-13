@@ -259,9 +259,8 @@ class VarInTermPath(VarInTermIndicator):
 
     @jit.unroll_safe
     def get(self, obj):
-        for i in self.path:
-            obj = obj.argument_at(i)
-        return obj
+        from prolog.interpreter.shape import ShapedCallableMutable
+        return obj.get_shape().resolve_indicator(self, obj)
 
 # _____________________________________________________________________
 
