@@ -504,6 +504,7 @@ class Callable(NonVar):
         raise NotImplementedError("abstract base")
     
     @specialize.arg(3)
+    @jit.unroll_safe
     def basic_unify(self, other, heap, occurs_check=False):
         if (isinstance(other, Callable) and
                 self.signature().eq(other.signature())):
