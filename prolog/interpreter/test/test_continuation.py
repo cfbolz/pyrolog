@@ -978,6 +978,68 @@ def trace_init_test(database):
     e.tracewrapper.show_info = False
     return order, e
 
+def test_trace_crop():
+    order, e = trace_init_test("""
+    f(1, 1).
+    f(2, 2).
+    f(3, X) :- X = 1.
+    """)
+    e.run(parse_query_term("trace, f(1, 1), f(2, 2), f(3, 1)."), e.modulewrapper.user_module)
+    c = "creep\n"
+    assert order == ["Call: (1) f(1, 1) ?",c,"Exit: (1) f(1, 1) ?",c,
+            "Call: (1) f(2, 2) ?",c,"Exit: (1) f(2, 2) ?",c,
+            "Call: (1) f(3, 1) ?",c,"Call: (2) 1=1 ?",c,
+            "Exit: (2) 1=1 ?",c,"Exit: (1) f(3, 1) ?",c]
+
+# XXX write test for forced fail within and-compounded terms
+
+# XXX
+def test_trace_crop_fails():
+    order, e = trace_init_test("""
+    f(1, 1).
+    f(2, 2).
+    f(3, X) :- X = 1.
+    """)
+    p = parse_query_term("trace, f(1, 1), f(2, 2), f(3, 3).")
+    py.test.raises(UnificationFailed, e.run, p, e.modulewrapper.user_module)
+    c = "creep\n"
+    assert order == ["Call: (1) f(1, 1) ?",c,"Exit: (1) f(1, 1) ?",c,
+            "Call: (1) f(2, 2) ?",c,"Exit: (1) f(2, 2) ?",c,
+            "Call: (1) f(3, 3) ?",c,"Call: (2) 3=1 ?",c,
+            "Fail: (2) 3=1 ?",c,"Fail: (1) f(3, 3) ?",c]
+
+def test_trace_crop_redo():
+    order, e = trace_init_test("""
+    f(X) :- X = 1 ; X = 2.
+    f(X) :- X = x.
+    """)
+    e.run(parse_query_term("trace, f(1), f(x), f(2)."), e.modulewrapper.user_module)
+    c = "creep\n"
+    assert order == ["Call: (1) f(1) ?",c,"Call: (2) 1=1 ?",c,"Exit: (2) 1=1 ?",c,
+            "Exit: (1) f(1) ?",c,"Call: (1) f(x) ?",c,"Call: (2) x=1 ?",c,
+            "Fail: (2) x=1 ?",c,"Call: (2) x=2 ?",c,"Fail: (2) x=2 ?",c,
+            "Redo: (1) f(x) ?",c,"Call: (2) x=x ?",c,"Exit: (2) x=x ?",c,
+            "Exit: (1) f(x) ?",c,"Call: (1) f(2) ?",c,"Call: (2) 2=1 ?",c,
+            "Fail: (2) 2=1 ?",c,"Call: (2) 2=2 ?",c,"Exit: (2) 2=2 ?",c,
+            "Exit: (1) f(2) ?",c]
+
+def test_trace_crop_redo_fail():
+    order, e = trace_init_test("""
+    f(X) :- X = 1 ; X = 2.
+    f(X) :- X = x.
+    """)
+    p = parse_query_term("trace, f(1), f(x), f(3).")
+    py.test.raises(UnificationFailed, e.run, p, e.modulewrapper.user_module)
+    c = "creep\n"
+    assert order == ["Call: (1) f(1) ?",c,"Call: (2) 1=1 ?",c,"Exit: (2) 1=1 ?",c,
+            "Exit: (1) f(1) ?",c,"Call: (1) f(x) ?",c,"Call: (2) x=1 ?",c,
+            "Fail: (2) x=1 ?",c,"Call: (2) x=2 ?",c,"Fail: (2) x=2 ?",c,
+            "Redo: (1) f(x) ?",c,"Call: (2) x=x ?",c,"Exit: (2) x=x ?",c,
+            "Exit: (1) f(x) ?",c,"Call: (1) f(3) ?",c,"Call: (2) 3=1 ?",c,
+            "Fail: (2) 3=1 ?",c,"Call: (2) 3=2 ?",c,"Fail: (2) 3=2 ?",c,
+            "Redo: (1) f(3) ?",c,"Call: (2) 3=x ?",c,"Fail: (2) 3=x ?",c,
+            "Fail: (1) f(3) ?",c]
+
 # XXX Test controls:
 # - repeat
 # - !
@@ -1019,20 +1081,6 @@ def test_trace_repeat():
             "Call: (2) fact(3) ?",c,"Exit: (2) fact(3) ?",c,
             "Exit: (1) all_facts ?",c]
 
-# XXX
-def test_trace_crop_fails():
-    order, e = trace_init_test("""
-    f(1, 1).
-    f(2, 2).
-    f(3, X) :- X = 1.
-    """)
-    p = parse_query_term("trace, f(1, 1), f(2, 2), f(3, 3).")
-    py.test.raises(UnificationFailed, e.run, p, e.modulewrapper.user_module)
-    c = "creep\n"
-    assert order == ["Call: (1) f(1, 1) ?",c,"Exit: (1) f(1, 1) ?",c,
-            "Call: (1) f(2, 2) ?",c,"Exit: (1) f(2, 2) ?",c,
-            "Call: (1) f(3, 3) ?",c,"Call: (2) 3=1 ?",c,
-            "Fail: (2) 3=1 ?",c,"Fail: (1) f(3, 3) ?",c]
 
 # _____________________________Automated test
 
