@@ -732,6 +732,7 @@ class TraceSuccessContinuation(Continuation):
                 else:
                     write("\n")
 
+            # XXX make with dict
             decision = getattr(self, "action_"+res)
             ans = decision(fcont, heap)
             if ans is not None:
@@ -746,6 +747,9 @@ class TraceSuccessContinuation(Continuation):
         if self.port == "Call":
             nextcont, fcont, heap = self.innercont.activate(fcont, heap)
             depth += 1
+        elif self.port == "Exit" and isinstance(fcont, TraceFailureContinuation):
+            # unwrap corresponding fail
+            fcont = fcont.innerfcont
         nextcont = nextcont.trace_wrap(depth)
         fcont = nextcont.make_next_fcont(fcont)
         return nextcont, fcont, heap
@@ -806,10 +810,11 @@ class TraceSuccessContinuation(Continuation):
     # XXX crop processed TraceFailureContinuations
     def make_next_fcont(self, fcont):
         """ Prepend an element to fcont-chain for fail output, if innercont fails. """
-        nextc = self.innercont
-        if isinstance(nextc, RuleContinuation) or (isinstance(nextc, BuiltinContinuation) and
-                    nextc.builtin.should_trace):
-            fcont = fcont.trace_wrap(self.depth, scont=self)
+        if self.port != "Exit":
+            nextc = self.innercont
+            if isinstance(nextc, RuleContinuation) or (isinstance(nextc, BuiltinContinuation) and
+                        nextc.builtin.should_trace):
+                fcont = fcont.trace_wrap(self.depth, scont=self)
         return fcont
 
     def trace_wrap(self, depth, query=None):
