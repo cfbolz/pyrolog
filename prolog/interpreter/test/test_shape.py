@@ -380,3 +380,29 @@ def test_functional_test():
     assert l == range(100)
     res = env['X']
     assert len(res.get_full_storage()) == shape.SHAPED_CALLABLE_SIZE
+
+
+def test_functional_meta():
+    from prolog.interpreter.continuation import Engine
+    from prolog.interpreter.test.tool import assert_true, get_engine
+    from prolog.interpreter.helper import unwrap_list
+    e = get_engine("""
+        run(X, Y) :- catch(solve([X]), done(Y), true).
+        solve([]).
+        solve([A | T]) :-
+            my_pred(A, T, T1),
+            solve(T1).
+
+        my_pred(app(X, Y, Z), T, _) :- throw(done([app(X, Y, Z) | T])).
+        my_pred(nrev([], []), T, T).
+        my_pred(nrev([X | Y], Z), Rest, [nrev(Y, Z1), app(Z1, [X], Z) | Rest]).
+    """)
+
+    for i in range(10):
+        env = assert_true("run(nrev(%s, X), Y)." % range(20), e)
+    dot = signature.Signature.getsignature(".", 2)
+    app = signature.Signature.getsignature("app", 3)
+    shape = env['Y'].shape
+    assert shape.signature.eq(dot)
+    assert shape.children[0].signature.eq(app)
+
