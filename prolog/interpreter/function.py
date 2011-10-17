@@ -65,7 +65,7 @@ class Rule(object):
         body = self.body
         if body is None:
             return None
-        return self.body_standardizer.make_shaped_callable(env, heap)
+        return self.body_standardizer.make_shaped_callable(heap, env)
 
     def __repr__(self):
         if self.body is None:

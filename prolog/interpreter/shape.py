@@ -528,12 +528,18 @@ class ShapedCallable(ShapedCallableMixin, ShapedCallableBase):
 def make_standardizer(w_obj):
     memo = []
     shape = term_with_numbered_vars_to_shape(w_obj, memo)
-    return Standardizer(shape, memo[:])
+    if isinstance(shape, SharingShape):
+        w_obj = ShapedCallable(shape, memo[:])
+    elif isinstance(shape, WrapShape):
+        w_obj = shape.w_obj
+    else:
+        assert 0, "should be unreachable"
+    return Standardizer(w_obj)
 
 def term_with_numbered_vars_to_shape(w_obj, memo):
     from prolog.interpreter import term
     if isinstance(w_obj, term.NumberedVar):
-        memo.append(w_obj.num)
+        memo.append(w_obj)
         return InStorageShape.build()
     elif isinstance(w_obj, term.Callable):
         argshapes = [term_with_numbered_vars_to_shape(w_arg, memo)
@@ -542,26 +548,12 @@ def term_with_numbered_vars_to_shape(w_obj, memo):
     return WrapShape(w_obj)
 
 class Standardizer(object):
-    _immutable_fields_ = ["shape", "memo[*]"]
-    def __init__(self, shape, memo):
-        self.shape = shape
-        self.memo = memo
+    _immutable_fields_ = ["w_obj"]
+    def __init__(self, w_obj):
+        self.w_obj = w_obj
 
-    @jit.unroll_safe
-    def make_shaped_callable(self, env, heap):
-        storage = [None] * len(self.memo)
-        for i in range(len(self.memo)):
-            index = self.memo[i]
-            if index < 0:
-                # XXX introduce an UnsharedVar class?
-                obj = heap.newvar()
-            else:
-                obj = env[index]
-                if obj is None:
-                    # XXX use newvar_in_term?
-                    obj = env[index] = heap.newvar()
-            storage[i] = obj
-        return ShapedCallable.build(self.shape, storage)
+    def make_shaped_callable(self, heap, env):
+        return self.w_obj.copy_standardize_apart(heap, env)
 
 # _____________________________________________________________________
 

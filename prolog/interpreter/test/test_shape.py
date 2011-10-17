@@ -80,49 +80,49 @@ def test_make_standardizer():
                                       term.NumberedVar(0),
                                       term.NumberedVar(1)])
     std = shape.make_standardizer(w_obj)
-    s = std.shape
+    s = std.w_obj.shape
     assert isinstance(s, shape.SharingShape)
     assert s.children[0].w_obj.signature().name == "a"
     assert s.children[1].w_obj.num == 12
     assert isinstance(s.children[2], shape.InStorageShape)
     assert isinstance(s.children[3], shape.InStorageShape)
-    w_obj = std.make_shaped_callable([4, 5], None)
+    w_obj = std.make_shaped_callable(None, [4, 5])
     assert w_obj.get_full_storage() == [4, 5]
 
 
     w_obj = term.Callable.build("f", [term.Callable.build("a"),
                                       term.Number(12)])
     std = shape.make_standardizer(w_obj)
-    s = std.shape
-    assert isinstance(s, shape.WrapShape)
-    assert s.w_obj.signature().name == "f"
-    w_obj = std.make_shaped_callable([], None)
-    assert w_obj is s.w_obj
+    w_obj = std.make_shaped_callable(None, [])
+    assert w_obj is std.w_obj
 
     w_obj = term.Callable.build("f", [term.NumberedVar(0),
                                       term.NumberedVar(0),
                                       term.NumberedVar(1),
                                       term.NumberedVar(-1)])
     std = shape.make_standardizer(w_obj)
-    s = std.shape
+    s = std.w_obj.shape
     assert s.signature.name == "f"
     assert isinstance(s.children[0], shape.InStorageShape)
     assert isinstance(s.children[1], shape.InStorageShape)
     assert isinstance(s.children[2], shape.InStorageShape)
     assert isinstance(s.children[3], shape.InStorageShape)
-    assert std.memo == [0, 0, 1, -1]
     class FakeHeap(object):
         def newvar(self):
             return 7
-    w_obj = std.make_shaped_callable([4, 5], FakeHeap())
+        def newvar_in_term(self, parent, index):
+            return 7
+    w_obj = std.make_shaped_callable(FakeHeap(), [4, 5])
     assert w_obj.get_full_storage() == [4, 4, 5, 7]
-    w_obj = std.make_shaped_callable([4, None], FakeHeap())
+    w_obj = std.make_shaped_callable(FakeHeap(), [4, None])
     assert w_obj.get_full_storage() == [4, 4, 7, 7]
 
     class FakeHeap(object):
         def newvar(self):
             return object()
-    w_obj = std.make_shaped_callable([None, None], FakeHeap())
+        def newvar_in_term(self, parent, index):
+            return 7
+    w_obj = std.make_shaped_callable(FakeHeap(), [None, None])
     assert w_obj.get_storage(0) is w_obj.get_storage(1)
 
 def test_replace():
