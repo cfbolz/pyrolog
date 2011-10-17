@@ -18,8 +18,12 @@ class TestLLtype(LLJitMixin):
         app([], X, X).
         app([H | T1], T2, [H | T3]) :-
             app(T1, T2, T3).
+        infloop([1 | T]) :- infloop(T).
+        infloop2(In, Out) :- infloop2([1 | In], Out).
         loop(0, []).
-        loop(X, [H|T]) :- X > 0, X0 is X - 1, loop(X0, T).
+        loop(X, [X0|T]) :- X > 0, X0 is X - 1, loop(X0, T).
+        loop_crazy(0, []).
+        loop_crazy(X, [Y|T]) :- X > 0, X0 is X - 1, Y is (37 * X0) mod 97, loop_crazy(X0, T).
         loop1(0, []).
         loop1(N, [H|T]) :- N > 0, N1 is N - 1, !, loop1(N1, T).
         loop1(N, [H|T]) :- N > 0, N1 is N - 1, loop1(N1, T).
@@ -123,15 +127,23 @@ class TestLLtype(LLJitMixin):
         )
 
         t1 = parse_query_term("app([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], [8, 9], X), X == [1, 2, 3, 4, 5, 6, 8, 9].")
-        #t2 = parse_query_term("loop_when(100).")
-        t2 = parse_query_term("freeze_list(15, T).")
+        t2 = parse_query_term("loop(1000, T), append(T, T, T1).")
+        t2 = parse_query_term("loop(1000, T), map(add1, T, T1).")
+        t2 = parse_query_term("loop(1000, T), reverse(T, [], T1).")
+        #t2 = parse_query_term("infloop(_).")
+        #t2 = parse_query_term("infloop2([], _).")
+        #t2 = parse_query_term("freeze_list(15, T).")
         t3 = parse_query_term("reverse([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [], X), X == [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1].")
-        t4 = parse_query_term("run(app([1, 2, 3, 4, 5, 6, 7], [8, 9], X)), X == [1, 2, 3, 4, 5, 6, 7, 8, 9].")
+        t4 = parse_query_term("run(nrev(%s, Y))." % range(100))
+        t4 = parse_query_term("nrev(%s, Y)." % range(100))
         t5 = parse_query_term("map(add1, [1, 2, 3, 4, 5, 6, 7], X), X == [2, 3, 4, 5, 6, 7, 8].")
         t6 = parse_query_term("partition([6, 6, 6, 6, 6, 6, 66, 3, 6, 1, 2, 6, 8, 9, 0,4, 2, 5, 1, 106, 3, 6, 1, 2, 6, 8, 9, 0,4, 2, 5, 1, 10, 3, 6, 1, 2, 6, 8, 9, 0,4, 2, 5, 1, 10], 5, X, Y).")
+        t6 = parse_query_term("loop_crazy(1000, X), partition(X, 50, _, _).")
+        t6 = parse_query_term("loop(1000, X), partition(X, 500, _, _).")
         t7 = parse_query_term("findall(X+Y, app([X|_], [Y|_], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]), L).")
         def interp_w(c):
             jitdriver.set_param("inlining", True)
+            jitdriver.set_param("threshold", 10)
             if c == 1:
                 t = t1
             elif c == 2:
@@ -152,7 +164,7 @@ class TestLLtype(LLJitMixin):
         # XXX
         #interp_w(2)
 
-        self.meta_interp(interp_w, [1], listcomp=True, backendopt=True,
+        self.meta_interp(interp_w, [4], listcomp=True, backendopt=True,
                          listops=True)
         #self.meta_interp(interp_w, [3], listcomp=True,
         #                 listops=True)

@@ -6,8 +6,11 @@ class FakeShapedCallable(object):
     def __init__(self, l):
         self.storage = l
 
-    def get_storage(self, i):
+    def get_raw_storage(self, i):
         return self.storage[i]
+
+def erased_storage(l):
+    return FakeShapedCallable([shape.erase(o) for o in l])
 
 def test_instorage_build():
     assert shape.InStorageShape.build() is shape.InStorageShape.build()
@@ -26,17 +29,20 @@ def test_sharing_build():
 
 def test_wrapshape_resolve():
     s = shape.WrapShape(term.Callable.build("a", [term.Number(1)]))
-    w_obj = s.resolve(FakeShapedCallable([1, 2, 3]), 0)
+    w_obj = s.resolve(erased_storage([1, 2, 3]), 0)
     assert w_obj.name() == "a"
     assert w_obj.argument_at(0).num == 1
 
 
 def test_instorage_resolve():
     s = shape.InStorageShape()
-    assert s.resolve(FakeShapedCallable([1, 2, 3]), 0) == 1
-    assert s.resolve(FakeShapedCallable([1, 2, 3]), 1) == 2
-    assert s.resolve(FakeShapedCallable([1, 2, 3]), 2) == 3
+    assert s.resolve(erased_storage([1, 2, 3]), 0) == 1
+    assert s.resolve(erased_storage([1, 2, 3]), 1) == 2
+    assert s.resolve(erased_storage([1, 2, 3]), 2) == 3
 
+def test_instorage_int_resolve():
+    s = shape.InStorageIntShape()
+    assert s.resolve(FakeShapedCallable([shape.rerased.erase_int(1)]), 0).num == 1
 
 def test_sharing_resolve():
     sig = signature.Signature.getsignature("f", 2)
@@ -44,8 +50,8 @@ def test_sharing_resolve():
         shape.WrapShape(term.Callable.build("a")),
         shape.InStorageShape()
     ])
-    assert s.resolve_at(0, FakeShapedCallable([1, 2])).name() == "a"
-    assert s.resolve_at(1, FakeShapedCallable([1, 2])) == 1
+    assert s.resolve_at(0, erased_storage([1, 2])).name() == "a"
+    assert s.resolve_at(1, erased_storage([1, 2])) == 1
 
     w_obj = s.resolve(shape.ShapedCallable(s, [2]), 0)
     assert isinstance(w_obj, shape.ShapedCallable)

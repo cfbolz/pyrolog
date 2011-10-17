@@ -1,7 +1,9 @@
-from pypy.rlib import jit, objectmodel, debug, unroll
+from pypy.rlib import jit, objectmodel, debug, unroll, rerased
 from prolog.interpreter import term
 from prolog.interpreter.graphviz import _dot, view
 # a Callable implementation that tries to save memory
+
+erase, unerase = rerased.new_erasing_pair("pyrolog")
 
 # XXX tune this
 MAX_DEPTH = 6
@@ -61,7 +63,7 @@ class InStorageShape(Shape):
         return InStorageShape._singleton
 
     def resolve(self, shaped_callable, index):
-        return shaped_callable.get_storage(index)
+        return unerase(shaped_callable.get_raw_storage(index))
 
     def num_storage_vars(self):
         return 1
@@ -72,8 +74,21 @@ class InStorageShape(Shape):
 
     def str(self):
         return "InStorageShape()"
-
 InStorageShape._singleton = InStorageShape()
+
+class InStorageIntShape(InStorageShape):
+    @staticmethod
+    def build():
+        return InStorageIntShape._singleton
+
+    def resolve(self, shaped_callable, index):
+        val = rerased.unerase_int(shaped_callable.get_raw_storage(index))
+        return term.Number(val)
+
+    def str(self):
+        return "InStorageIntShape()"
+InStorageIntShape._singleton = InStorageIntShape()
+
 
 def shape_eq((sig1, children1), (sig2, children2)):
     return sig1 is sig2 and children1 == children2
