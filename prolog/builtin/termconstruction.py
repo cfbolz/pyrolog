@@ -26,6 +26,7 @@ def impl_functor(engine, heap, t, functor, arity):
                 t.unify(helper.ensure_atomic(functor), heap)
             else:
                 name = helper.unwrap_atom(functor)
+                # XXX use newvar_in_term
                 t.unify(
                     term.Callable.build(name, [heap.newvar() for i in range(a)]),
                     heap)

@@ -15,6 +15,7 @@ class FindallContinuation(continuation.Continuation):
     def activate(self, fcont, _):
         m = memo.CopyMemo()
         clone = self.template.copy(self.heap, m)
+        # XXX newvar_in_term
         newresultvar = self.heap.newvar()
         result = term.Callable.build(".", [clone, newresultvar])
         self.resultvar.setvalue(result, self.heap)

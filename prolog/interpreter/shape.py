@@ -553,11 +553,12 @@ class Standardizer(object):
         for i in range(len(self.memo)):
             index = self.memo[i]
             if index < 0:
-                # XXX
+                # XXX introduce an UnsharedVar class?
                 obj = heap.newvar()
             else:
                 obj = env[index]
                 if obj is None:
+                    # XXX use newvar_in_term?
                     obj = env[index] = heap.newvar()
             storage[i] = obj
         return ShapedCallable.build(self.shape, storage)
