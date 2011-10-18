@@ -1,4 +1,4 @@
-from pypy.rlib import jit, objectmodel, debug, unroll, rerased
+from pypy.rlib import jit, objectmodel, debug, unroll, rerased, rarithmetic
 from prolog.interpreter import term
 from prolog.interpreter.graphviz import _dot, view
 # a Callable implementation that tries to save memory
@@ -88,25 +88,35 @@ class InStorageIntShape(InStorageShape):
         val = rerased.unerase_int(shaped_callable.get_raw_storage(index))
         return term.Number(val)
 
-    def write(self, shaped_callable, i, val):
-        assert isinstance(val, term.Number)
-        r_val = rerased.erase_int(val.num) # does not raise OverflowError
+    def write(self, shaped_callable, i, obj):
+        if obj is None:
+            val = -41 # need an initialization value
+        else:
+            val = obj.num
+        r_val = rerased.erase_int(val)
         shaped_callable.set_raw_storage(i, r_val)
 
     def str(self):
         return "InStorageIntShape()"
 InStorageIntShape._singleton = InStorageIntShape()
 
+def can_be_tagged(obj):
+    val = obj.num
+    # bit sucky
+    try:
+        rarithmetic.ovfcheck(val + val)
+    except OverflowError:
+        return False
+    return True
 
 def shape_eq((sig1, children1), (sig2, children2)):
     return sig1 is sig2 and children1 == children2
 
 def shape_hash((sig, children)):
-    from pypy.rlib.rarithmetic import intmask
     x = objectmodel.compute_identity_hash(sig)
     for item in children:
         y = objectmodel.compute_identity_hash(item)
-        x = intmask((1000003 * x) ^ y)
+        x = rarithmetic.intmask((1000003 * x) ^ y)
     return x
 
 class SharingShape(Shape):
@@ -268,6 +278,9 @@ class ShapedCallableBase(term.Callable):
     def get_storage(self, i):
         raise NotImplementedError("abstract base class")
 
+    def get_storage_using_shape(self, i, shape):
+        raise NotImplementedError("abstract base class")
+
     def set_storage(self, i, val):
         raise NotImplementedError("abstract base class")
 
@@ -279,7 +292,6 @@ class ShapedCallableBase(term.Callable):
 
     @jit.unroll_safe
     def get_mode(self):
-        from pypy.rlib.rarithmetic import intmask
         mode = 0x345678
         for i in range(self.size_storage()):
             child = self.get_storage(i)
@@ -292,7 +304,7 @@ class ShapedCallableBase(term.Callable):
                     y = objectmodel.compute_identity_hash(shape)
                 else:
                     y = 0
-            mode = intmask((1000003 * mode) ^ y)
+            mode = rarithmetic.intmask((1000003 * mode) ^ y)
         return mode
 
 UNROLL_N = unroll.unrolling_iterable(range(SHAPED_CALLABLE_SIZE))
@@ -331,8 +343,11 @@ class ShapedCallableMixin:
             self.rest_storage[i - SHAPED_CALLABLE_SIZE] = r_val
 
     def get_storage(self, i):
+        return self.get_storage_using_shape(i, self.get_shape())
+
+    def get_storage_using_shape(self, i, shape):
         jit.promote(i)
-        return self.get_shape().storage[i].resolve(self, i)
+        return shape.storage[i].resolve(self, i)
 
     def set_storage(self, i, val):
         jit.promote(i)
@@ -485,11 +500,11 @@ class ShapedCallableMixin:
         self.set_shape(new_shape)
         if offset < 0:
             for i in range(index + 1, self.size_storage()):
-                self.move_child(i, i + offset)
+                self.move_child(i, i + offset, old_shape)
         else:
             if offset > 0:
                 for i in range(old_shape.num_storage_vars() - 1, index, -1):
-                    self.move_child(i, i + offset)
+                    self.move_child(i, i + offset, old_shape)
             for i in range(obj.size_storage()):
                 child = obj.get_storage(i)
                 # XXX whew, subtle logic here
@@ -504,18 +519,24 @@ class ShapedCallableMixin:
                 self.set_storage(i + index, child)
         return self
 
-    def move_child(self, index, newindex):
-        child = self.get_storage(index)
+    def move_child(self, index, newindex, old_shape):
+        child = self.get_storage_using_shape(index, old_shape)
         if isinstance(child, term.VarInTerm):
             child = child.move(self, index, newindex)
         self.set_storage(newindex, child)
 
     def replace_child(self, index, obj):
+        shape = self.get_shape()
         if isinstance(obj, ShapedCallableBase):
-            new_shape = self.get_shape().get_transition(index, obj.get_shape())
+            new_shape = shape.get_transition(index, obj.get_shape())
             if new_shape is not None:
                 assert new_shape.num_storage_vars() <= SHAPED_CALLABLE_SIZE
                 return self._replace_child(index, obj, new_shape)
+        elif isinstance(obj, term.Number) and can_be_tagged(obj):
+            new_shape = shape.replace(index, InStorageIntShape.build())
+            self.set_shape(new_shape)
+            # new shape will take care to store unwrapped
+            self.set_storage(index, obj)
         return None
 
     @staticmethod
@@ -558,8 +579,14 @@ class ShapedCallableMutable(ShapedCallableMixin, ShapedCallableBase):
 class ShapedCallable(ShapedCallableMixin, ShapedCallableBase):
     _immutable_fields_ = ["shape", "rest_storage[*]"] + ["a%s" % i for i in range(SHAPED_CALLABLE_SIZE)]
 
+    @jit.unroll_safe
     def _make_mutable(self):
-        return ShapedCallableMutable(self.get_shape(), self.get_full_storage())
+        result = objectmodel.instantiate(ShapedCallableMutable)
+        result.shape = self.shape
+        for i in range(SHAPED_CALLABLE_SIZE):
+            result.set_raw_storage(i, self.get_raw_storage(i))
+        result.rest_storage = self.rest_storage
+        return result
 
     def new(self, shape, storage):
         return ShapedCallable(shape, storage)

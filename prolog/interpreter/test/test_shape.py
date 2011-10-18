@@ -241,6 +241,26 @@ def test_replace_child_fixup_varinterm_from_replacement():
     assert res.get_storage(2).parent is res
     assert res.get_storage(2).indicator.index == 2
 
+def test_shaped_callable_replace_child_int():
+    import sys
+    sig = signature.Signature.getsignature(".", 2)
+    build = shape.SharingShape
+    X = shape.InStorageShape.build()
+    s1 = build(sig, [X, X])
+    a = term.Callable.build("a")
+    b = term.Callable.build("b")
+    nil = term.Callable.build("[]")
+    c1 = shape.ShapedCallable(s1, [a, None])
+    c2 = term.Number(27)
+    res = c1.replace_child(1, c2)
+    assert res is None
+    assert shape.rerased.unerase_int(c1.get_raw_storage(1)) == 27
+    c1 = shape.ShapedCallable(s1, [a, None])
+    c2 = term.Number(sys.maxint)
+    res = c1.replace_child(1, c2)
+    assert res is None
+    assert shape.unerase(c1.get_raw_storage(1)) is None
+
 def test_depth():
     sig = signature.Signature.getsignature(".", 2)
     b = shape.SharingShape.build

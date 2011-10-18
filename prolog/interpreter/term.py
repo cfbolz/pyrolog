@@ -209,6 +209,8 @@ class VarInTerm(Var):
         path = obj.get_shape().get_path(index)
         newobj = obj.replace_child(index, value)
         if newobj is None:
+            # unfortunately this can lead to another write in the case where
+            # value is an int
             obj.set_storage(index, value)
         else:
             assert newobj is obj
