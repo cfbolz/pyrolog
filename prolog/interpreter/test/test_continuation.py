@@ -978,6 +978,23 @@ def trace_init_test(database):
     e.tracewrapper.show_info = False
     return order, e
 
+def trace_init_test_gen(database, interactions):
+    e = get_engine(database)
+    order = []
+    def w(s):
+        if s != "\n":
+            order.append(s)
+    def gen():
+        for i in interactions:
+            yield i
+    responses = gen()
+    def g():
+        return responses.next()
+    e.tracewrapper.write = w
+    e.tracewrapper.getch = g
+    e.tracewrapper.show_info = False
+    return order, e
+
 def test_trace_crop():
     order, e = trace_init_test("""
     f(1, 1).
@@ -1038,7 +1055,35 @@ def test_trace_crop_redo_fail():
             "Exit: (1) f(x) ?",c,"Call: (1) f(3) ?",c,"Call: (2) 3=1 ?",c,
             "Fail: (2) 3=1 ?",c,"Call: (2) 3=2 ?",c,"Fail: (2) 3=2 ?",c,
             "Redo: (1) f(3) ?",c,"Call: (2) 3=x ?",c,"Fail: (2) 3=x ?",c,
-            "Fail: (1) f(3) ?",c]
+            "Fail: (1) f(3) ?",c,
+            "Call: (1) 1=2 ?",c,"Fail: (1) 1=2 ?",c,"Redo: (1) f(1) ?",c,
+            "Call: (2) 1=x ?",c,"Fail: (2) 1=x ?",c,"Fail: (1) f(1) ?",c]
+
+def test_trace_crop_append():
+    order, e = trace_init_test_gen("""
+    app([], X, X).
+    app([H|T], X, [H|R]) :-
+        app(T, X, R).
+
+    list([]).
+    list([H|T]) :-
+        list(T).
+
+    test([]).
+    test([X]).
+    test([X,Y|R]) :-
+        Y is X + 1,
+        test([Y|R]).
+    """, ["\n","\n","s","\n","\n","f","s","\n","s","\n","s","\n"])
+    e.run(parse_query_term("trace, list(X), app([1],X,Y), test(Y)."), e.modulewrapper.user_module)
+    c = "creep\n"
+    s = "skip\n"
+    assert order == ["Call: (1) list(_G0) ?",c,"Exit: (1) list([]) ?",c,"Call: (1) app([1], [], _G0) ?",s,
+            "Exit: (1) app([1], [], [1]) ?",c,"Call: (1) test([1]) ?",c,"Exit: (1) test([1]) ?","fail\n",
+            "Redo: (1) list(_G0) ?",s,"Exit: (1) list([_G0]) ?",c,"Call: (1) app([1], [_G0], _G1) ?",s,
+            "Exit: (1) app([1], [_G0], [1, _G0]) ?",c,"Call: (1) test([1, _G0]) ?",s,
+            "Exit: (1) test([1, 2]) ?",c]
+
 
 # XXX Test controls:
 # - repeat
