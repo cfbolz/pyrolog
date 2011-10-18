@@ -65,6 +65,9 @@ class InStorageShape(Shape):
     def resolve(self, shaped_callable, index):
         return unerase(shaped_callable.get_raw_storage(index))
 
+    def write(self, shaped_callable, i, val):
+        shaped_callable.set_raw_storage(i, erase(val))
+
     def num_storage_vars(self):
         return 1
 
@@ -85,6 +88,11 @@ class InStorageIntShape(InStorageShape):
         val = rerased.unerase_int(shaped_callable.get_raw_storage(index))
         return term.Number(val)
 
+    def write(self, shaped_callable, i, val):
+        assert isinstance(val, term.Number)
+        r_val = rerased.erase_int(val.num) # does not raise OverflowError
+        shaped_callable.set_raw_storage(i, r_val)
+
     def str(self):
         return "InStorageIntShape()"
 InStorageIntShape._singleton = InStorageIntShape()
@@ -102,7 +110,7 @@ def shape_hash((sig, children)):
     return x
 
 class SharingShape(Shape):
-    _immutable_fields_ = ["signature", "children[*]", "_num_storage_vars", "paths[*]"]
+    _immutable_fields_ = ["signature", "children[*]", "_num_storage_vars", "paths[*]", "storage[*]"]
     _cache = objectmodel.r_dict(shape_eq, shape_hash)
     _transitions = None
 
@@ -113,18 +121,23 @@ class SharingShape(Shape):
         children = debug.make_sure_not_resized(children)
         _num_storage_vars = 0
         paths = []
+        storage = []
         for i in range(len(children)):
             child = children[i]
             _num_storage_vars += child.num_storage_vars()
             if isinstance(child, InStorageShape):
                 paths.append(term.VarInTermPath([i]))
+                storage.append(child)
             elif isinstance(child, SharingShape):
                 for subpath in child.paths:
                     if subpath is not None:
                         paths.append(term.VarInTermPath([i] + subpath.path))
+                storage.extend(child.storage)
         self._num_storage_vars = _num_storage_vars
         assert len(paths) == _num_storage_vars
+        assert len(storage) == _num_storage_vars
         self.paths = paths[:]
+        self.storage = storage[:]
 
     @staticmethod
     def build(signature, children):
@@ -145,8 +158,6 @@ class SharingShape(Shape):
     def resolve(self, shaped_callable, index):
         storage = [shaped_callable.get_storage(i)
                       for i in range(index, index + self.num_storage_vars())]
-        # XXX fix up vars in term?
-        # XXX use build here?
         return shaped_callable.new(self, storage).compress()
 
     @jit.unroll_safe
@@ -305,28 +316,38 @@ class ShapedCallableMixin:
     def set_shape(self, shape):
         self.shape = shape
 
-    def get_storage(self, i):
+    def get_raw_storage(self, i):
         for n in UNROLL_N:
             if i == n:
                 return getattr(self, "a%s" % n)
         return self.rest_storage[i - SHAPED_CALLABLE_SIZE]
 
-    def set_storage(self, i, val):
-        assert val is not None
+    def set_raw_storage(self, i, r_val):
         for n in UNROLL_N:
             if i == n:
-                setattr(self, "a%s" % n, val)
+                setattr(self, "a%s" % n, r_val)
                 break
         else:
-            self.rest_storage[i - SHAPED_CALLABLE_SIZE] = val
+            self.rest_storage[i - SHAPED_CALLABLE_SIZE] = r_val
+
+    def get_storage(self, i):
+        jit.promote(i)
+        return self.get_shape().storage[i].resolve(self, i)
+
+    def set_storage(self, i, val):
+        jit.promote(i)
+        self.get_shape().storage[i].write(self, i, val)
 
     def size_storage(self):
         return self.get_shape().num_storage_vars()
 
 
+    @jit.unroll_safe
     def get_full_storage(self):
-        # this is very much over the top, but it was fun to do
         size = self.size_storage()
+        return [self.get_storage(i) for i in range(size)]
+
+        # this is very much over the top, but it was fun to do
         result = [None] * min(size, SHAPED_CALLABLE_SIZE)
         if size == 0:
             return result
@@ -338,11 +359,17 @@ class ShapedCallableMixin:
             n = SHAPED_CALLABLE_SIZE - 1
         for i in UNROLL_R:
             if n == i:
-                result[i] = getattr(self, "a%s" % i)
+                result[i] = self.get_storage(i)
                 n = i - 1
         return result
 
+    @jit.unroll_safe
     def set_full_storage(self, storage):
+        self.rest_storage = [erase(None)] * (len(storage) - SHAPED_CALLABLE_SIZE)
+        for i in range(len(storage)):
+            self.set_storage(i, storage[i])
+        return
+
         # this is very much over the top, but it was fun to do
         size = self.size_storage()
         self.rest_storage = None
@@ -515,7 +542,7 @@ class ShapedCallableMixin:
     _dot = _dot
 
 for i in range(SHAPED_CALLABLE_SIZE):
-    setattr(ShapedCallableMixin, "a%s" % i, None)
+    setattr(ShapedCallableMixin, "a%s" % i, erase(None))
 
 class ShapedCallableMutable(ShapedCallableMixin, ShapedCallableBase):
     def _make_immutable(self):
