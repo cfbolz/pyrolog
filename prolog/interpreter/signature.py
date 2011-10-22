@@ -68,9 +68,14 @@ class Signature(object):
 
     @jit.elidable_promote('all')
     def eq(self, other):
+        # slightly evil
+        if jit.isconstant(self):
+            jit.promote(other)
+        elif jit.isconstant(other):
+            jit.promote(self)
         return self is other or (
-                self.name == other.name and
-                self.numargs == other.numargs)
+                self.numargs == other.numargs and
+                self.name == other.name)
 
     @specialize.arg(1)
     def get_extra(self, name):
