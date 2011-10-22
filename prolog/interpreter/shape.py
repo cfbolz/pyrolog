@@ -101,6 +101,24 @@ class InStorageIntShape(InStorageShape):
         return "InStorageIntShape()"
 InStorageIntShape._singleton = InStorageIntShape()
 
+class InStorageAtomShape(InStorageShape):
+    @staticmethod
+    def build():
+        return InStorageAtomShape._singleton
+
+    def resolve(self, shaped_callable, index):
+        result = unerase(shaped_callable.get_raw_storage(index))
+        assert isinstance(result, term.Atom)
+        return result
+
+    def write(self, shaped_callable, i, val):
+        assert val is None or isinstance(val, term.Atom)
+        shaped_callable.set_raw_storage(i, erase(val))
+
+    def str(self):
+        return "InStorageAtomShape()"
+InStorageAtomShape._singleton = InStorageAtomShape()
+
 def can_be_tagged(obj):
     val = obj.num
     # bit sucky
@@ -540,6 +558,10 @@ class ShapedCallableMixin:
             new_shape = shape.replace(index, InStorageIntShape.build())
             self.set_shape(new_shape)
             # new shape will take care to store unwrapped
+            self.set_storage(index, obj)
+        elif isinstance(obj, term.Atom):
+            new_shape = shape.replace(index, InStorageAtomShape.build())
+            self.set_shape(new_shape)
             self.set_storage(index, obj)
         return None
 

@@ -44,6 +44,11 @@ def test_instorage_int_resolve():
     s = shape.InStorageIntShape()
     assert s.resolve(FakeShapedCallable([shape.rerased.erase_int(1)]), 0).num == 1
 
+def test_instorage_atom_resolve():
+    s = shape.InStorageAtomShape()
+    a = term.Atom.build("a")
+    assert s.resolve(erased_storage([a]), 0) is a
+
 def test_sharing_resolve():
     sig = signature.Signature.getsignature("f", 2)
     s = shape.SharingShape(sig, [
@@ -261,6 +266,21 @@ def test_shaped_callable_replace_child_int():
     assert res is None
     assert shape.unerase(c1.get_raw_storage(1)) is None
 
+def test_shaped_callable_replace_child_atom():
+    import sys
+    sig = signature.Signature.getsignature(".", 2)
+    build = shape.SharingShape
+    X = shape.InStorageShape.build()
+    s1 = build(sig, [X, X])
+    a = term.Callable.build("a")
+    b = term.Callable.build("b")
+    nil = term.Callable.build("[]")
+    c1 = shape.ShapedCallable(s1, [a, None])
+    res = c1.replace_child(1, nil)
+    assert res is None
+    assert isinstance(c1.shape.children[1], shape.InStorageAtomShape)
+    assert c1.get_full_storage() == [a, nil]
+
 def test_depth():
     sig = signature.Signature.getsignature(".", 2)
     b = shape.SharingShape.build
@@ -341,8 +361,8 @@ def test_copy_standardize_apart_compresses():
     s1.get_transition(1, s1)
     s2 = s1.get_transition(1, s1)
 
-    a = term.Callable.build("a")
-    b = term.Callable.build("b")
+    a = term.Float(0)
+    b = term.Float(1)
     c_numbered = shape.ShapedCallable(s1, [term.NumberedVar(0), term.NumberedVar(1)])
     c1 = shape.ShapedCallable(s1, [a, b])
     c2 = c_numbered.copy_standardize_apart(h, [a, c1])
