@@ -92,6 +92,7 @@ class InStorageIntShape(InStorageShape):
         if obj is None:
             val = -41 # need an initialization value
         else:
+            assert isinstance(obj, term.Number)
             val = obj.num
         r_val = rerased.erase_int(val)
         shaped_callable.set_raw_storage(i, r_val)
@@ -380,14 +381,17 @@ class ShapedCallableMixin:
 
     @jit.unroll_safe
     def set_full_storage(self, storage):
-        self.rest_storage = [erase(None)] * (len(storage) - SHAPED_CALLABLE_SIZE)
+        additional_size = max(0, len(storage) - SHAPED_CALLABLE_SIZE)
+        if additional_size:
+            self.rest_storage = [erase(None)] * additional_size
+        else:
+            self.rest_storage = None
         for i in range(len(storage)):
             self.set_storage(i, storage[i])
         return
 
         # this is very much over the top, but it was fun to do
         size = self.size_storage()
-        self.rest_storage = None
         if size == 0:
             return
         # the trick: "promote" size
