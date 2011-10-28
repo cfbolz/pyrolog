@@ -538,14 +538,16 @@ class ShapedCallableMixin:
                         child.indicator = term.VarInTermIndex.build(i + index)
                     else:
                         child = deref
-                self.set_storage(i + index, child)
+                self.set_raw_storage(i + index, obj.get_raw_storage(i))
         return self
 
     def move_child(self, index, newindex, old_shape):
         child = self.get_storage_using_shape(index, old_shape)
         if isinstance(child, term.VarInTerm):
             child = child.move(self, index, newindex)
-        self.set_storage(newindex, child)
+            self.set_storage(newindex, child)
+        else:
+            self.set_raw_storage(newindex, self.get_raw_storage(index))
 
     def replace_child(self, index, obj):
         shape = self.get_shape()
