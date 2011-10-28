@@ -123,7 +123,7 @@ def can_be_tagged(obj):
     val = obj.num
     # bit sucky
     try:
-        rarithmetic.ovfcheck(val + val)
+        rerased.erase_int(val)
     except OverflowError:
         return False
     return True
