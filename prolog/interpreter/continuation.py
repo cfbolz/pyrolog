@@ -480,7 +480,6 @@ class BuiltinContinuation(ContinuationWithModule):
 
     def trace_wrap(self, depth, query=None):
         if self.builtin.should_trace:
-            # XXX let Exit and Call Wrapper point to the same innercont
             nextcont = TraceSuccessContinuation("Exit", self, depth, query=self.query,
                     nextcont=self.nextcont)
             self = BuiltinContinuation(self.engine, self.module, nextcont, self.builtin,
@@ -535,7 +534,6 @@ class RuleContinuation(ContinuationWithModule):
         return "<RuleContinuation rule=%r query=%r>" % (self._rule, self.query)
 
     def trace_wrap(self, depth, query=None):
-        # XXX let Exit and Call wrapper point to the same innercont
         nextcont = TraceSuccessContinuation("Exit", self, depth, query=self.query, nextcont=self.nextcont)
         self = RuleContinuation(self.engine, self.module, nextcont, self._rule, self.query)
         nextcont.innercont = self
@@ -751,7 +749,8 @@ class TraceSuccessContinuation(Continuation):
             depth += 1
         elif self.port == "Exit" and isinstance(fcont, TraceFailureContinuation):
             # unwrap obsolete fail
-            fcont = fcont.innerfcont
+            if fcont.port == "Fail":
+                fcont = fcont.innerfcont
         nextcont = nextcont.trace_wrap(depth)
         fcont = nextcont.make_next_fcont(fcont)
         return nextcont, fcont, heap
@@ -773,6 +772,7 @@ class TraceSuccessContinuation(Continuation):
         elif self.port == "Exit":
             write("[retry]\n")
             nextcont = self.innercont.trace_wrap(self.depth)
+            nextcont.innercont.nextcont = self
         return nextcont, fcont, heap
 
     def action_goals(self, fcont, heap):
@@ -934,7 +934,7 @@ class TraceFailureContinuation(FailureContinuation):
                 return self.innerfcont.fail(heap)
             else:
                 if self.depth == self.scont.depth:
-                    raise error.UnificationFailed
+                    return self.orig_fcont.fail(heap)
                 # !!! not called yet
                 return self.action_creep(heap)
         else:
