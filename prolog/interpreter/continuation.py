@@ -706,16 +706,12 @@ class TraceSuccessContinuation(Continuation):
                                 "Error: err/1: Undefined procedure: "+sig+"\n")
                         raise e
                     self.raw_query = scont.raw_query
-                    # XXX fix problem with and-compounded terms
-                    # fcont = fcont.trace_unwrap()
                     fcont = fcont.trace_wrap(self.depth, scont=self)
                     fcont.fail(heap)
                     raise e
             else:
                 nextcont, fcont, heap = self.innercont.activate(fcont, heap)
             nextcont = nextcont.trace_wrap(self.depth)
-            # XXX fix problem with and-compounded terms
-            #fcont = fcont.trace_unwrap()
             fcont = nextcont.make_next_fcont(fcont)
             return nextcont, fcont, heap
 
@@ -814,7 +810,6 @@ class TraceSuccessContinuation(Continuation):
 
     # __________Helper methods
 
-    # XXX crop processed TraceFailureContinuations
     def make_next_fcont(self, fcont):
         """ Prepend an element to fcont-chain for fail output, if innercont fails. """
         if self.port != "Exit":
