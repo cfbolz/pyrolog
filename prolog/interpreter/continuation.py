@@ -925,21 +925,12 @@ class TraceFailureContinuation(FailureContinuation):
     def action_fail(self, heap):
         if self.port == "Fail":
             return self.action_creep(heap)
-        # just Redo port from here
-        if self.shall_fail and not self.fail_from_scont is self.scont:
-            # !!! not called yet
-            return self.action_creep(heap)
-        elif self.shall_fail and self.fail_from_scont is self.scont:
-            if isinstance(self.innerfcont, TraceFailureContinuation):
-                return self.innerfcont.fail(heap)
-            else:
+        # Redo:
+        if self.shall_fail and self.fail_from_scont is self.scont:
+            if not isinstance(self.innerfcont, TraceFailureContinuation):
                 if self.depth == self.scont.depth:
                     return self.orig_fcont.fail(heap)
-                # !!! not called yet
-                return self.action_creep(heap)
-        else:
-            #raise error.UnificationFailed
-            return self.orig_fcont.fail(heap)
+        return self.orig_fcont.fail(heap)
 
     def action_retry(self, heap):
         self.engine.tracewrapper.write("[retry]\n")
