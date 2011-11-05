@@ -692,11 +692,6 @@ class TraceSuccessContinuation(Continuation):
     def is_done(self):
         return False
 
-    # XXX foreach builtin control make a test, that are:
-        # cut
-        # ->
-        # not, \+
-    # XXX refactor translatedmain, see todo marks
     # XXX optimize
     def activate(self, fcont, heap):
         if not self.port in ["Call", "Exit", "Exception", None]:
