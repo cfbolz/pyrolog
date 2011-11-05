@@ -673,6 +673,11 @@ class TraceSuccessContinuation(Continuation):
             query = self.innercont.query
         self.query = query
         self.raw_query = format_query(self.engine, self.query)
+        self.actions = {"creep":self.action_creep, "fail":self.action_fail,
+                "retry":self.action_retry,"goals":self.action_goals,
+                "skip":self.action_skip,"print":self.action_print,
+                "write":self.action_write,"leap":self.action_leap,
+                "abort":self.action_abort}
 
     def is_done(self):
         return False
@@ -728,13 +733,11 @@ class TraceSuccessContinuation(Continuation):
                 else:
                     write("\n")
 
-            # XXX make with dict
-            decision = getattr(self, "action_"+res)
+            decision = self.actions[res]
             ans = decision(fcont, heap)
             if ans is not None:
                 scont, fcont, heap = ans # raise if not compatible
                 return scont, fcont, heap
-
     # __________Action methods
 
     def action_creep(self, fcont, heap):
@@ -862,6 +865,11 @@ class TraceFailureContinuation(FailureContinuation):
         self.query = scont.query
         self.undoheap = self.innerfcont.undoheap
         self.orig_fcont = self.innerfcont.orig_fcont
+        self.actions = {"creep":self.action_creep, "fail":self.action_fail,
+                "retry":self.action_retry,"goals":self.action_goals,
+                "skip":self.action_skip,"print":self.action_print,
+                "write":self.action_write,"leap":self.action_leap,
+                "abort":self.action_abort}
 
     def is_done(self):
         return False
@@ -898,8 +906,7 @@ class TraceFailureContinuation(FailureContinuation):
             if self.shall_fail:
                 res = "fail"
 
-            # XXX make with dict
-            decision = getattr(self, "action_"+res)
+            decision = self.actions[res]
             ans = decision(heap)
             if ans is not None:
                 scont, fcont, heap = ans # raise if not compatible
