@@ -485,6 +485,7 @@ class BuiltinContinuation(ContinuationWithModule):
                     nextcont=self.nextcont)
             self = BuiltinContinuation(self.engine, self.module, nextcont, self.builtin,
                     self.query)
+            nextcont.innercont = self
             return TraceSuccessContinuation("Call", self, depth)
         return TraceSuccessContinuation(None, self, depth)
 
@@ -537,6 +538,7 @@ class RuleContinuation(ContinuationWithModule):
         # XXX let Exit and Call wrapper point to the same innercont
         nextcont = TraceSuccessContinuation("Exit", self, depth, query=self.query, nextcont=self.nextcont)
         self = RuleContinuation(self.engine, self.module, nextcont, self._rule, self.query)
+        nextcont.innercont = self
         return TraceSuccessContinuation("Call", self, depth)
 
 class CutScopeNotifier(Continuation):
@@ -748,7 +750,7 @@ class TraceSuccessContinuation(Continuation):
             nextcont, fcont, heap = self.innercont.activate(fcont, heap)
             depth += 1
         elif self.port == "Exit" and isinstance(fcont, TraceFailureContinuation):
-            # unwrap corresponding fail
+            # unwrap obsolete fail
             fcont = fcont.innerfcont
         nextcont = nextcont.trace_wrap(depth)
         fcont = nextcont.make_next_fcont(fcont)
@@ -757,6 +759,10 @@ class TraceSuccessContinuation(Continuation):
     def action_fail(self, fcont, heap):
         if isinstance(fcont, TraceFailureContinuation):
             fcont.shall_fail = True
+            if self.port == "Exit":
+                fcont.fail_from_scont = self.innercont
+            else:
+                fcont.fail_from_scont = self
         raise error.UnificationFailed
 
     def action_retry(self, fcont, heap):
@@ -778,7 +784,8 @@ class TraceSuccessContinuation(Continuation):
         while not isinstance(cont, DoneSuccessContinuation):
             if isinstance(cont, TraceSuccessContinuation):
                 write(get_goal_string(cont.engine, cont.query, cont.depth))
-                cont = cont.innercont
+                if cont.port != "Exit":
+                    cont = cont.innercont
             cont = cont.nextcont
         return self, fcont, heap
 
@@ -821,9 +828,12 @@ class TraceSuccessContinuation(Continuation):
         return self
 
     def trace_unwrap(self):
-        self = self.innercont
-        self.nextcont = self.nextcont.trace_unwrap()
-        return self
+        if self.port != "Exit":
+            cont = self.innercont
+            cont.nextcont = cont.nextcont.trace_unwrap()
+        else:
+            cont = self.nextcont.trace_unwrap()
+        return cont
 
     def trace_exception(self):
         # XXX
@@ -850,6 +860,7 @@ class TraceFailureContinuation(FailureContinuation):
         self.innerfcont = fcont
         self.depth = depth
         self.shall_fail = False
+        self.fail_from_scont = None
         self.scont = scont # korreponding success continuation of this fcont
         if scont is None:
             query = self.innerfcont.query
@@ -914,8 +925,21 @@ class TraceFailureContinuation(FailureContinuation):
     def action_fail(self, heap):
         if self.port == "Fail":
             return self.action_creep(heap)
+        # just Redo port from here
+        if self.shall_fail and not self.fail_from_scont is self.scont:
+            # !!! not called yet
+            return self.action_creep(heap)
+        elif self.shall_fail and self.fail_from_scont is self.scont:
+            if isinstance(self.innerfcont, TraceFailureContinuation):
+                return self.innerfcont.fail(heap)
+            else:
+                if self.depth == self.scont.depth:
+                    raise error.UnificationFailed
+                # !!! not called yet
+                return self.action_creep(heap)
         else:
-            raise error.UnificationFailed
+            #raise error.UnificationFailed
+            return self.orig_fcont.fail(heap)
 
     def action_retry(self, heap):
         self.engine.tracewrapper.write("[retry]\n")
