@@ -798,9 +798,6 @@ def test_trace_crop():
             "Call: (1) f(3, 1) ?",c,"Call: (2) 1=1 ?",c,
             "Exit: (2) 1=1 ?",c,"Exit: (1) f(3, 1) ?",c]
 
-# XXX write test for forced fail within and-compounded terms
-
-# XXX
 def test_trace_crop_fails():
     order, e = trace_init_test("""
     f(1, 1).
@@ -915,6 +912,83 @@ def test_trace_repeat():
             "Call: (2) assert(index(3)) ?",c,"Exit: (2) assert(index(3)) ?",c,
             "Call: (2) fact(3) ?",c,"Exit: (2) fact(3) ?",c,
             "Exit: (1) all_facts ?",c]
+
+def test_trace_cut():
+    order, e = trace_init_test("""
+    fib(0, 1) :- !.
+    fib(1, 1) :- !.
+    fib(X, Y) :-
+        X1 is X - 1, fib(X1, Y1),
+        X2 is X - 2, fib(X2, Y2),
+        Y is Y1 + Y2.
+    """)
+
+    e.run(parse_query_term("trace, fib(4, 5)."),e.modulewrapper.user_module)
+    c = "creep\n"
+    assert order == [
+            "Call: (1) fib(4, 5) ?",c,
+            "Call: (2) _G0is4-1 ?",c,"Exit: (2) 3is4-1 ?",c,
+            "Call: (2) fib(3, _G0) ?",c,
+            "Call: (3) _G0is3-1 ?",c,"Exit: (3) 2is3-1 ?",c,
+            "Call: (3) fib(2, _G0) ?",c,
+            "Call: (4) _G0is2-1 ?",c,"Exit: (4) 1is2-1 ?",c,"Call: (4) fib(1, _G0) ?",c,"Exit: (4) fib(1, 1) ?",c,
+            "Call: (4) _G0is2-2 ?",c,"Exit: (4) 0is2-2 ?",c,"Call: (4) fib(0, _G0) ?",c,"Exit: (4) fib(0, 1) ?",c,
+            "Call: (4) _G0is1+1 ?",c,"Exit: (4) 2is1+1 ?",c,
+            "Exit: (3) fib(2, 2) ?",c,
+            "Call: (3) _G0is3-2 ?",c,"Exit: (3) 1is3-2 ?",c,"Call: (3) fib(1, _G0) ?",c,"Exit: (3) fib(1, 1) ?",c,
+            "Call: (3) _G0is2+1 ?",c,"Exit: (3) 3is2+1 ?",c,
+            "Exit: (2) fib(3, 3) ?",c,
+            "Call: (2) _G0is4-2 ?",c,"Exit: (2) 2is4-2 ?",c,
+            "Call: (2) fib(2, _G0) ?",c,
+            "Call: (3) _G0is2-1 ?",c,"Exit: (3) 1is2-1 ?",c,"Call: (3) fib(1, _G0) ?",c,"Exit: (3) fib(1, 1) ?",c,
+            "Call: (3) _G0is2-2 ?",c,"Exit: (3) 0is2-2 ?",c,"Call: (3) fib(0, _G0) ?",c,"Exit: (3) fib(0, 1) ?",c,
+            "Call: (3) _G0is1+1 ?",c,"Exit: (3) 2is1+1 ?",c,
+            "Exit: (2) fib(2, 2) ?",c,
+            "Call: (2) 5is3+2 ?",c,"Exit: (2) 5is3+2 ?",c,
+            "Exit: (1) fib(4, 5) ?",c]
+
+def test_trace_cut2():
+    order, e = trace_init_test("""
+    f(X) :- X=1.
+    f(X) :- X=2.
+    """)
+    c = "creep\n"
+    p = parse_query_term("trace, f(X), fail.")
+    py.test.raises(error.UnificationFailed, e.run, p, e.modulewrapper.user_module)
+    assert order == ["Call: (1) f(_G0) ?",c,"Call: (2) _G0=1 ?",c,"Exit: (2) 1=1 ?",c,
+            "Exit: (1) f(1) ?",c,"Call: (1) fail ?",c,"Fail: (1) fail ?",c,
+            "Redo: (1) f(_G0) ?",c,"Call: (2) _G0=2 ?",c,"Exit: (2) 2=2 ?",c,
+            "Exit: (1) f(2) ?",c,"Call: (1) fail ?",c,"Fail: (1) fail ?",c]
+
+    order.__init__()
+    p = parse_query_term("trace, f(X), !, fail.")
+    py.test.raises(error.UnificationFailed, e.run, p, e.modulewrapper.user_module)
+    assert order == ["Call: (1) f(_G0) ?",c,"Call: (2) _G0=1 ?",c,"Exit: (2) 1=1 ?",c,
+            "Exit: (1) f(1) ?",c,"Call: (1) fail ?",c,"Fail: (1) fail ?",c]
+
+def test_trace_if():
+    order, e = trace_init_test("""
+    f(X,Y) :- (X < 0 -> Y is (-1)*X ; Y=0).
+    f(X,Y) :- X=Y.
+    """)
+    p = parse_query_term("trace, f(-2, 2), fail.")
+    py.test.raises(error.UnificationFailed, e.run, p, e.modulewrapper.user_module)
+    c = "creep\n"
+    assert order == ["Call: (1) f(-2, 2) ?",c,"Call: (2) -2<0 ?",c,"Exit: (2) -2<0 ?",c,
+            "Call: (2) 2is-1*-2 ?",c,"Exit: (2) 2is-1*-2 ?",c,"Exit: (1) f(-2, 2) ?",c,
+            "Call: (1) fail ?",c,"Fail: (1) fail ?",c,"Redo: (1) f(-2, 2) ?",c,
+            "Call: (2) -2=2 ?",c,"Fail: (2) -2=2 ?",c,"Fail: (1) f(-2, 2) ?",c]
+    order.__init__()
+    e.run(parse_query_term("trace, 1 > 2 ->  fail ; true."), e.modulewrapper.user_module)
+    assert order == ["Call: (1) 1>2 ?",c,"Fail: (1) 1>2 ?",c,"Call: (1) true ?",c,
+            "Exit: (1) true ?",c]
+
+def test_trace_not():
+    order, e = trace_init_test("")
+    e.run(parse_query_term("trace, \\+ (1>1)."), e.modulewrapper.user_module)
+    c = "creep\n"
+    assert order == ["Call: (1) \\+1>1 ?",c,"Call: (2) 1>1 ?",c,"Fail: (2) 1>1 ?",c,
+            "Call: (2) true ?",c,"Exit: (2) true ?",c,"Exit: (1) \\+1>1 ?",c]
 
 # _____________________________Automated test
 
