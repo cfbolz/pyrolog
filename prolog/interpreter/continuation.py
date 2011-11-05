@@ -821,7 +821,7 @@ class TraceSuccessContinuation(Continuation):
 
     def action_abort(self, fcont, heap):
         nextcont = DoneSuccessContinuation(self.engine)
-        write("Execution aborted\n")
+        self.engine.tracewrapper.write("Execution aborted\n")
         return nextcont, fcont, heap
 
     # __________Helper methods
