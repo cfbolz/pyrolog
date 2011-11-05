@@ -91,9 +91,13 @@ def run(query, var_to_pos, engine):
     try:
         if query is None:
             return
-        # XXX wrap for tracing via engine.run_tracing
-        engine.run(query, engine.modulewrapper.current_module, 
-                ContinueContinuation(engine, var_to_pos, printmessage))
+        if engine.tracewrapper.tracing:
+            engine.run_tracing(query, engine.modulewrapper.current_module,
+                    ContinueContinuation(engine, var_to_pos, printmessage))
+        else:
+            engine.run(query, engine.modulewrapper.current_module,
+                    ContinueContinuation(engine, var_to_pos, printmessage))
+
     except error.UnificationFailed:
         printmessage("no\n")
     except (error.UncaughtError, error.CatchableError), e:

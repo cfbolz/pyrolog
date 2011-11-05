@@ -916,7 +916,6 @@ def test_trace_repeat():
             "Call: (2) fact(3) ?",c,"Exit: (2) fact(3) ?",c,
             "Exit: (1) all_facts ?",c]
 
-
 # _____________________________Automated test
 
 @py.test.mark.xfail

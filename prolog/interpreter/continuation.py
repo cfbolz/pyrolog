@@ -203,6 +203,16 @@ class Engine(object):
         driver(*self.call(query, module, continuation, fcont, Heap()))
     run = run_query
 
+    def run_tracing(self, query, module, continuation=None):
+        assert isinstance(module, Module)
+        fcont = DoneFailureContinuation(self)
+        if continuation is None:
+            continuation = CutScopeNotifier(self, DoneSuccessContinuation(self), fcont)
+        scont, fcont, heap = self.call(query, module, continuation, fcont, Heap())
+        if self.tracewrapper.tracing:
+            scont = scont.trace_wrap(1)
+        driver(scont, fcont, heap)
+
     def call(self, query, module, scont, fcont, heap):
         if isinstance(query, Var):
             query = query.dereference(heap)
