@@ -807,6 +807,54 @@ def test_trace_failoption2():
     py.test.raises(UnificationFailed, e.run, parse_query_term("trace, f(x)."), e.modulewrapper.user_module)
     assert order == ["Call: (1) f(x) ?","fail\n"]
 
+def test_trace_failoption3():
+    order, e = trace_init_test_gen("""
+    f(X) :- X=1.
+    f(X) :- X=2.
+    """, ["\n","f","\n","\n","\n","\n"] + ["\n","\n","f","\n","\n","\n","\n"])
+    c = "creep\n"
+    py.test.raises(UnificationFailed, e.run, parse_query_term("trace, f(1)."), e.modulewrapper.user_module)
+    assert order == ["Call: (1) f(1) ?",c,"Call: (2) 1=1 ?","fail\n","Redo: (1) f(1) ?",c,
+            "Call: (2) 1=2 ?",c,"Fail: (2) 1=2 ?",c,"Fail: (1) f(1) ?",c]
+
+    order.__init__()
+    py.test.raises(UnificationFailed, e.run, parse_query_term("trace, f(1)."), e.modulewrapper.user_module)
+    assert order == ["Call: (1) f(1) ?",c,"Call: (2) 1=1 ?",c,"Exit: (2) 1=1 ?","fail\n","Redo: (1) f(1) ?",c,
+            "Call: (2) 1=2 ?",c,"Fail: (2) 1=2 ?",c,"Fail: (1) f(1) ?",c]
+
+def test_trace_failoption4():
+    order, e = trace_init_test_gen("""
+    f(X) :- X=1.
+    f(X) :- X=2.
+    g(X) :- X=3.
+    """, 4*["\n"] + ["f"] + 8*["\n"])
+    c = "creep\n"
+    py.test.raises(UnificationFailed, e.run, parse_query_term("trace, f(X), g(1)."), e.modulewrapper.user_module)
+    assert order == ["Call: (1) f(_G0) ?",c,"Call: (2) _G0=1 ?",c,"Exit: (2) _G0=1 ?",c,
+            "Exit: (1) f(1) ?",c,"Call: (1) g(1) ?","fail\n","Redo: (1) f(_G0) ?",c,
+            "Call: (2) _G0=2 ?",c,"Exit: 2=2 ?",c,"Exit: f(2) ?",c,"Call: (1) g(1) ?",c,
+            "Call: (2) 1=3 ?",c,"Fail: (2) 1=3 ?",c,"Fail: (1) g(1) ?",c]
+
+
+def test_trace_failoption5():
+    order, e = trace_init_test_gen("""
+    f(X) :- X=1.
+    f(X) :- X=2.
+    """, (5*["\n"] + ["f"] + 4*["\n"] + ["f","\n"]) + (4*["\n"] + ["f"] + 5*["\n"] + ["f","\n"]))
+    c = "creep\n"
+    py.test.raises(UnificationFailed, e.run, parse_query_term("trace, f(X), f(1)."), e.modulewrapper.user_module)
+    assert order == ["Call: (1) f(_G0) ?",c,"Call: (2) _G0=1 ?",c,"Exit: (2) 1=1 ?",c,
+            "Exit: (1) f(1) ?",c,"Call: (1) f(1) ?",c,"Call: (2) 1=1 ?","fail\n","Redo: (1) f(1) ?",c,
+            "Call: (2) 1=2 ?",c,"Fail: (2) 1=2 ?",c,"Redo: (1) f(1) ?",c,
+            "Call: (2) _G0=2 ?","fail\n","Fail: (1) f(1) ?",c] # XXX should be: 'Fail: (1) f(_G0) ?'
+
+    order.__init__()
+    py.test.raises(UnificationFailed, e.run, parse_query_term("trace, f(X), f(1)."), e.modulewrapper.user_module)
+    assert order == ["Call: (1) f(_G0) ?",c,"Call: (2) _G0=1 ?",c,"Exit: (2) 1=1 ?",c,
+            "Exit: (1) f(1) ?",c,"Call: (1) f(1) ?","fail\n","Redo: (1) f(1) ?",c,
+            "Call: (2) 1=2 ?",c,"Fail: (2) 1=2 ?",c,"Redo: (1) f(1) ?",c,
+            "Call: (2) _G0=2 ?","fail\n","Fail: (1) f(1) ?",c] # XXX should be: 'Fail: (1) f(_G0) ?'
+
 def test_trace_retry():
     e = get_engine("""
     f(X) :- X=1;X=2.
