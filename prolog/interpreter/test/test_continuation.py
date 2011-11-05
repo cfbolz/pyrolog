@@ -562,7 +562,6 @@ def test_trace_leap():
     assert order == ["Call: (1) llength([1, 2, 3], 3) ?", "leap\n"]
     assert e.tracewrapper.tracing == False
 
-# XXX repair xfail
 @py.test.mark.xfail
 def test_trace_leap2():
     order, e = trace_init_test_gen("""
@@ -571,7 +570,7 @@ def test_trace_leap2():
         llength(T, X1),
         trace,
         X is X1 + 1.
-    """, 10*["l"])
+    """, 2*["l"])
     e.run(parse_query_term("trace, llength([1], X)."), e.modulewrapper.user_module)
     # XXX depth will start from 0 every "trace"
     assert order == ["Call: (1) llength([1], _G0) ?","leap\n","Call: (2) _G0is0+1 ?","leap\n"]
@@ -909,8 +908,8 @@ def test_trace_repeat():
             "Call: (2) _G0is1+1 ?",c,"Exit: (2) 2is1+1 ?",c,
             "Call: (2) assert(fact(2)) ?",c,"Exit: (2) assert(fact(2)) ?",c,
             "Call: (2) assert(index(2)) ?",c,"Exit: (2) assert(index(2)) ?",c,
-            "Call: (2) fact(3) ?",c,"Fail: (2) fact(3) ?",c,"Exit: repeat ?",c,
-            "Call: (2) retract(index(_G0)) ?",c,"Exit: (2) index(2) ?",c,
+            "Call: (2) fact(3) ?",c,"Fail: (2) fact(3) ?",c,"Exit: (2) repeat ?",c,
+            "Call: (2) retract(index(_G0)) ?",c,"Exit: (2) retract(index(2)) ?",c,
             "Call: (2) _G0is2+1 ?",c,"Exit: (2) 3is2+1 ?",c,
             "Call: (2) assert(fact(3)) ?",c,"Exit: (2) assert(fact(3)) ?",c,
             "Call: (2) assert(index(3)) ?",c,"Exit: (2) assert(index(3)) ?",c,
