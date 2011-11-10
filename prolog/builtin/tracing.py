@@ -8,9 +8,6 @@ def impl_trace(engine, heap, scont, fcont):
     engine.tracewrapper.tracing = True
     scont = scont.trace_wrap(1)
     engine.tracewrapper.info("The Debugger will first creep, showing everything (trace).\n\n")
-    #if "query" in dir(scont) and scont.query is not None:
-    #    import pdb; pdb.set_trace()
-    #    fcont = fcont.trace_wrap(1, query=scont.query)
     return scont, fcont, heap
 
 @expose_builtin("notrace", unwrap_spec=[], handles_continuation=True, trace=False)
@@ -32,7 +29,8 @@ def impl_leash(engine, heap, optionlist):
         error.throw_instantiation_error()
     optionlist = unwrap_list(optionlist)
     for o in optionlist:
-        if not o.argument_count != 1:
+        # should always be like +(all), -(fail)
+        if o.argument_count() != 1:
             error.throw_domain_error('One of (+|-) all,call,exit,fail,redo,exception', o)
         op = o.name()
         if not op in "+-":
@@ -49,6 +47,3 @@ def impl_leash(engine, heap, optionlist):
         engine.tracewrapper.info("No leashing\n")
     else:
         engine.tracewrapper.info("Using leashing stopping at "+repr(leash)+" ports\n")
-
-
-
