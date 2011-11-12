@@ -960,7 +960,13 @@ def test_trace_cut2():
             "Redo: (1) f(_G0) ?",c,"Call: (2) _G0=2 ?",c,"Exit: (2) 2=2 ?",c,
             "Exit: (1) f(2) ?",c,"Call: (1) fail ?",c,"Fail: (1) fail ?",c]
 
-    order.__init__()
+    order, e = trace_init_test("""
+    f(X) :- X=1.
+    f(X) :- X=2.
+    f(X) :- X=3.
+    f(X) :- X=4.
+    f(X) :- X=5;X=6.
+    """)
     p = parse_query_term("trace, f(X), !, fail.")
     py.test.raises(error.UnificationFailed, e.run, p, e.modulewrapper.user_module)
     assert order == ["Call: (1) f(_G0) ?",c,"Call: (2) _G0=1 ?",c,"Exit: (2) 1=1 ?",c,
@@ -989,6 +995,107 @@ def test_trace_not():
     c = "creep\n"
     assert order == ["Call: (1) \\+1>1 ?",c,"Call: (2) 1>1 ?",c,"Fail: (2) 1>1 ?",c,
             "Call: (2) true ?",c,"Exit: (2) true ?",c,"Exit: (1) \\+1>1 ?",c]
+
+def test_trace_topdown():
+    order, en = trace_init_test("""
+    parse(C, [Word|S], S) :-
+        word(C, Word).
+    parse(C, S1, S) :-
+        rule(C, Cs),
+        parse_list(Cs, S1, S).
+
+    parse_list([C|Cs], S1, S) :-
+        parse(C, S1, S2),
+        parse_list(Cs, S2, S).
+    parse_list([], S, S).
+
+    rule(s, [np, vp]).
+    rule(np, [d, n]).
+    rule(vp, [v, np]).
+    rule(vp, [v, np, pp]).
+    rule(pp, [p, np]).
+
+    word(d, the).
+    word(n, dog).
+    word(n, dogs).
+    word(n, cat).
+    word(n, cats).
+    word(n, elephant).
+    word(p, near).
+    word(v, chase).
+    word(v, chases).
+    word(v, see).
+    word(v, sees).
+    """)
+    cr = "creep\n"
+    def c(i, s):
+        lqa = ": ("+str(i)+") "+s+" ?";return "Call"+lqa
+    def e(i, s):
+        lqa = ": ("+str(i)+") "+s+" ?";return "Exit"+lqa
+    def f(i, s):
+        lqa = ": ("+str(i)+") "+s+" ?";return "Fail"+lqa
+    def r(i, s):
+        lqa = ": ("+str(i)+") "+s+" ?";return "Redo"+lqa
+    p = parse_query_term("trace, parse(s, [the, dog, sees, the, cat], []).")
+    en.run(p, en.modulewrapper.user_module)
+    assert order == [c(1,"parse(s, [the, dog, sees, the, cat], [])"),cr,
+            r(1,"parse(s, [the, dog, sees, the, cat], [])"),cr,
+            c(2,"rule(s, _G0)"),cr,e(2,"rule(s, [np, vp])"),cr,
+            c(2,"parse_list([np, vp], [the, dog, sees, the, cat], [])"),cr,
+            c(3,"parse(np, [the, dog, sees, the, cat], _G0)"),cr,
+            r(3,"parse(np, [the, dog, sees, the, cat], _G0)"),cr,
+            c(4,"rule(np, _G0)"),cr,e(4,"rule(np, [d, n])"),cr,
+            c(4,"parse_list([d, n], [the, dog, sees, the, cat], _G0)"),cr,
+            c(5,"parse(d, [the, dog, sees, the, cat], _G0)"),cr,
+            c(6,"word(d, the)"),cr,e(6,"word(d, the)"),cr,
+            e(5,"parse(d, [the, dog, sees, the, cat], [dog, sees, the, cat])"),cr,
+            c(5,"parse_list([n], [dog, sees, the, cat], _G0)"),cr,
+            c(6,"parse(n, [dog, sees, the, cat], _G0)"),cr,
+            c(7,"word(n, dog)"),cr,e(7,"word(n, dog)"),cr,
+            e(6,"parse(n, [dog, sees, the, cat], [sees, the, cat])"),cr,
+            c(6,"parse_list([], [sees, the, cat], _G0)"),cr,
+            e(6,"parse_list([], [sees, the, cat], [sees, the, cat])"),cr,
+            e(5,"parse_list([n], [dog, sees, the, cat], [sees, the, cat])"),cr,
+            e(4,"parse_list([d, n], [the, dog, sees, the, cat], [sees, the, cat])"),cr,
+            e(3,"parse(np, [the, dog, sees, the, cat], [sees, the, cat])"),cr,
+            c(3,"parse_list([vp], [sees, the, cat], [])"),cr,# [] ok?
+            c(4,"parse(vp, [sees, the, cat], _G0)"),cr,
+            r(4,"parse(vp, _G0, _G1)"),cr, # XXX why _G0 ???
+            c(5,"rule(vp, _G0)"),cr,e(5,"rule(vp, [v, np])"),cr,
+            c(5,"parse_list([v, np], [sees, the, cat], _G0)"),cr,
+            c(6,"parse(v, [sees, the, cat], _G0)"),cr,
+            c(7,"word(v, sees)"),cr,e(7,"word(v, sees)"),cr,
+            e(6,"parse(v, [sees, the, cat], [the, cat])"),cr,
+            c(6,"parse_list([np], [the, cat], _G0)"),cr,
+            c(7,"parse(np, [the, cat], _G0)"),cr,
+            r(7,"parse(np, _G0, _G1)"),cr, # XXX _G0 again
+            c(8,"rule(np, _G0)"),cr,e(8,"rule(np, [d, n])"),cr,
+            c(8,"parse_list([d, n], [the, cat], _G0)"),cr,
+            c(9,"parse(d, [the, cat], _G0)"),cr,
+            c(10,"word(d, the)"),cr,e(10,"word(d, the)"),cr,
+            e(9,"parse(d, [the, cat], [cat])"),cr,
+            c(9,"parse_list([n], [cat], _G0)"),cr,
+            c(10,"parse(n, [cat], _G0)"),cr,
+            c(11,"word(n, cat)"),cr,e(11,"word(n, cat)"),cr,
+            e(10,"parse(n, [cat], [])"),cr,
+            c(10,"parse_list([], [], _G0)"),cr,
+            e(10,"parse_list([], [], [])"),cr,
+            e(9,"parse_list([n], [cat], [])"),cr,
+            e(8,"parse_list([d, n], [the, cat], [])"),cr,
+            e(7,"parse(np, [the, cat], [])"),cr,
+            c(7,"parse_list([], [], _G0)"),cr,
+            e(7,"parse_list([], [], [])"),cr,
+            e(6,"parse_list([np], [the, cat], [])"),cr,
+            e(5,"parse_list([v, np], [sees, the, cat], [])"),cr,
+            e(4,"parse(vp, [sees, the, cat], [])"),cr,
+            c(4,"parse_list([], [], [])"),cr,
+            e(4,"parse_list([], [], [])"),cr,
+            e(3,"parse_list([vp], [sees, the, cat], [])"),cr,
+            e(2,"parse_list([np, vp], [the, dog, sees, the, cat], [])"),cr,
+            e(1,"parse(s, [the, dog, sees, the, cat], [])"),cr]
+
+
+
 
 # _____________________________Automated test
 
