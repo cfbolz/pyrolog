@@ -842,7 +842,7 @@ class TraceSuccessContinuation(Continuation):
         return cont
 
     def trace_exception(self):
-        # XXX
+        # XXX Write more tests
         if isinstance(self.innercont, CutScopeNotifier):
             return self.innercont
         while isinstance(self, TraceSuccessContinuation) and self.port != "Exit":
@@ -935,8 +935,7 @@ class TraceFailureContinuation(FailureContinuation):
     def action_fail(self, heap):
         if self.port == "Fail":
             return self.action_creep(heap)
-        # Redo:
-        if self.shall_fail and self.fail_from_scont is self.scont:
+        elif self.shall_fail and self.fail_from_scont is self.scont:
             if not isinstance(self.innerfcont, TraceFailureContinuation):
                 if self.depth == self.scont.depth:
                     return self.orig_fcont.fail(heap)
@@ -971,7 +970,7 @@ class TraceFailureContinuation(FailureContinuation):
         return self.action_write(heap)
 
     def action_write(self, heap):
-        # do continue printing the query in loop
+        # continue printing the query in loop
         return
 
     def action_leap(self, heap):
