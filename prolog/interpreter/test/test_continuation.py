@@ -1094,7 +1094,72 @@ def test_trace_topdown():
             e(2,"parse_list([np, vp], [the, dog, sees, the, cat], [])"),cr,
             e(1,"parse(s, [the, dog, sees, the, cat], [])"),cr]
 
+def test_trace_listify():
+    order, en = trace_init_test("""
+    list([]).
+    list([_|T]) :- list(T).
 
+    listify(A,'.'(A,[])) :-
+        ground(A), A \= (_,_).
+    listify(A,'.'(A,[])) :-
+        var(A).
+    listify(','(A,B),'.'(A,C)) :-
+        listify(B,C).
+    """)
+    cr = "creep\n"
+    def c(i, s):
+        return "Call: ("+str(i)+") "+s+" ?"
+    def e(i, s):
+        return "Exit: ("+str(i)+") "+s+" ?"
+    def f(i, s):
+        return "Fail: ("+str(i)+") "+s+" ?"
+    def r(i, s):
+        return "Redo: ("+str(i)+") "+s+" ?"
+    p = parse_query_term("trace,listify((1,2,3),X),list(X).")
+    en.run(p, en.modulewrapper.user_module)
+    assert order == [c(1,"listify((1, 2, 3), _G0)"),cr,
+            c(2,"ground((1, 2, 3))"),cr,e(2,"ground((1, 2, 3))"),cr,
+            c(2,"(1, 2, 3)\=(_G0, _G1)"),cr,f(2,"(1, 2, 3)\=(_G0, _G1)"),cr,
+            r(1,"listify((1, 2, 3), _G0)"),cr,
+            c(2,"var((1, 2, 3))"),cr,f(2,"var((1, 2, 3))"),cr,
+            r(1,"listify((1, 2, 3), _G0)"),cr,
+            c(2,"listify((2, 3), _G0)"),cr,
+            c(3,"ground((2, 3))"),cr,e(3,"ground((2, 3))"),cr,
+            c(3,"(2, 3)\=(_G0, _G1)"),cr,f(3,"(2, 3)\=(_G0, _G1)"),cr,
+            r(2,"listify((2, 3), _G0)"),cr,
+            c(3,"var((2, 3))"),cr,f(3,"var((2, 3))"),cr,
+            r(2,"listify((2, 3), _G0)"),cr,
+            c(3,"listify(3, _G0)"),cr,
+            c(4,"ground(3)"),cr,e(4,"ground(3)"),cr,
+            c(4,"3\=(_G0, _G1)"),cr,e(4,"3\=(_G0, _G1)"),cr,
+            e(3,"listify(3, [3])"),cr,
+            e(2,"listify((2, 3), [2, 3])"),cr,
+            e(1,"listify((1, 2, 3), [1, 2, 3])"),cr,
+            c(1,"list([1, 2, 3])"),cr,
+            c(2,"list([2, 3])"),cr,
+            c(3,"list([3])"),cr,
+            c(4,"list([])"),cr,e(4,"list([])"),cr,
+            e(3,"list([3])"),cr,
+            e(2,"list([2, 3])"),cr,
+            e(1,"list([1, 2, 3])"),cr]
+
+def test_trace_arith():
+    order, e = trace_init_test("""
+    lplus(A,B,C) :- var(A), A==B, ground(C), A is C / 2, !.
+    lplus(A,B,C) :- ground(A), ground(B), !, C is A+B.
+    lplus(A,B,C) :- ground(C), ((ground(A), lminus(C,A,B)) ; (ground(B), lminus(C,B,A))),!.
+    lplus(A,B,C) :- ground(C), (A=C,lplus(A,B,C);dec(C,A), lplus(A,B,C)).
+
+    lminus(A,B,0) :- var(A), A==B, !.
+    lminus(A,B,C) :- var(A), A==B, !,fail.
+    lminus(A,B,C) :- ground(A), ground(B), !, C is A-B.
+    lminus(A,B,C) :- ground(C), ((ground(B), lplus(C,B,A)) ; (ground(A), lminus(A,C,B))),!.
+    lminus(A,B,C) :- ground(C), (B=C,lminus(A,B,C);dec(C,B), lminus(A,B,C)).
+    """)
+    assert_true("leash([-all]), trace, lplus(A,B,10),A=10,B=0.",e)
+    assert_true("leash([-all]), trace, lplus(5,A,2),A=-3.",e)
+    assert_true("leash([-all]), trace, lminus(1,2,A),A=-1.",e)
+    assert_true("leash([-all]), trace, lminus(5,A,4),A=1.",e)
 
 
 # _____________________________Automated test
