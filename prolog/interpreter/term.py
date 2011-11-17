@@ -401,7 +401,6 @@ class NumberedVar(PrologObject):
     
     def copy_standardize_apart(self, heap, env):
         if self.num < 0:
-            # XXX introduce an UnsharedVar
             return heap.newvar()
         res = env[self.num]
         if res is None:
