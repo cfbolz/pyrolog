@@ -5,6 +5,7 @@ class o:
     viewloops = True
 conftest.option = o
 from pypy.jit.metainterp.test.test_ajit import LLJitMixin
+from pypy.rlib import jit
 
 from prolog.interpreter.parsing import parse_query_term, get_engine
 from prolog.interpreter.parsing import get_query_and_vars
@@ -142,8 +143,8 @@ class TestLLtype(LLJitMixin):
         t6 = parse_query_term("loop(1000, X), partition(X, 500, _, _).")
         t7 = parse_query_term("findall(X+Y, app([X|_], [Y|_], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]), L).")
         def interp_w(c):
-            jitdriver.set_param("inlining", True)
-            jitdriver.set_param("threshold", 10)
+            jit.set_param(jitdriver, "inlining", True)
+            jit.set_param(jitdriver, "threshold", 10)
             if c == 1:
                 t = t1
             elif c == 2:
@@ -163,8 +164,8 @@ class TestLLtype(LLJitMixin):
             e.run(t, e.modulewrapper.user_module)
         # XXX
         #interp_w(2)
-
+        topt = {'taggedpointers': True}
         self.meta_interp(interp_w, [4], listcomp=True, backendopt=True,
-                         listops=True)
+                         listops=True, translationoptions=topt)
         #self.meta_interp(interp_w, [3], listcomp=True,
         #                 listops=True)
