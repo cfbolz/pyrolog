@@ -10,6 +10,15 @@ class SignatureFactory(object):
         self.init_extra_attrs = lambda self: None
 
     def getsignature(self, name, numargs, cache=True):
+        if cache:
+            return self._getsignature_elidable(name, numargs)
+        return self._getsignature(name, numargs, False)
+
+    @jit.elidable
+    def _getsignature_elidable(self, name, numargs):
+        return self._getsignature(name, numargs, True)
+
+    def _getsignature(self, name, numargs, cache):
         if (name, numargs) in self.cache:
             return self.cache[name, numargs]
         res = Signature(name, numargs, cached=cache, factory=self)
@@ -53,7 +62,7 @@ class Signature(object):
 
     _cache = SignatureFactory()
 
-    _immutable_fields_ = ["name", "numargs", "factory"]
+    _immutable_fields_ = ["name", "numargs", "atom_signature", "factory"]
 
     def __init__(self, name, numargs, cached=False, factory=None):
         assert name is not None
@@ -64,6 +73,11 @@ class Signature(object):
         if factory is None:
             factory = self._cache
         self.factory = factory
+        if numargs:
+            atom_signature = factory.getsignature(name, 0, cached)
+        else:
+            atom_signature = self
+        self.atom_signature = atom_signature
         factory.init_extra_attrs(self)
 
     def eq(self, other):
