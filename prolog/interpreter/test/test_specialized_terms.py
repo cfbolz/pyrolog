@@ -43,6 +43,8 @@ def test_specialize_on_build():
     sig = signature.Signature.getsignature("foo", 1)
     a1 = specialterm.build(sig, [Number(0)])
     assert a1.argument_at(0).num == 0
+    # check that a new number is built, because the value is stored tagged
+    assert a1.argument_at(0) is not a1.argument_at(0)
     s1 = a1.get_shape()
     a2 = specialterm.build(sig, [Callable.build("bar")])
     assert a2.argument_at(0).name() == "bar"

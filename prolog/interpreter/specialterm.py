@@ -54,7 +54,24 @@ class VarArgumentDescr(ArgumentDescr):
 
 class NumberArgumentDescr(ArgumentDescr):
     def compatible_with(self, obj):
-        return isinstance(obj, term.Number)
+        if not isinstance(obj, term.Number):
+            return False
+        val = obj.num
+        # bit sucky
+        try:
+            rerased.erase_int(val)
+        except OverflowError:
+            return False
+        return True
+
+    def read_argument(self, i, obj):
+        res = rerased.unerase_int(obj._raw_argument_at(i))
+        return term.Number(res)
+
+    def write_argument(self, i, val, obj):
+        assert isinstance(val, term.Number)
+        res = rerased.erase_int(val.num)
+        obj._raw_set_argument_at(i, res)
 
 ANY_ARGUMENT = AnyArgumentDescr()
 VAR_ARGUMENT = VarArgumentDescr()
