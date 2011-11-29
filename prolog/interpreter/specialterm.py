@@ -1,21 +1,31 @@
 from prolog.interpreter import term
 from prolog.interpreter import signature
 
-from pypy.rlib import jit
+from pypy.rlib import jit, objectmodel, rarithmetic
 
 signature.Signature.register_extr_attr("shape")
+
+def shape_eq(args1, args2):
+    return args1 == args2
+
+def shape_hash(args):
+    x = 0x345678
+    for item in args:
+        y = objectmodel.compute_identity_hash(item)
+        x = rarithmetic.intmask((1000003 * x) ^ y)
+    return x
 
 class ShapeCache(object):
     def __init__(self, signature):
         self.signature = signature
-        self.d = {}
+        self.d = objectmodel.r_dict(shape_eq, shape_hash)
 
     def get(self, argshapes):
         try:
-            return self.d[tuple(argshapes)]
+            return self.d[argshapes]
         except KeyError:
             res = Shape(self.signature, argshapes, self)
-            self.d[tuple(argshapes)] = res
+            self.d[argshapes] = res
             return res
 
 class ArgumentDescr(object):
