@@ -1,8 +1,10 @@
 from prolog.interpreter import term
 from prolog.interpreter import signature
 
-from pypy.rlib import jit, objectmodel, rarithmetic
+from pypy.rlib import jit, objectmodel, rarithmetic, rerased
 from pypy.rlib.objectmodel import specialize
+
+erase, unerase = rerased.new_erasing_pair("pyrolog-shape")
 
 signature.Signature.register_extr_attr("shape")
 
@@ -34,13 +36,13 @@ class ArgumentDescr(object):
         return False
 
     def read_argument(self, i, obj):
-        res = obj._raw_argument_at(i)
+        res = unerase(obj._raw_argument_at(i))
         assert self.compatible_with(res)
         return res
 
     def write_argument(self, i, val, obj):
         assert self.compatible_with(val)
-        obj._raw_set_argument_at(i, val)
+        obj._raw_set_argument_at(i, erase(val))
 
 class AnyArgumentDescr(ArgumentDescr):
     def compatible_with(self, obj):
