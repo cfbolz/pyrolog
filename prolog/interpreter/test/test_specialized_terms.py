@@ -1,5 +1,6 @@
 from prolog.interpreter.term import Atom, Number, Term, Callable, specialized_term_classes
 from prolog.interpreter.test.tool import parse
+from prolog.interpreter import signature
 import py
 
     
@@ -32,3 +33,20 @@ def test_dont_cache_atoms():
     a1 = Callable.build('foo')
     a2 = Callable.build('foo')
     assert a1 is a2
+
+# ___________________________________________________________________
+# tests for term specialization
+
+from prolog.interpreter import specialterm
+
+def test_specialize_on_build():
+    sig = signature.Signature.getsignature("foo", 1)
+    a1 = specialterm.SpecialTerm(sig, [Number(0)])
+    assert isinstance(a1, specialterm.SpecialTerm)
+    s1 = a1.get_shape()
+    a2 = specialterm.SpecialTerm(sig, [Callable.build("blubl")])
+    assert isinstance(a1, specialterm.SpecialTerm)
+    s2 = a2.get_shape()
+    assert s1 is not s2
+    a3 = specialterm.SpecialTerm(sig, [Number(1)])
+    assert a3.get_shape() is s1
