@@ -134,7 +134,7 @@ def test_copy_standardize_apart_term():
 
     t2 = t.copy_standardize_apart(heap, [Number(1)])
     assert isinstance(t2.argument_at(0), Number)
-    assert t2.argument_at(0) is t2.argument_at(1)
+    assert t2.argument_at(0).num == t2.argument_at(1).num
 
     Z = NumberedVar(-1)
     t = Callable.build("f", [Z, Z])

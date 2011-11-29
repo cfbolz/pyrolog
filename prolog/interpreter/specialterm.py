@@ -106,14 +106,16 @@ def get_shape(signature, args):
     return cache.get(argshapes)
 
 def build(signature, args):
-    shape = get_shape(signature, args)
-    return specialized_term_classes[len(args)](shape, args)
+    if len(args) <= len(specialized_term_classes):
+        shape = get_shape(signature, args)
+        return specialized_term_classes[len(args) - 1](shape, args)
 
 def make_specialized_term_cls(n_args):
     from pypy.rlib.unroll import unrolling_iterable
     arg_iter = unrolling_iterable(range(n_args))
     base = term.Callable
     class generic_callable(base):
+        TYPE_STANDARD_ORDER = term.Term.TYPE_STANDARD_ORDER
 
         _immutable_fields_ = ["shape"] + ["val_%d" % x for x in arg_iter]
 
@@ -174,13 +176,13 @@ def make_specialized_term_cls(n_args):
         def basic_unify(self, other, heap, occurs_check):
             if not (isinstance(other, generic_callable) and
                     self.get_shape() is other.get_shape()):
-                return Callable.basic_unify(self, other, heap, occurs_check)
+                return term.Callable.basic_unify(self, other, heap, occurs_check)
             for x in arg_iter:
-                a = self.argument_at(i)
-                b = other.argument_at(i)
+                a = self.argument_at(x)
+                b = other.argument_at(x)
                 a.unify(b, heap, occurs_check)
 
     generic_callable.__name__ = 'SpecializedGeneric'+str(n_args)
     return generic_callable
 
-specialized_term_classes = [make_specialized_term_cls(i) for i in range(10)]
+specialized_term_classes = [make_specialized_term_cls(i) for i in range(1, 10)]

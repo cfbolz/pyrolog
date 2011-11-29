@@ -576,6 +576,10 @@ class Callable(NonVar):
                 assert signature.numargs == len(args)
             assert isinstance(signature, Signature)
 
+            from prolog.interpreter.specialterm import build
+            res = build(signature, args)
+            if res is not None:
+                return res
             cls = Callable._find_specialized_class(term_name, len(args))
             if cls is not None:
                 return cls(term_name, args, signature)
