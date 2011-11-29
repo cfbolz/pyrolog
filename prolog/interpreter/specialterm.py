@@ -2,6 +2,7 @@ from prolog.interpreter import term
 from prolog.interpreter import signature
 
 from pypy.rlib import jit, objectmodel, rarithmetic
+from pypy.rlib.objectmodel import specialize
 
 signature.Signature.register_extr_attr("shape")
 
@@ -29,14 +30,30 @@ class ShapeCache(object):
             return res
 
 class ArgumentDescr(object):
-    pass
+    def compatible_with(self, obj):
+        return False
+
+    def read_argument(self, i, obj):
+        res = obj._raw_argument_at(i)
+        assert self.compatible_with(res)
+        return res
+
+    def write_argument(self, i, val, obj):
+        assert self.compatible_with(val)
+        obj._raw_set_argument_at(i, val)
 
 class AnyArgumentDescr(ArgumentDescr):
-    pass
+    def compatible_with(self, obj):
+        return True
+
 class VarArgumentDescr(ArgumentDescr):
-    pass
+    def compatible_with(self, obj):
+        return isinstance(obj, term.BindingVar)
+
 class NumberArgumentDescr(ArgumentDescr):
-    pass
+    def compatible_with(self, obj):
+        return isinstance(obj, term.Number)
+
 ANY_ARGUMENT = AnyArgumentDescr()
 VAR_ARGUMENT = VarArgumentDescr()
 NUMBER_ARGUMENT = NumberArgumentDescr()
@@ -49,8 +66,11 @@ class Shape(object):
         self.args = args
         self.cache = cache
 
-    def argument_at(self, i, t):
-        return self.args[i].read_argument(i, t)
+    def argument_at(self, i, obj):
+        return self.args[i].read_argument(i, obj)
+
+    def set_argument_at(self, i, val, obj):
+        return self.args[i].write_argument(i, val, obj)
 
 def get_shape(signature, args):
     cache = signature.get_extra("shape")
@@ -60,29 +80,88 @@ def get_shape(signature, args):
     argshapes = [ANY_ARGUMENT] * len(args)
     for i in range(len(args)):
         arg = args[i]
-        if isinstance(arg, term.BindingVar):
+        if VAR_ARGUMENT.compatible_with(arg):
             argshapes[i] = VAR_ARGUMENT
-        elif isinstance(arg, term.Number):
+        elif NUMBER_ARGUMENT.compatible_with(arg):
             argshapes[i] = NUMBER_ARGUMENT
     return cache.get(argshapes)
 
-class SpecialTerm(term.Callable):
-    def __init__(self, signature, args):
-        self.shape = get_shape(signature, args)
+def build(signature, args):
+    shape = get_shape(signature, args)
+    return specialized_term_classes[len(args)](shape, args)
 
-    def get_shape(self):
-        return jit.promote(self.shape)
+def make_specialized_term_cls(n_args):
+    from pypy.rlib.unroll import unrolling_iterable
+    arg_iter = unrolling_iterable(range(n_args))
+    base = term.Callable
+    class generic_callable(base):
 
-    def name(self):
-        return self.signature().name
+        _immutable_fields_ = ["shape"] + ["val_%d" % x for x in arg_iter]
 
-    def signature(self):
-        return self.get_shape().signature
+        def __init__(self, shape, args):
+            self.shape = shape
+            self._init_values(args)
 
-    def argument_at(self, i):
-        raise NotImplementedError("abstract base")
+        def _init_values(self, args):
+            if args is None:
+                return
+            for x in range(len(args)):
+                self.set_argument_at(x, args[x])
 
-    def argument_count(self):
-        raise NotImplementedError("abstract base")
+        def _make_new(self):
+            cls = mutable_version
+            return cls(self.get_shape(), None)
 
+        def get_shape(self):
+            return jit.promote(self.shape)
 
+        def signature(self):
+            return self.get_shape().signature
+
+        def arguments(self):
+            result = [None] * n_args
+            for x in range(n_args):
+                result[x] = self.argument_at(x)
+            return result
+
+        def argument_count(self):
+            return len(self.get_shape().args)
+
+        def argument_at(self, i):
+            return self.get_shape().argument_at(i, self)
+
+        def set_argument_at(self, i, obj):
+            self.get_shape().set_argument_at(i, obj, self)
+
+        def _raw_argument_at(self, i):
+            for x in arg_iter:
+                if x == i:
+                    return getattr(self, 'val_%d' % x)
+            raise IndexError
+
+        def _raw_set_argument_at(self, i, arg):
+            for x in arg_iter:
+                if x == i:
+                    setattr(self, 'val_%d' % x, arg)
+                    return
+            raise IndexError
+
+        def argument_count(self):
+            return n_args
+
+        @jit.look_inside_iff(lambda self, other, heap, occurs_check:
+                jit.isvirtual(self) or jit.isvirtual(other) or
+                jit.isconstant(self) or jit.isconstant(other))
+        def basic_unify(self, other, heap, occurs_check):
+            if not (isinstance(other, generic_callable) and
+                    self.get_shape() is other.get_shape()):
+                return Callable.basic_unify(self, other, heap, occurs_check)
+            for x in arg_iter:
+                a = self.argument_at(i)
+                b = other.argument_at(i)
+                a.unify(b, heap, occurs_check)
+
+    generic_callable.__name__ = 'SpecializedGeneric'+str(n_args)
+    return generic_callable
+
+specialized_term_classes = [make_specialized_term_cls(i) for i in range(10)]

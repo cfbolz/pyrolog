@@ -41,12 +41,13 @@ from prolog.interpreter import specialterm
 
 def test_specialize_on_build():
     sig = signature.Signature.getsignature("foo", 1)
-    a1 = specialterm.SpecialTerm(sig, [Number(0)])
-    assert isinstance(a1, specialterm.SpecialTerm)
+    a1 = specialterm.build(sig, [Number(0)])
+    assert a1.argument_at(0).num == 0
     s1 = a1.get_shape()
-    a2 = specialterm.SpecialTerm(sig, [Callable.build("blubl")])
-    assert isinstance(a1, specialterm.SpecialTerm)
+    a2 = specialterm.build(sig, [Callable.build("bar")])
+    assert a2.argument_at(0).name() == "bar"
     s2 = a2.get_shape()
     assert s1 is not s2
-    a3 = specialterm.SpecialTerm(sig, [Number(1)])
+    a3 = specialterm.build(sig, [Number(1)])
     assert a3.get_shape() is s1
+    assert a3.argument_at(0).num == 1
