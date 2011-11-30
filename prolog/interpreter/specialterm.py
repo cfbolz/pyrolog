@@ -8,29 +8,6 @@ erase, unerase = rerased.new_erasing_pair("pyrolog-shape")
 
 signature.Signature.register_extr_attr("shape")
 
-def shape_eq(args1, args2):
-    return args1 == args2
-
-def shape_hash(args):
-    x = 0x345678
-    for item in args:
-        y = objectmodel.compute_identity_hash(item)
-        x = rarithmetic.intmask((1000003 * x) ^ y)
-    return x
-
-class ShapeCache(object):
-    def __init__(self, signature):
-        self.signature = signature
-        self.d = objectmodel.r_dict(shape_eq, shape_hash)
-
-    def get(self, argshapes):
-        try:
-            return self.d[argshapes]
-        except KeyError:
-            res = Shape(self.signature, argshapes, self)
-            self.d[argshapes] = res
-            return res
-
 class ArgumentDescr(object):
     def compatible_with(self, obj):
         return False
@@ -80,10 +57,10 @@ NUMBER_ARGUMENT = NumberArgumentDescr()
 class Shape(object):
     _immutable_fields_ = ["signature", "args[*]"]
 
-    def __init__(self, signature, args, cache):
+    def __init__(self, signature, args):
         self.signature = signature
         self.args = args
-        self.cache = cache
+        self.cache = None
 
     def argument_at(self, i, obj):
         return self.args[i].read_argument(i, obj)
@@ -91,19 +68,41 @@ class Shape(object):
     def set_argument_at(self, i, val, obj):
         return self.args[i].write_argument(i, val, obj)
 
+    @jit.elidable
+    def replace(self, i, arg):
+        if self.args[i] is arg:
+            return self
+        key = (i, arg)
+        if self.cache is None:
+            self.cache = {}
+        elif key in self.cache:
+            return self.cache[key]
+        args = self.args[:i] + [arg] + self.args[i + 1:]
+        shape = Shape(self.signature, args)
+        self.cache[key] = shape
+        return shape
+
+@jit.elidable
+def get_base_shape(signature):
+    shape = signature.get_extra("shape")
+    if shape is None:
+        shape = Shape(signature, [ANY_ARGUMENT] * signature.numargs)
+        signature.set_extra("shape", shape)
+    return shape
+
+@jit.unroll_safe
 def get_shape(signature, args):
-    cache = signature.get_extra("shape")
-    if cache is None:
-        cache = ShapeCache(signature)
-        signature.set_extra("shape", cache)
-    argshapes = [ANY_ARGUMENT] * len(args)
+    shape = get_base_shape(signature)
     for i in range(len(args)):
         arg = args[i]
         if VAR_ARGUMENT.compatible_with(arg):
-            argshapes[i] = VAR_ARGUMENT
+            argshape = VAR_ARGUMENT
         elif NUMBER_ARGUMENT.compatible_with(arg):
-            argshapes[i] = NUMBER_ARGUMENT
-    return cache.get(argshapes)
+            argshape = NUMBER_ARGUMENT
+        else:
+            continue
+        shape = shape.replace(i, argshape)
+    return shape
 
 def build(signature, args):
     if len(args) <= len(specialized_term_classes):
@@ -126,7 +125,7 @@ def make_specialized_term_cls(n_args):
         def _init_values(self, args):
             if args is None:
                 return
-            for x in range(len(args)):
+            for x in arg_iter:
                 self.set_argument_at(x, args[x])
 
         def _make_new(self):
@@ -170,9 +169,11 @@ def make_specialized_term_cls(n_args):
         def argument_count(self):
             return n_args
 
+        @specialize.arg(3)
         @jit.look_inside_iff(lambda self, other, heap, occurs_check:
                 jit.isvirtual(self) or jit.isvirtual(other) or
                 jit.isconstant(self) or jit.isconstant(other))
+        @specialize.arg(3)
         def basic_unify(self, other, heap, occurs_check):
             if not (isinstance(other, generic_callable) and
                     self.get_shape() is other.get_shape()):
