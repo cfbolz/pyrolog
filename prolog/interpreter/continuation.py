@@ -137,7 +137,7 @@ class Engine(object):
         signature = rule.signature        
         if self.get_builtin(signature):
             error.throw_permission_error(
-                "modify", "static_procedure", rule.head.get_prolog_signature())
+                "modify", "static_procedure", signature.get_prolog_signature())
 
         function = m.current_module.lookup(signature)
         function.add_rule(rule, end)
@@ -218,7 +218,7 @@ class Engine(object):
             return BuiltinContinuation(self, module, scont, builtin, query), fcont, heap
 
         # do a real call
-        function = self._get_function(signature, module, query)
+        function = self._get_function(signature, module)
         query = function.add_meta_prefixes(query, module.nameatom)
         startrulechain = jit.hint(function.rulechain, promote=True)
         rulechain = startrulechain.find_applicable_rule(query)
@@ -227,13 +227,13 @@ class Engine(object):
         scont, fcont, heap = _make_rule_conts(self, scont, fcont, heap, query, rulechain)
         return scont, fcont, heap
 
-    def _get_function(self, signature, module, query): 
+    def _get_function(self, signature, module):
         function = module.lookup(signature)
         if function.rulechain is None and self.modulewrapper.system is not None:
             function = self.modulewrapper.system.lookup(signature)
         if function.rulechain is None:
             return error.throw_existence_error(
-                    "procedure", query.get_prolog_signature())
+                    "procedure", signature.get_prolog_signature())
         return function
 
     # _____________________________________________________

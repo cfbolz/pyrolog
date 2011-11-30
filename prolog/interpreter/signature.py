@@ -90,6 +90,11 @@ class Signature(object):
                 self.numargs == other.numargs and
                 self.name == other.name)
 
+    def get_prolog_signature(self):
+        from prolog.interpreter.term import Callable, Number
+        return Callable.build("/", [Callable.build(self.name),
+                                    Number(self.numargs)])
+
     @specialize.arg(1)
     def get_extra(self, name):
         aname = "extra_attr_" + name
