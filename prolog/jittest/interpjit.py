@@ -1,7 +1,7 @@
 import sys
 from pypy import conftest
 class o:
-    view = False
+    view = True
     viewloops = True
 conftest.option = o
 from pypy.jit.metainterp.test.test_ajit import LLJitMixin
@@ -128,7 +128,6 @@ class TestLLtype(LLJitMixin):
         t6 = parse_query_term("partition([6, 6, 6, 6, 6, 6, 66, 3, 6, 1, 2, 6, 8, 9, 0,4, 2, 5, 1, 106, 3, 6, 1, 2, 6, 8, 9, 0,4, 2, 5, 1, 10, 3, 6, 1, 2, 6, 8, 9, 0,4, 2, 5, 1, 10], 5, X, Y).")
         t7 = parse_query_term("findall(X+Y, app([X|_], [Y|_], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]), L).")
         def interp_w(c):
-            jitdriver.set_param("inlining", True)
             if c == 1:
                 t = t1
             elif c == 2:
@@ -149,7 +148,7 @@ class TestLLtype(LLJitMixin):
         # XXX
         #interp_w(2)
 
-        self.meta_interp(interp_w, [2], listcomp=True, backendopt=True,
-                         listops=True)
+        self.meta_interp(interp_w, [3], listcomp=True, backendopt=True,
+                listops=True, translationoptions={"taggedpointers": True})
         #self.meta_interp(interp_w, [3], listcomp=True,
         #                 listops=True)

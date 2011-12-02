@@ -103,3 +103,16 @@ def test_specialize_term():
     a3 = specialterm.build(sig, [bar1, Number(1)])
     s3 = a3.get_shape()
     assert s1 is not s3
+
+def test_special_class_for_cons():
+    dotsig = signature.Signature.getsignature(".", 2)
+    barsig = signature.Signature.getsignature("bar", 2)
+    bar = specialterm.build(barsig, [Number(0), Number(1)])
+    dot = specialterm.build(dotsig, [Number(-1), Number(0)])
+    assert bar.__class__ is not dot.__class__
+
+    sig = signature.Signature.getsignature("f", 1)
+    a1 = specialterm.build(sig, [bar])
+    a2 = specialterm.build(sig, [dot])
+    assert a1.get_shape() is not a2.get_shape()
+

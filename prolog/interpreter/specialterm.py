@@ -8,6 +8,8 @@ erase, unerase = rerased.new_erasing_pair("pyrolog-shape")
 
 signature.Signature.register_extr_attr("shape")
 
+conssig = signature.Signature.getsignature(".", 2)
+
 class ArgumentDescr(object):
     def compatible_with(self, obj):
         return False
@@ -123,8 +125,10 @@ def get_shape(signature, args):
     return shape
 
 def build(signature, args):
+    shape = get_shape(signature, args)
+    if signature.eq(conssig):
+        return Cons(shape, args)
     if len(args) <= len(specialized_term_classes):
-        shape = get_shape(signature, args)
         return specialized_term_classes[len(args) - 1](shape, args)
 
 def make_specialized_term_cls(n_args):
@@ -194,6 +198,18 @@ def make_specialized_term_cls(n_args):
     generic_callable.__name__ = 'SpecializedGeneric'+str(n_args)
     return generic_callable
 
+specialized_term_classes = [make_specialized_term_cls(i) for i in range(1, 10)]
+
+class Cons(make_specialized_term_cls(2)):
+    def name(self):
+        return "."
+
+    def signature(self):
+        return conssig
+
+    def _make_new(self, name, signature):
+        return Cons(name, None, signature)
+
 def make_specialized_argument_descr(termcls):
     class cls(ArgumentDescr):
         def compatible_with(self, obj):
@@ -209,9 +225,11 @@ def make_specialized_argument_descr(termcls):
     cls.__name__ = termcls.__name__ + "ArgumentDescr"
     return cls()
 
-specialized_term_classes = [make_specialized_term_cls(i) for i in range(1, 10)]
+
 all_argument_descrs.extend([make_specialized_argument_descr(cls)
             for cls in specialized_term_classes])
 all_argument_descrs.append(make_specialized_argument_descr(term.Atom))
+all_argument_descrs.append(make_specialized_argument_descr(Cons))
 
 all_argument_descrs = unroll.unrolling_iterable(all_argument_descrs)
+
