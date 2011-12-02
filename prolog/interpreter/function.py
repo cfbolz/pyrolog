@@ -56,10 +56,7 @@ class Rule(object):
         env = [None] * self.size_env
         if self.headargs is not None:
             assert isinstance(head, Callable)
-            for i in range(len(self.headargs)):
-                arg2 = self.headargs[i]
-                arg1 = head.argument_at(i)
-                arg2.unify_and_standardize_apart(arg1, heap, env)
+            self.head.unify_and_standardize_apart(head, heap, env)
         body = self.body
         if body is None:
             return None
