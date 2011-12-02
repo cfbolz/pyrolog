@@ -35,8 +35,11 @@ class PrologObject(object):
         return self.copy_standardize_apart(heap, env)
 
     def unify_and_standardize_apart(self, other, heap, env):
+        """ standardize apart self, unifying it with other. self is an
+        immutable term that cannot contains normal variables, only
+        NumberedVars"""
         raise NotImplementedError("abstract base class")
-    
+
     def enumerate_vars(self, memo):
         raise NotImplementedError("abstract base class")
     
