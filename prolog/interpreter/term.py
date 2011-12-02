@@ -487,6 +487,10 @@ class Callable(NonVar):
         raise NotImplementedError("abstract base")
     
     @specialize.arg(3)
+    @jit.look_inside_iff(lambda self, other, heap, occurs_check:
+            jit.isvirtual(self) or jit.isvirtual(other) or
+            jit.isconstant(self) or jit.isconstant(other))
+    @specialize.arg(3)
     def basic_unify(self, other, heap, occurs_check):
         if (isinstance(other, Callable) and
                 self.signature().eq(other.signature())):
