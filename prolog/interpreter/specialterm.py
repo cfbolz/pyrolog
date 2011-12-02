@@ -12,10 +12,16 @@ class ArgumentDescr(object):
     def compatible_with(self, obj):
         return False
 
+    def dereference_with_known_type(self, obj, heap):
+        return obj.dereference(heap)
+
     def read_argument(self, i, obj):
         res = unerase(obj._raw_argument_at(i))
-        assert self.compatible_with(res)
         return res
+
+    def read_argument_dereference(self, i, obj, heap):
+        res = self.read_argument(i, obj)
+        return self.dereference_with_known_type(res, heap)
 
     def write_argument(self, i, val, obj):
         assert self.compatible_with(val)
@@ -28,6 +34,11 @@ class AnyArgumentDescr(ArgumentDescr):
 class VarArgumentDescr(ArgumentDescr):
     def compatible_with(self, obj):
         return isinstance(obj, term.BindingVar)
+
+    def dereference_with_known_type(self, obj, heap):
+        assert isinstance(obj, term.BindingVar)
+        return obj.dereference(heap)
+
 
 class NumberArgumentDescr(ArgumentDescr):
     def compatible_with(self, obj):
@@ -64,6 +75,9 @@ class Shape(object):
 
     def argument_at(self, i, obj):
         return self.args[i].read_argument(i, obj)
+
+    def argument_at_dereference(self, i, obj, heap):
+        return self.args[i].read_argument_dereference(i, obj, heap)
 
     def set_argument_at(self, i, val, obj):
         return self.args[i].write_argument(i, val, obj)
@@ -150,6 +164,9 @@ def make_specialized_term_cls(n_args):
         def argument_at(self, i):
             return self.get_shape().argument_at(i, self)
 
+        def argument_at_dereference(self, i, heap):
+            return self.get_shape().argument_at_dereference(i, self, heap)
+
         def set_argument_at(self, i, obj):
             self.get_shape().set_argument_at(i, obj, self)
 
@@ -169,19 +186,6 @@ def make_specialized_term_cls(n_args):
         def argument_count(self):
             return n_args
 
-        @specialize.arg(3)
-        @jit.look_inside_iff(lambda self, other, heap, occurs_check:
-                jit.isvirtual(self) or jit.isvirtual(other) or
-                jit.isconstant(self) or jit.isconstant(other))
-        @specialize.arg(3)
-        def basic_unify(self, other, heap, occurs_check):
-            if not (isinstance(other, generic_callable) and
-                    self.get_shape() is other.get_shape()):
-                return term.Callable.basic_unify(self, other, heap, occurs_check)
-            for x in arg_iter:
-                a = self.argument_at(x)
-                b = other.argument_at(x)
-                a.unify(b, heap, occurs_check)
 
     generic_callable.__name__ = 'SpecializedGeneric'+str(n_args)
     return generic_callable
