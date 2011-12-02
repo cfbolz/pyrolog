@@ -44,18 +44,6 @@ class VarArgumentDescr(ArgumentDescr):
         jit.record_known_class(res, term.BindingVar)
         return res
 
-class AtomArgumentDescr(ArgumentDescr):
-    def compatible_with(self, obj):
-        return isinstance(obj, term.Atom)
-
-    def dereference_with_known_type(self, obj, heap):
-        return obj
-
-    def read_argument(self, i, obj):
-        res = unerase(obj._raw_argument_at(i))
-        jit.record_known_class(res, term.Atom)
-        return res
-
 class NumberArgumentDescr(ArgumentDescr):
     def compatible_with(self, obj):
         if not isinstance(obj, term.Number):
@@ -79,8 +67,7 @@ class NumberArgumentDescr(ArgumentDescr):
 
 ANY_ARGUMENT = AnyArgumentDescr()
 all_argument_descrs = [VarArgumentDescr(),
-                       NumberArgumentDescr(),
-                       AtomArgumentDescr()]
+                       NumberArgumentDescr()]
 
 class Shape(object):
     _immutable_fields_ = ["signature", "args[*]"]
@@ -225,5 +212,6 @@ def make_specialized_argument_descr(termcls):
 specialized_term_classes = [make_specialized_term_cls(i) for i in range(1, 10)]
 all_argument_descrs.extend([make_specialized_argument_descr(cls)
             for cls in specialized_term_classes])
+all_argument_descrs.append(make_specialized_argument_descr(term.Atom))
 
 all_argument_descrs = unroll.unrolling_iterable(all_argument_descrs)
