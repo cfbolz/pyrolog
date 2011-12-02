@@ -1,5 +1,6 @@
-from prolog.interpreter.term import Atom, Number, Term, Callable, specialized_term_classes
+from prolog.interpreter.term import Atom, Number, Term, Callable, specialized_term_classes, Float
 from prolog.interpreter.test.tool import parse
+from prolog.interpreter.heap import Heap
 from prolog.interpreter import signature
 import py
 
@@ -53,3 +54,22 @@ def test_specialize_on_build():
     a3 = specialterm.build(sig, [Number(1)])
     assert a3.get_shape() is s1
     assert a3.argument_at(0).num == 1
+
+def test_specialize_var():
+    h = Heap()
+    sig = signature.Signature.getsignature("foo", 2)
+    v1 = h.newvar()
+    a1 = specialterm.build(sig, [v1, Number(0)])
+    assert a1.argument_at(0) is v1
+    s1 = a1.get_shape()
+    v2 = h.newvar()
+    a2 = specialterm.build(sig, [v2, Number(1)])
+    assert a2.argument_at(0) is v2
+    s2 = a2.get_shape()
+    assert s1 is s2
+
+    bar = Callable.build("bar")
+    a3 = specialterm.build(sig, [Float(1.1), Number(1)])
+    s3 = a3.get_shape()
+    assert s1 is not s3
+
