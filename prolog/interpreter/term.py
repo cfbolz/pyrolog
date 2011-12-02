@@ -153,7 +153,7 @@ class Var(PrologObject):
         assert isinstance(other, Var)
         return rcmp(compute_unique_id(self), compute_unique_id(other))
 
-class BindingVar(Var):
+class AbstractBindingVar(Var):
     __slots__ = ("binding", "created_after_choice_point")
 
     def __init__(self):
@@ -175,6 +175,17 @@ class BindingVar(Var):
                 self.setvalue(other, heap)
             next._unify_derefed(other, heap, occurs_check)
 
+class BindingVar(AbstractBindingVar):
+    def dereference(self, heap):
+        next = self.binding
+        if next is None:
+            return self
+        else:
+            result = next.dereference(heap)
+            if result is not next and heap is not None:
+                # do path compression
+                self.setvalue(result, heap)
+            return result
 
 class VarInTerm(Var):
     def __init__(self, parent):
@@ -258,11 +269,11 @@ class AttMap(object):
     def get_attname_at_index(self, index):
         return self.attnames_in_order[index]
 
-class AttVar(BindingVar):
+class AttVar(AbstractBindingVar):
     attmap = AttMap()
 
     def __init__(self):
-        BindingVar.__init__(self)
+        AbstractBindingVar.__init__(self)
         self.value_list = debug.make_sure_not_resized([])
 
     @specialize.arg(3)
@@ -278,7 +289,7 @@ class AttVar(BindingVar):
     def setvalue(self, value, heap):
         if self.value_list is not None:
             heap.add_hook(self)
-        BindingVar.setvalue(self, value, heap)
+        AbstractBindingVar.setvalue(self, value, heap)
 
     def __repr__(self):
         attrs = []
@@ -458,6 +469,7 @@ class Callable(NonVar):
     
     def get_prolog_signature(self):
         return self.signature().get_prolog_signature()
+
     def arguments(self):
         argcount = self.argument_count()
         result = [None] * argcount
