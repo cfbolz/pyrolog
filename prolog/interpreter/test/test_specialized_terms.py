@@ -73,3 +73,33 @@ def test_specialize_var():
     s3 = a3.get_shape()
     assert s1 is not s3
 
+def test_specialize_atom():
+    h = Heap()
+    sig = signature.Signature.getsignature("foo", 2)
+    bar = Callable.build("bar")
+    a1 = specialterm.build(sig, [bar, Number(0)])
+    assert a1.argument_at(0) is bar
+    s1 = a1.get_shape()
+    a2 = specialterm.build(sig, [bar, Number(1)])
+    s2 = a2.get_shape()
+    assert s1 is s2
+
+    a3 = specialterm.build(sig, [Float(0.1), Number(1)])
+    s3 = a3.get_shape()
+    assert s1 is not s3
+
+def test_specialize_term():
+    h = Heap()
+    sig = signature.Signature.getsignature("foo", 2)
+    bar = Callable.build("bar", [Number(0), Number(1)])
+    a1 = specialterm.build(sig, [bar, Number(0)])
+    assert a1.argument_at(0) is bar
+    s1 = a1.get_shape()
+    a2 = specialterm.build(sig, [bar, Number(1)])
+    s2 = a2.get_shape()
+    assert s1 is s2
+
+    bar1 = Callable.build("bar", [Number(0)])
+    a3 = specialterm.build(sig, [bar1, Number(1)])
+    s3 = a3.get_shape()
+    assert s1 is not s3

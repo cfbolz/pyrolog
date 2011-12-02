@@ -1,7 +1,7 @@
 from prolog.interpreter import term
 from prolog.interpreter import signature
 
-from pypy.rlib import jit, objectmodel, rarithmetic, rerased
+from pypy.rlib import jit, objectmodel, rarithmetic, rerased, unroll
 from pypy.rlib.objectmodel import specialize
 
 erase, unerase = rerased.new_erasing_pair("pyrolog-shape")
@@ -39,6 +39,22 @@ class VarArgumentDescr(ArgumentDescr):
         assert isinstance(obj, term.BindingVar)
         return obj.dereference(heap)
 
+    def read_argument(self, i, obj):
+        res = unerase(obj._raw_argument_at(i))
+        jit.record_known_class(res, term.BindingVar)
+        return res
+
+class AtomArgumentDescr(ArgumentDescr):
+    def compatible_with(self, obj):
+        return isinstance(obj, term.Atom)
+
+    def dereference_with_known_type(self, obj, heap):
+        return obj
+
+    def read_argument(self, i, obj):
+        res = unerase(obj._raw_argument_at(i))
+        jit.record_known_class(res, term.Atom)
+        return res
 
 class NumberArgumentDescr(ArgumentDescr):
     def compatible_with(self, obj):
@@ -62,8 +78,9 @@ class NumberArgumentDescr(ArgumentDescr):
         obj._raw_set_argument_at(i, res)
 
 ANY_ARGUMENT = AnyArgumentDescr()
-VAR_ARGUMENT = VarArgumentDescr()
-NUMBER_ARGUMENT = NumberArgumentDescr()
+all_argument_descrs = [VarArgumentDescr(),
+                       NumberArgumentDescr(),
+                       AtomArgumentDescr()]
 
 class Shape(object):
     _immutable_fields_ = ["signature", "args[*]"]
@@ -109,10 +126,10 @@ def get_shape(signature, args):
     shape = get_base_shape(signature)
     for i in range(len(args)):
         arg = args[i]
-        if VAR_ARGUMENT.compatible_with(arg):
-            argshape = VAR_ARGUMENT
-        elif NUMBER_ARGUMENT.compatible_with(arg):
-            argshape = NUMBER_ARGUMENT
+        for descr in all_argument_descrs:
+            if descr.compatible_with(arg):
+                argshape = descr
+                break
         else:
             continue
         shape = shape.replace(i, argshape)
@@ -190,4 +207,23 @@ def make_specialized_term_cls(n_args):
     generic_callable.__name__ = 'SpecializedGeneric'+str(n_args)
     return generic_callable
 
+def make_specialized_argument_descr(termcls):
+    class cls(ArgumentDescr):
+        def compatible_with(self, obj):
+            return isinstance(obj, termcls)
+
+        def dereference_with_known_type(self, obj, heap):
+            return obj
+
+        def read_argument(self, i, obj):
+            res = unerase(obj._raw_argument_at(i))
+            jit.record_known_class(res, termcls)
+            return res
+    cls.__name__ = termcls.__name__ + "ArgumentDescr"
+    return cls()
+
 specialized_term_classes = [make_specialized_term_cls(i) for i in range(1, 10)]
+all_argument_descrs.extend([make_specialized_argument_descr(cls)
+            for cls in specialized_term_classes])
+
+all_argument_descrs = unroll.unrolling_iterable(all_argument_descrs)
