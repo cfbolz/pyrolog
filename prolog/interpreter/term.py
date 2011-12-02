@@ -479,7 +479,10 @@ class Callable(NonVar):
     
     def argument_at(self, i):
         raise NotImplementedError("abstract base")
-    
+
+    def argument_at_dereference(self, i, heap):
+        return self.argument_at(i).dereference(heap)
+
     def argument_count(self):
         raise NotImplementedError("abstract base")
     
@@ -488,7 +491,11 @@ class Callable(NonVar):
         if (isinstance(other, Callable) and
                 self.signature().eq(other.signature())):
             for i in range(self.argument_count()):
-                self.argument_at(i).unify(other.argument_at(i), heap, occurs_check)
+                # only dereference one argument, to still deal with
+                # cyclic terms correctly
+                argself = self.argument_at(i)
+                argother = other.argument_at_dereference(i, heap)
+                argself.unify(argother, heap, occurs_check)
         else:
             raise UnificationFailed
     
@@ -498,7 +505,7 @@ class Callable(NonVar):
             self.signature().eq(other.signature())):
             for i in range(self.argument_count()):
                 argself = self.argument_at(i)
-                argother = other.argument_at(i)
+                argother = other.argument_at_dereference(i, heap)
                 argself.unify_and_standardize_apart(argother, heap, env)
         else:
             raise UnificationFailed
@@ -547,8 +554,8 @@ class Callable(NonVar):
         if c != 0:
             return c
         for i in range(self.argument_count()):
-            a1 = self.argument_at(i).dereference(heap)
-            a2 = other.argument_at(i).dereference(heap)
+            a1 = self.argument_at_dereference(i, heap)
+            a2 = other.argument_at_dereference(i, heap)
             c = cmp_standard_order(a1, a2, heap)
             if c != 0:
                 return c
@@ -621,7 +628,9 @@ class Callable(NonVar):
         if not self.signature().eq(other.signature()):
             return False
         for i in range(self.argument_count()):
-            if not self.argument_at(i).quick_unify_check(other.argument_at(i)):
+            argself = self.argument_at_dereference(i, None)
+            argother = other.argument_at_dereference(i, None)
+            if not argself.quick_unify_check(argother):
                 return False
         return True
 
@@ -820,8 +829,6 @@ def _term_copy_standardize_apart(obj, i, heap, env):
 def _term_enumerate_vars(obj, i, _, memo):
     return obj.enumerate_vars(memo)
 
-def _term_unify_and_standardize_apart(obj, i, heap, other, memo):
-    obj.unify_and_standardize_apart(other.argument_at(i), heap, memo)
 
 class Term(Callable):
     TYPE_STANDARD_ORDER = 4

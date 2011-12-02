@@ -55,7 +55,7 @@ def make_wrapper(func, name, unwrap_spec=[], handles_continuation=False,
         varname = "var%s" % (i, )
         subargs.append(varname)
         if spec in ("obj", "callable", "int", "atom", "arithmetic", "instream", "outstream", "stream", "list"):
-            code.append("    %s = query.argument_at(%s).dereference(heap)" %
+            code.append("    %s = query.argument_at_dereference(%s, heap)" %
                         (varname, i))
         if spec in ("int", "atom", "arithmetic", "list", "instream", "outstream", "stream"):
             code.append(
