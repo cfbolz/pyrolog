@@ -262,11 +262,20 @@ class Engine(object):
     @jit.unroll_safe
     def throw(self, exc, scont, fcont, heap):
         # XXX write tests for catching non-ground things
+        # Trace: exception will print backtrace and overwrite scont, fcont heap
+        orig_scont = scont
+        orig_fcont = fcont
+        orig_heap = heap
         while not scont.is_done():
             if isinstance(scont, TraceSuccessContinuation):
                 scont = scont.trace_exception()
-                scont, fcont, heap = scont.activate(fcont, heap)
-                continue
+                if not isinstance(scont, DoneSuccessContinuation):
+                    scont, fcont, heap = scont.activate(fcont, heap)
+                    continue
+                else:
+                    # now, throw the exception on the raising continuations
+                    scont, fcont, heap = orig_scont.trace_unwrap(), orig_fcont.trace_unwrap(), orig_heap
+                    continue
             if not isinstance(scont, CatchingDelimiter):
                 scont = scont.nextcont
                 continue
@@ -834,10 +843,10 @@ class TraceSuccessContinuation(Continuation):
         return self
 
     def trace_unwrap(self):
-        if self.port != "Exit":
+        if self.port == "Call" or self.port is None:
             cont = self.innercont
             cont.nextcont = cont.nextcont.trace_unwrap()
-        else:
+        else: # Exit or Exception
             cont = self.nextcont.trace_unwrap()
         return cont
 
