@@ -76,13 +76,18 @@ all_argument_descrs = [VarArgumentDescr(),
                        NumberArgumentDescr()]
 
 class Shape(object):
-    _immutable_fields_ = ["signature", "args[*]"]
+    _immutable_fields_ = ["signature", "args[*]", "str"]
 
     def __init__(self, signature, args):
         self.signature = signature
         self.args = args
         self.str = "".join([a.char for a in args])
         self.cache = None
+
+    def count(self, onlyifnonconst=False):
+        if not onlyifnonconst or not jit.isconstant(self):
+            key = self.str, self.signature.name
+            stats.d[key] = stats.d.get(key, 0) + 1
 
     def argument_at(self, i, obj):
         return self.args[i].read_argument(i, obj)
@@ -107,6 +112,12 @@ class Shape(object):
         self.cache[key] = shape
         return shape
 
+class Stats(object):
+    pass
+
+stats = Stats()
+stats.d = {}
+
 @jit.elidable
 def get_base_shape(signature):
     shape = signature.get_extra("shape")
@@ -127,6 +138,7 @@ def get_shape(signature, args):
         else:
             continue
         shape = shape.replace(i, argshape)
+    shape.count()
     return shape
 
 def build(signature, args):
@@ -160,6 +172,7 @@ def make_specialized_term_cls(n_args):
             return cls(self.get_shape(), None)
 
         def get_shape(self):
+            self.shape.count(onlyifnonconst=True)
             return jit.promote(self.shape)
 
         def signature(self):
