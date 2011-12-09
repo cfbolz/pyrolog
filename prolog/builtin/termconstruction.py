@@ -6,25 +6,30 @@ from pypy.rlib import jit
 # analysing and construction terms
 
 @expose_builtin("functor", unwrap_spec=["obj", "obj", "obj"])
+@jit.unroll_safe
 def impl_functor(engine, heap, t, functor, arity):
     if helper.is_atomic(t):
         functor.unify(t, heap)
         arity.unify(term.Number(0), heap)
     elif helper.is_term(t):
         assert isinstance(t, term.Callable)
-        functor.unify(term.Callable.build(t.name()), heap)
+        sig = t.signature()
+        atom = term.Callable.build(t.name(), signature=sig.atom_signature)
+        functor.unify(atom, heap)
         arity.unify(term.Number(t.argument_count()), heap)
     elif isinstance(t, term.Var):
         if isinstance(functor, term.Var):
             error.throw_instantiation_error()
         a = helper.unwrap_int(arity)
+        jit.promote(a)
         if a < 0:
             error.throw_domain_error("not_less_than_zero", arity)
         else:
             functor = helper.ensure_atomic(functor)
             if a == 0:
-                t.unify(helper.ensure_atomic(functor), heap)
+                t.unify(functor, heap)
             else:
+                jit.promote(functor)
                 name = helper.unwrap_atom(functor)
                 # XXX use newvar_in_term
                 t.unify(
@@ -74,7 +79,8 @@ def impl_univ(engine, heap, first, second):
     if not isinstance(first, term.Var):
         if helper.is_term(first):
             assert isinstance(first, term.Callable)
-            l = [term.Callable.build(first.name())] + first.arguments()
+            sig = first.signature().atom_signature
+            l = [term.Callable.build(first.name(), signature=sig)] + first.arguments()
         else:
             l = [first]
         u1 = helper.wrap_list(l)

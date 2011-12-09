@@ -452,7 +452,7 @@ class NonVar(PrologObject):
         return self._unify_derefed(other, heap, occurs_check)
     
     @specialize.arg(3)
-    def basic_unify(self, other, heap, occurs_check=False):
+    def basic_unify(self, other, heap, occurs_check):
         raise NotImplementedError("abstract base class")
     
     @specialize.arg(3)
@@ -507,7 +507,7 @@ class Callable(NonVar):
     
     @specialize.arg(3)
     @jit.unroll_safe
-    def basic_unify(self, other, heap, occurs_check=False):
+    def basic_unify(self, other, heap, occurs_check):
         if (isinstance(other, Callable) and
                 self.signature().eq(other.signature())):
             for i in range(self.argument_count()):
@@ -602,8 +602,8 @@ class Callable(NonVar):
 
         if len(args) == 0:
             if cache:
-                return Atom.newatom(term_name)
-            return Atom(term_name)
+                return Atom.newatom(term_name, signature)
+            return Atom(term_name, signature)
         else:
             # XXX be less aggressive later
             if cache:
@@ -657,12 +657,14 @@ class Atom(Callable):
         return "Atom(%r)" % (self.name(),)
     
     @staticmethod
-    def newatom(name):
-        result = Atom.cache.get(name, None)
+    @jit.elidable
+    def newatom(name, signature=None):
+        if signature is None:
+            signature = Signature.getsignature(name, 0)
+        result = Atom.cache.get(signature, None)
         if result is not None:
             return result
-        signature = Signature.getsignature(name, 0)
-        Atom.cache[name] = result = Atom(name, signature)
+        Atom.cache[signature] = result = Atom(name, signature)
         return result
     
     def eval_arithmetic(self, engine):
@@ -691,17 +693,16 @@ class Atom(Callable):
 class Numeric(NonVar):
     __slots__ = ()
 
-class Number(Numeric): #, UnboxedValue):
+class Number(Numeric):#, UnboxedValue):
     TYPE_STANDARD_ORDER = 3
     __slots__ = ("num", )
     _immutable_fields_ = ["num"]
-    
-    def __init__(self, num):
-        assert isinstance(num, int)
-        self.num = num
-    
+
+    def __init__(self, val):
+        self.num = val
+
     @specialize.arg(3)
-    def basic_unify(self, other, heap, occurs_check=False):
+    def basic_unify(self, other, heap, occurs_check):
         if isinstance(other, Number) and other.num == self.num:
             return
         raise UnificationFailed
@@ -747,7 +748,7 @@ class BigInt(Numeric):
     def __init__(self, value):
         self.value = value
 
-    def basic_unify(self, other, heap, occurs_check=False):
+    def basic_unify(self, other, heap, occurs_check):
         if isinstance(other, BigInt) and other.value.eq(self.value):
             return
         raise UnificationFailed
@@ -781,7 +782,7 @@ class Float(Numeric):
         self.floatval = floatval
     
     @specialize.arg(3)
-    def basic_unify(self, other, heap, occurs_check=False):
+    def basic_unify(self, other, heap, occurs_check):
         if isinstance(other, Float) and other.floatval == self.floatval:
             return
         raise UnificationFailed
