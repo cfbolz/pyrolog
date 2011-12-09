@@ -11,6 +11,7 @@ signature.Signature.register_extr_attr("shape")
 conssig = signature.Signature.getsignature(".", 2)
 
 class ArgumentDescr(object):
+    char = "b"
     def compatible_with(self, obj):
         return False
 
@@ -30,10 +31,12 @@ class ArgumentDescr(object):
         obj._raw_set_argument_at(i, erase(val))
 
 class AnyArgumentDescr(ArgumentDescr):
+    char = "*"
     def compatible_with(self, obj):
         return True
 
 class VarArgumentDescr(ArgumentDescr):
+    char = "X"
     def compatible_with(self, obj):
         return isinstance(obj, term.BindingVar)
 
@@ -47,6 +50,7 @@ class VarArgumentDescr(ArgumentDescr):
         return res
 
 class NumberArgumentDescr(ArgumentDescr):
+    char = "n"
     def compatible_with(self, obj):
         if not isinstance(obj, term.Number):
             return False
@@ -77,6 +81,7 @@ class Shape(object):
     def __init__(self, signature, args):
         self.signature = signature
         self.args = args
+        self.str = "".join([a.char for a in args])
         self.cache = None
 
     def argument_at(self, i, obj):
@@ -225,11 +230,17 @@ def make_specialized_argument_descr(termcls):
     cls.__name__ = termcls.__name__ + "ArgumentDescr"
     return cls()
 
-
-all_argument_descrs.extend([make_specialized_argument_descr(cls)
-            for cls in specialized_term_classes])
-all_argument_descrs.append(make_specialized_argument_descr(term.Atom))
-all_argument_descrs.append(make_specialized_argument_descr(Cons))
+def make_arg_descrs():
+    for i, cls in enumerate(specialized_term_classes):
+        descr = make_specialized_argument_descr(cls)
+        descr.char = str(i + 1)
+        assert len(descr.char) == 1
+        all_argument_descrs.append(descr)
+    all_argument_descrs.append(make_specialized_argument_descr(term.Atom))
+    all_argument_descrs[-1].char = "a"
+    all_argument_descrs.append(make_specialized_argument_descr(Cons))
+    all_argument_descrs[-1].char = "."
+make_arg_descrs()
 
 all_argument_descrs = unroll.unrolling_iterable(all_argument_descrs)
 
