@@ -437,8 +437,10 @@ class ShapedCallableMixin:
         return self.signature().numargs
 
     @objectmodel.specialize.arg(3)
-    @jit.unroll_safe
-    def basic_unify(self, other, heap, occurs_check=False):
+    @jit.look_inside_iff(lambda self, other, heap, occurs_check:
+        jit.isvirtual(self) or jit.isvirtual(other) or
+        jit.isconstant(self) or jit.isconstant(other))
+    def basic_unify(self, other, heap, occurs_check):
         if (isinstance(other, ShapedCallableBase) and
                 self.get_shape() is other.get_shape()):
             for i in range(self.size_storage()):
