@@ -108,6 +108,7 @@ class InStorageAtomShape(InStorageShape):
 
     def resolve(self, shaped_callable, index):
         result = unerase(shaped_callable.get_raw_storage(index))
+        # XXX use new JIT interface here instead
         assert isinstance(result, term.Atom)
         return result
 
@@ -118,6 +119,8 @@ class InStorageAtomShape(InStorageShape):
     def str(self):
         return "InStorageAtomShape()"
 InStorageAtomShape._singleton = InStorageAtomShape()
+
+# XXX introduce a Var Shape
 
 def can_be_tagged(obj):
     val = obj.num
