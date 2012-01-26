@@ -108,8 +108,7 @@ class InStorageAtomShape(InStorageShape):
 
     def resolve(self, shaped_callable, index):
         result = unerase(shaped_callable.get_raw_storage(index))
-        # XXX use new JIT interface here instead
-        assert isinstance(result, term.Atom)
+        jit.record_known_class(result, term.Atom)
         return result
 
     def write(self, shaped_callable, i, val):
@@ -318,7 +317,8 @@ class ShapedCallableBase(term.Callable):
         for i in range(self.size_storage()):
             child = self.get_storage(i)
             y = 0
-            if isinstance(child, term.VarInTerm):
+            # XXX adapt to missing VarInTerms
+            if 0:#isinstance(child, term.VarInTerm):
                 parent = child.parent
                 shape = parent.get_shape()
                 indicator = child.indicator
@@ -470,17 +470,14 @@ class ShapedCallableMixin:
         storage = [None] * self.size_storage()
         result = ShapedCallableMutable(self.get_shape(), storage)
         newinstance = False
-        needmutable = False
         i = 0
         for i in range(self.size_storage()):
             arg = self.get_storage(i)
             cloned = arg.copy_standardize_apart_as_child_of(heap, env, result, i)
             newinstance = newinstance | (isinstance(arg, term.NumberedVar) or cloned is not arg)
-            needmutable = needmutable | isinstance(cloned, term.VarInTerm)
             result.set_storage(i, cloned)
         if newinstance:
-            if not needmutable:
-                result = result._make_immutable()
+            result = result._make_immutable()
             return result.compress()
         else:
             return self
@@ -535,7 +532,7 @@ class ShapedCallableMixin:
             for i in range(obj.size_storage()):
                 child = obj.get_storage(i)
                 # XXX whew, subtle logic here
-                if isinstance(child, term.VarInTerm):
+                if 0: #isinstance(child, term.VarInTerm):
                     deref = child.getbinding()
                     if deref is None:
                         self = self._make_mutable()
@@ -548,7 +545,7 @@ class ShapedCallableMixin:
 
     def move_child(self, index, newindex, old_shape):
         child = self.get_storage_using_shape(index, old_shape)
-        if isinstance(child, term.VarInTerm):
+        if 0:#isinstance(child, term.VarInTerm):
             child = child.move(self, index, newindex)
             self.set_storage(newindex, child)
         else:

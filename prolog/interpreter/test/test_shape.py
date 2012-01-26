@@ -175,6 +175,7 @@ def test_shaped_callable_replace_child():
     assert c1.get_full_storage() == [b, nil, a]
 
 def test_replace_child_fixup_varinterm_at_end():
+    py.test.skip("VarInTerms are gone")
     h = heap.Heap()
     sig = signature.Signature.getsignature(".", 3)
     build = shape.SharingShape
@@ -214,6 +215,7 @@ def test_replace_child_fixup_varinterm_at_end():
 
 
 def test_replace_child_fixup_varinterm_from_replacement():
+    py.test.skip("VarInTerms are gone")
     h = heap.Heap()
     sig = signature.Signature.getsignature(".", 3)
     build = shape.SharingShape
@@ -406,23 +408,23 @@ def test_functional_test():
     for i in range(100):
         env = assert_true("loop(10, X).", e)
     res = env['X']
-    assert [obj.num for obj in unwrap_list(res)] == [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
-    assert len(res.get_full_storage()) == shape.SHAPED_CALLABLE_SIZE
+    assert [obj.binding.num for obj in unwrap_list(res)] == [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
+    #assert len(res.get_full_storage()) == shape.SHAPED_CALLABLE_SIZE
 
     for i in range(10):
         env = assert_true("loop(100, Y), append(Y, Y, X).", e)
     res = env['X']
-    l = [obj.num for obj in unwrap_list(res)]
+    l = [obj.binding.num for obj in unwrap_list(res)]
     assert l == range(99, -1, -1) * 2
     res = env['X']
-    assert len(res.get_full_storage()) == shape.SHAPED_CALLABLE_SIZE
+    #assert len(res.get_full_storage()) == shape.SHAPED_CALLABLE_SIZE
 
     for i in range(10):
         env = assert_true("loop(100, Y), reverse(Y, [], X).", e)
     res = env['Y']
-    assert len(res.get_full_storage()) == shape.SHAPED_CALLABLE_SIZE
+    #assert len(res.get_full_storage()) == shape.SHAPED_CALLABLE_SIZE
     res = env['X']
-    l = [obj.num for obj in unwrap_list(res)]
+    l = [obj.binding.num for obj in unwrap_list(res)]
     assert l == range(100)
     res = env['X']
     assert len(res.get_full_storage()) == shape.SHAPED_CALLABLE_SIZE
