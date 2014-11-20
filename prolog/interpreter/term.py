@@ -682,7 +682,7 @@ class Numeric(NonVar):
 
 class Number(Numeric):#, UnboxedValue):
     TYPE_STANDARD_ORDER = 1
-    __slots__ = ("num", )
+    _attrs_ = ("num", )
     _immutable_fields_ = ["num"]
 
     def __init__(self, val):

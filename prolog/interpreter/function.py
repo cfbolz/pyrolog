@@ -10,8 +10,10 @@ prefixsig = Signature.getsignature(":", 2)
 
 class Rule(object):
     _immutable_ = True
-    _immutable_fields_ = ["headargs[*]"]
-    _attrs_ = ['next', 'head', 'headargs', 'contains_cut', 'body', 'size_env', 'signature', 'module', 'file_name', 'line_range', 'source']
+    _immutable_fields_ = ["headargs[*]", "groundargs[*]"]
+    _attrs_ = ['next', 'head', 'headargs', 'groundargs', 'contains_cut',
+               'body', 'size_env', 'signature', 'module', 'file_name',
+               'line_range', 'source']
     unrolling_attrs = unroll.unrolling_iterable(_attrs_)
     
     def __init__(self, head, body, module, next = None):
@@ -22,8 +24,13 @@ class Rule(object):
         self.head = h = head.enumerate_vars(memo)
         if h.argument_count() > 0:
             self.headargs = h.arguments()
+            # an argument is ground if enumeration left it unchanged, because
+            # that means it contains no variables
+            self.groundargs = [h.argument_at(i) is head.argument_at(i)
+                    for i in range(h.argument_count())]
         else:
             self.headargs = None
+            self.groundargs = None
         if body is not None:
             body = body.dereference(None)
             body = helper.ensure_callable(body)
@@ -84,7 +91,10 @@ class Rule(object):
             for i in range(len(self.headargs)):
                 arg2 = self.headargs[i]
                 arg1 = head.argument_at(i)
-                arg2.unify_and_standardize_apart(arg1, heap, env)
+                if self.groundargs[i]:
+                    arg2.unify(arg1, heap)
+                else:
+                    arg2.unify_and_standardize_apart(arg1, heap, env)
         body = self.body
         if body is None:
             return None

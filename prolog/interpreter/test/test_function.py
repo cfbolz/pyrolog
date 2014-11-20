@@ -1,7 +1,8 @@
 from prolog.interpreter.function import Rule, Function
-from prolog.interpreter.term import Callable
+from prolog.interpreter.term import Callable, Number, BindingVar
 from prolog.interpreter.signature import Signature
 from prolog.interpreter.continuation import Engine
+from prolog.interpreter.heap import Heap
 from prolog.interpreter.test.tool import get_engine
 
 class C(Callable):
@@ -93,3 +94,34 @@ b.
     assert func.rulechain.source == "f(a) :- a."
     assert func.rulechain.next.source == "f(b) :-\n    b."
 
+
+def test_ground_args():
+    e = Engine()
+    m = e.modulewrapper
+    r = Rule(C(1), C(2), m.user_module)
+    assert r.groundargs is None
+
+    head = Callable.build("f", [Number(1)])
+    r = Rule(head, C(2), m.user_module)
+    assert r.groundargs == [True]
+
+    head = Callable.build(
+            "f", [Callable.build("g", [Number(1)]),
+                  BindingVar(),
+                  Callable.build("h", [Number(2), BindingVar()])])
+    r = Rule(head, C(2), m.user_module)
+    assert r.groundargs == [True, False, False]
+
+def test_dont_clone_ground_arg():
+    m = Engine().modulewrapper
+    n = Number(1)
+    n.unify_and_standardize_apart = None
+    head = Callable.build("f", [n])
+    r = Rule(head, C(2), m.user_module)
+    assert r.groundargs == [True]
+
+    b = BindingVar()
+    callhead = Callable.build("f", [b])
+    h = Heap()
+    # should not fail, because ground args don't need cloning
+    r.clone_and_unify_head(h, callhead)
