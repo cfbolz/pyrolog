@@ -31,9 +31,6 @@ class PrologObject(object):
     def copy_standardize_apart(self, heap, env):
         raise NotImplementedError("abstract base class")
 
-    def copy_standardize_apart_as_child_of(self, heap, env, parent, index):
-        return self.copy_standardize_apart(heap, env)
-
     def unify_and_standardize_apart(self, other, heap, env):
         raise NotImplementedError("abstract base class")
     
@@ -171,62 +168,6 @@ class BindingVar(Var):
             if isinstance(other, NonVar):
                 self.setvalue(other, heap)
             next._unify_derefed(other, heap, occurs_check)
-
-
-class VarInTerm(Var):
-    def __init__(self, parent):
-        raise NotImplementedError("abstract base class")
-
-    def init(self, parent):
-        assert isinstance(parent, MutableCallable)
-        self.parent_or_binding = parent
-        self.bound = False
-
-    def getbinding(self):
-        if self.bound:
-            return self.parent_or_binding
-        return None
-
-    def dereference(self, heap):
-        # makes no sense to do path compression here
-        next = self.getbinding()
-        if next is None:
-            return self
-        return next.dereference(heap)
-
-    def setvalue(self, value, heap):
-        # this is true because setvalues on bound VarInTerms don't happen
-        assert not self.bound
-        if heap is not self.created_after_choice_point:
-            var = self.created_after_choice_point.newvar()
-            var.setvalue(value, heap)
-            value = var
-        self._setvalue_in_parent(value)
-        self.bound = True
-        self.parent_or_binding = value
-
-    def _setvalue_in_parent(self, value):
-        raise NotImplementedError("abstract base class")
-
-    def __repr__(self):
-        if self.getbinding():
-            return "%s(%s)" % (self.__class__.__name__, self.getbinding())
-        return "%s(%s)" % (self.__class__.__name__, self.parent_or_binding.signature())
-
-def make_var_in_term_class(index):
-    class VarInTermN(VarInTerm):
-        def __init__(self, parent):
-            self.init(parent)
-
-        def _setvalue_in_parent(self, value):
-            self.parent_or_binding.set_argument_at(index, value)
-    VarInTermN.__name__ = "VarInTerm%s" % index
-    return VarInTermN
-
-var_in_term_classes = [make_var_in_term_class(i)
-                            for i in range(OPTIMIZED_TERM_SIZE_MAX)]
-
-
 
 
 class AttMap(object):
@@ -369,14 +310,6 @@ class NumberedVar(PrologObject):
         res = env[self.num]
         if res is None:
             res = env[self.num] = heap.newvar()
-        return res
-
-    def copy_standardize_apart_as_child_of(self, heap, env, parent, index):
-        if self.num < 0:
-            return heap.newvar_in_term(parent, index)
-        res = env[self.num]
-        if res is None:
-            res = env[self.num] = heap.newvar_in_term(parent, index)
         return res
 
     def unify_and_standardize_apart(self, other, heap, env):
@@ -970,13 +903,11 @@ def generate_abstract_class(n_args, immutable=True):
         def copy_standardize_apart(self, heap, env):
             result = self._make_new_mutable(self.name(), self.signature())
             newinstance = False
-            needmutable = False
             i = 0
             for i in arg_iter:
                 arg = getattr(self, 'val_%d' % i)
-                cloned = arg.copy_standardize_apart_as_child_of(heap, env, result, i)
+                cloned = arg.copy_standardize_apart(heap, env)
                 newinstance = newinstance | (cloned is not arg)
-                needmutable = needmutable | isinstance(arg, VarInTerm)
                 setattr(result, 'val_%d' % i, cloned)
                 i += 1
             if newinstance:
