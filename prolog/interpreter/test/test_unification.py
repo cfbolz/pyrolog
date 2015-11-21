@@ -106,42 +106,59 @@ def test_copy_standardize_apart():
     heap = Heap()
     Z = NumberedVar(0)
     env = [None]
-    t1 = Z.copy_standardize_apart(heap, env)
-    t2 = Z.copy_standardize_apart(heap, env)
+    t1, f1 = Z.copy_standardize_apart(heap, env)
+    t2, f2 = Z.copy_standardize_apart(heap, env)
+    assert not f1
+    assert not f2
     assert isinstance(t1, Var)
     assert t1 is t2
 
     env = [Number(1)]
-    t1 = Z.copy_standardize_apart(heap, env)
+    t1, f1 = Z.copy_standardize_apart(heap, env)
     assert isinstance(t1, Number)
-    t2 = Z.copy_standardize_apart(heap, env)
+    t2, f2 = Z.copy_standardize_apart(heap, env)
     assert t1 is t2
+    assert not f1
+    assert not f2
 
     Z = NumberedVar(-1)
-    t1 = Z.copy_standardize_apart(heap, [None])
-    t2 = Z.copy_standardize_apart(heap, [None])
+    t1, f1 = Z.copy_standardize_apart(heap, [None])
+    t2, f2 = Z.copy_standardize_apart(heap, [None])
     assert isinstance(t1, Var)
     assert isinstance(t2, Var)
     assert t1 is not t2
+    assert not f1
+    assert not f2
 
 def test_copy_standardize_apart_term():
     heap = Heap()
     Z = NumberedVar(0)
     t = Callable.build("f", [Z, Z])
-    t2 = t.copy_standardize_apart(heap, [None])
+    t2, f2 = t.copy_standardize_apart(heap, [None])
+    assert not f2
     assert isinstance(t2.argument_at(0), Var)
     assert t2.argument_at(0) is t2.argument_at(1)
 
-    t2 = t.copy_standardize_apart(heap, [Number(1)])
+    t2, f2 = t.copy_standardize_apart(heap, [Number(1)])
+    assert not f2
     assert isinstance(t2.argument_at(0), Number)
     assert t2.argument_at(0) is t2.argument_at(1)
 
     Z = NumberedVar(-1)
     t = Callable.build("f", [Z, Z])
-    t2 = t.copy_standardize_apart(heap, [None])
+    t2, f2 = t.copy_standardize_apart(heap, [None])
+    assert not f2
     assert isinstance(t2.argument_at(0), Var)
     assert isinstance(t2.argument_at(1), Var)
     assert t2.argument_at(0) is not t2.argument_at(1)
+
+def test_copy_standardize_apart_ground_term():
+    heap = Heap()
+    t = Callable.build("f", [Number(1), Callable.build("g")])
+    t2, f2 = t.copy_standardize_apart(heap, [None])
+    assert f2
+    assert t2 is t
+
 
 def test_run():
     e = Engine()

@@ -104,7 +104,7 @@ class Rule(object):
         body = self.body
         if body is None:
             return None
-        return body.copy_standardize_apart(heap, env)
+        return body.copy_standardize_apart(heap, env)[0]
 
     def __repr__(self):
         if self.body is None:
