@@ -140,6 +140,9 @@ def wrap_error(t):
 class UnificationFailed(PrologError):
     pass
 
+class CantDecide:
+    pass
+
 def throw_syntax_error(msg):
     from prolog.interpreter import term
     t = term.Callable.build("syntax_error", [term.Callable.build(msg)])

@@ -1,5 +1,5 @@
 import py
-from prolog.interpreter.error import UnificationFailed
+from prolog.interpreter.error import UnificationFailed, CantDecide
 from prolog.interpreter.term import Atom, Var, Number, Callable, Term
 from prolog.interpreter.term import NumberedVar, BindingVar
 from prolog.interpreter.continuation import Heap, Engine
@@ -101,6 +101,48 @@ def test_unify_and_standardize_apart():
 
     Z = NumberedVar(-1)
     Z.unify_and_standardize_apart(t2, heap, [])
+
+def test_unify_standardize_apart_no_mutation():
+    heap = Heap()
+    X = BindingVar()
+    Y = BindingVar()
+    Z = NumberedVar(0)
+
+    env = [None]
+    Z.unify_standardize_apart_no_mutation(X, env)
+    assert env == [X]
+
+    env = [None]
+    a = Atom.newatom("abc")
+    b = Atom.newatom("def")
+    Z.unify_standardize_apart_no_mutation(a, env)
+    assert env == [a]
+
+    with py.test.raises(UnificationFailed):
+        a.unify_standardize_apart_no_mutation(BindingVar(), env)
+
+    with py.test.raises(UnificationFailed):
+        a.unify_standardize_apart_no_mutation(BindingVar(), env)
+
+    env = [None]
+    Z.unify_standardize_apart_no_mutation(a, env)
+    with py.test.raises(CantDecide):
+        Z.unify_standardize_apart_no_mutation(BindingVar(), env)
+
+    env = [None]
+    Z.unify_standardize_apart_no_mutation(a, env)
+    with py.test.raises(UnificationFailed):
+        Z.unify_standardize_apart_no_mutation(b, env)
+    # XXX we would like this
+    # env = [None]
+    # Z.unify_standardize_apart_no_mutation(a, env)
+    # Z.unify_standardize_apart_no_mutation(a, env)
+
+    env = [None]
+    t1 = Callable.build("f", [Z])
+    t2 = Callable.build("f", [a])
+    t1.unify_standardize_apart_no_mutation(t2, env)
+    assert env == [a]
 
 def test_copy_standardize_apart():
     heap = Heap()

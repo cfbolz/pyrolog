@@ -33,7 +33,13 @@ class PrologObject(object):
 
     def unify_and_standardize_apart(self, other, heap, env):
         raise NotImplementedError("abstract base class")
-    
+
+    def unify_standardize_apart_no_mutation(self, other, env):
+        """ like unify_and_standardize_apart but not allowed to change any
+        bindings in other. Will either succeed (then env is the correct
+        binding) or fail or raise CantDecide. """
+        raise NotImplementedError("abstract base class")
+
     def enumerate_vars(self, memo):
         raise NotImplementedError("abstract base class")
     
@@ -321,10 +327,24 @@ class NumberedVar(PrologObject):
             return other
         res.unify(other, heap)
         return res
-    
+
+    def unify_standardize_apart_no_mutation(self, other, env):
+        if self.num < 0:
+            return other
+        res = env[self.num]
+        if res is None:
+            other = env[self.num] = other.dereference(None)
+            return other
+        # call quick_unify_check. if that returns False, we know the two terms
+        # can't possibly unify. Otherwise, we still have no clue
+        quick = res.quick_unify_check(other)
+        if not quick:
+            raise UnificationFailed
+        raise error.CantDecide
+
     def dereference(self, heap):
         return self
-    
+
     def __repr__(self):
         return "NumberedVar(%s)" % (self.num, )
 
@@ -372,12 +392,22 @@ class NonVar(PrologObject):
             other._unify_derefed(copy, heap)
             return copy
         else:
-            return self.basic_unify_and_standardize_apart(other, heap, env)
+            return self.nonvar_unify_and_standardize_apart(other, heap, env)
 
-    def basic_unify_and_standardize_apart(self, other, heap, env):
+    def unify_standardize_apart_no_mutation(self, other, env):
+        other = other.dereference(None)
+        if isinstance(other, Var):
+            raise UnificationFailed
+        else:
+            return self.nonvar_unify_standardize_apart_no_mutation(other, env)
+
+    def nonvar_unify_and_standardize_apart(self, other, heap, env):
         # good enough default implementation:
-        self.nonvar_unify(other, heap, False)
-        return self
+        return self.atomic_unify(other)
+
+    def nonvar_unify_standardize_apart_no_mutation(self, other, env):
+        # good enough default implementation:
+        return self.atomic_unify(other)
 
     def enumerate_vars(self, memo):
         return self
@@ -420,7 +450,7 @@ class Callable(NonVar):
             raise UnificationFailed
     
     @jit.unroll_safe
-    def basic_unify_and_standardize_apart(self, other, heap, env):
+    def nonvar_unify_and_standardize_apart(self, other, heap, env):
         if (isinstance(other, Callable) and
             self.signature().eq(other.signature())):
             for i in range(self.argument_count()):
@@ -605,9 +635,15 @@ class Atom(Callable):
     def signature(self):
         return self._signature
 
-    def basic_unify_and_standardize_apart(self, other, heap, env):
+    def nonvar_unify_and_standardize_apart(self, other, heap, env):
         if not isinstance(other, Atom):
-            return Callable.basic_unify_and_standardize_apart(self, other, heap, env)
+            raise UnificationFailed
+        if not self.signature().eq(other.signature()):
+            raise UnificationFailed
+
+    def nonvar_unify_standardize_apart_no_mutation(self, other, env):
+        if not isinstance(other, Atom):
+            raise UnificationFailed
         if not self.signature().eq(other.signature()):
             raise UnificationFailed
 
@@ -750,6 +786,7 @@ class Term(Callable):
     
     def __init__(self, term_name, args, signature):
         assert signature.name == term_name
+        assert args
         self._args = make_sure_not_resized(args)
         self._signature = signature
         Callable.__init__(self)
@@ -900,14 +937,25 @@ def generate_abstract_class(n_args, immutable=True):
                     return False
             return True
 
-        def basic_unify_and_standardize_apart(self, other, heap, env):
+        def nonvar_unify_and_standardize_apart(self, other, heap, env):
             if not isinstance(other, abstract_callable):
-                return Callable.basic_unify_and_standardize_apart(self, other, heap, env)
+                raise UnificationFailed
             if self.signature().eq(other.signature()):
                 for x in arg_iter:
                     a = getattr(self, 'val_%d' % x)
                     b = getattr(other, 'val_%d' % x)
                     a.unify_and_standardize_apart(b, heap, env)
+            else:
+                raise UnificationFailed
+
+        def nonvar_unify_standardize_apart_no_mutation(self, other, env):
+            if not isinstance(other, abstract_callable):
+                raise UnificationFailed
+            if self.signature().eq(other.signature()):
+                for x in arg_iter:
+                    a = getattr(self, 'val_%d' % x)
+                    b = getattr(other, 'val_%d' % x)
+                    a.unify_standardize_apart_no_mutation(b, env)
             else:
                 raise UnificationFailed
 
