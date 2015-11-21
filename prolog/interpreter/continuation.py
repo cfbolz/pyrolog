@@ -240,7 +240,7 @@ class Engine(object):
     def call_in_module(self, query, module, scont, fcont, heap):
         return self.call(query, module._toplevel_rule, scont, fcont, heap)
 
-    def _get_function(self, signature, module, query): 
+    def _get_function(self, signature, module, query):
         function = module.lookup(signature)
         if function.rulechain is None and self.modulewrapper.system is not None:
             function = self.modulewrapper.system.lookup(signature)

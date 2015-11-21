@@ -132,11 +132,33 @@ class Rule(object):
         # This method should do some quick filtering on the rules to filter out
         # those that cannot match query. Here is where e.g. indexing should
         # occur.
+        env = [None] * self.size_env
+        while self is not None:
+            if self.headargs is not None:
+                assert isinstance(query, Callable)
+                for i in range(len(self.headargs)):
+                    arg2 = self.headargs[i]
+                    arg1 = query.argument_at(i)
+                    if not arg2.quick_unify_check(arg1):
+                        break
+                else:
+                    return self
+            else:
+                return self
+            self = self.next
+        return None
+
+    @jit.unroll_safe
+    def find_next_applicable_rule(self, query):
+        if self.next is None:
+            return None
+        self = self.next
         while self is not None:
             try:
                 env = self._check_rule_applicable(query)
             except UnificationFailed:
                 self = self.next
+                continue
             except CantDecide:
                 pass
             return self
@@ -150,11 +172,8 @@ class Rule(object):
                 arg2 = self.headargs[i]
                 arg1 = query.argument_at(i)
                 arg2.unify_standardize_apart_no_mutation(arg1, env)
+        return env
 
-    def find_next_applicable_rule(self, query):
-        if self.next is None:
-            return None
-        return self.next.find_applicable_rule(query)
     
     def __eq__(self, other):
         return self.__class__ == other.__class__ and self.__dict__ == other.__dict__
