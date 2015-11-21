@@ -83,6 +83,12 @@ class Rule(object):
                     stack.extend(current.arguments())
         self.contains_cut = False
 
+    def clone_and_unify_rulecont(self, heap, rulecont):
+        query = Callable.build(self.signature.name, rulecont._get_full_list(),
+                               signature=self.signature)
+        return self.clone_and_unify_head(heap, query)
+
+
     @jit.unroll_safe
     def clone_and_unify_head(self, heap, head):
         env = [None] * self.size_env

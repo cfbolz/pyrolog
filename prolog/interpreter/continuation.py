@@ -11,6 +11,7 @@ from prolog.interpreter.signature import Signature
 from prolog.interpreter.module import Module, ModuleWrapper
 from prolog.interpreter.helper import unwrap_predicate_indicator
 from prolog.interpreter.stream import StreamWrapper
+from prolog.interpreter.small_list import inline_small_list
 
 Signature.register_extr_attr("function", engine=True)
 
@@ -302,7 +303,7 @@ def _make_rule_conts(engine, scont, fcont, heap, query, rulechain):
         fcont = UserCallContinuation(engine, scont, fcont, heap, query, restchain)
         heap = heap.branch()
 
-    scont = RuleContinuation(engine, scont, rule, query)
+    scont = RuleContinuation.make(query.arguments(), engine, scont, rule)
     return scont, fcont, heap
 
 # ___________________________________________________________________
@@ -482,8 +483,8 @@ class UserCallContinuation(FailureContinuation):
     def __repr__(self):
         return "<UserCallContinuation query=%r rule=%r>" % (
                 self.query, self.rulechain)
-    
 
+@inline_small_list(immutable=True)
 class RuleContinuation(ContinuationWithRule):
     """ A Continuation that represents the application of a rule, i.e.:
         - standardizing apart of the rule
@@ -491,14 +492,13 @@ class RuleContinuation(ContinuationWithRule):
         - calling the body of the rule
     """
 
-    def __init__(self, engine, nextcont, rule, query):
+    def __init__(self, engine, nextcont, rule):
         ContinuationWithRule.__init__(self, engine, nextcont, rule)
-        self.query = query
 
     def activate(self, fcont, heap):
         nextcont = self.nextcont
-        rule = jit.hint(self.rule, promote=True)
-        nextcall = rule.clone_and_unify_head(heap, self.query)
+        rule = jit.promote(self.rule)
+        nextcall = rule.clone_and_unify_rulecont(heap, self)
         if nextcall is not None:
             return self.engine.call(nextcall, self.rule, nextcont, fcont, heap)
         else:
