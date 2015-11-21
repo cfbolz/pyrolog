@@ -578,10 +578,6 @@ class Callable(NonVar):
                 return False
         return True
 
-class MutableCallable(Callable):
-    def set_argument_at(self, i, arg):
-        raise NotImplementedError
-
 
 class Atom(Callable):
     TYPE_STANDARD_ORDER = 2
@@ -830,12 +826,10 @@ def cmp_standard_order(obj1, obj2, heap):
         return c
     return obj1.cmp_standard_order(obj2, heap)
 
-def generate_class(cname, fname, n_args, immutable=True):
+def generate_class(cname, fname, n_args):
     from rpython.rlib.unroll import unrolling_iterable
     arg_iter = unrolling_iterable(range(n_args))
     parent = callables['Abstract', n_args]
-    if not immutable:
-        parent = parent.mutable_version
     assert parent is not None
     signature = Signature.getsignature(fname, n_args)
 
@@ -844,15 +838,15 @@ def generate_class(cname, fname, n_args, immutable=True):
             TYPE_STANDARD_ORDER = Atom.TYPE_STANDARD_ORDER
         else:
             TYPE_STANDARD_ORDER = Term.TYPE_STANDARD_ORDER
-        
+
         def __init__(self, term_name, args, signature):
             parent._init_values(self, args)
             assert self.name() == term_name
             assert args is None or len(args) == n_args
-                
+
         def name(self):
             return fname
-        
+
         def signature(self):
             return signature
 
@@ -860,29 +854,15 @@ def generate_class(cname, fname, n_args, immutable=True):
             cls = specific_class
             return cls(name, None, signature)
 
-        if immutable:
-            def _make_new_mutable(self, name, signature):
-                cls = mutable_version
-                return cls(name, None, signature)
-        else:
-            _make_new_mutable = _make_new
-    if immutable:
-        mutable_version = specific_class.mutable_version = generate_class(
-                cname, fname, n_args, False)
-    specific_class.__name__ = cname + "Mutable" * (not immutable)
+    specific_class.__name__ = cname
     return specific_class
 
-def generate_abstract_class(n_args, immutable=True):
+def generate_abstract_class(n_args):
     from rpython.rlib.unroll import unrolling_iterable
     arg_iter = unrolling_iterable(range(n_args))
-    if immutable:
-        base = Callable
-    else:
-        base = MutableCallable
-    class abstract_callable(base):
+    class abstract_callable(Callable):
 
-        if immutable:
-            _immutable_fields_ = ["val_%d" % x for x in arg_iter]
+        _immutable_fields_ = ["val_%d" % x for x in arg_iter]
 
         def __init__(self, term_name, args, signature):
             raise NotImplementedError
@@ -895,7 +875,6 @@ def generate_abstract_class(n_args, immutable=True):
 
         def _make_new(self, name, signature):
             raise NotImplementedError("abstract base class")
-        _make_new_mutable = _make_new
 
         def arguments(self):
             result = [None] * n_args
@@ -908,14 +887,6 @@ def generate_abstract_class(n_args, immutable=True):
                 if x == i:
                     return getattr(self, 'val_%d' % x)
             raise IndexError
-
-        if not immutable:
-            def set_argument_at(self, i, arg):
-                for x in arg_iter:
-                    if x == i:
-                        setattr(self, 'val_%d' % x, arg)
-                        return
-                raise IndexError
 
         def argument_count(self):
             return n_args
@@ -960,7 +931,7 @@ def generate_abstract_class(n_args, immutable=True):
                 raise UnificationFailed
 
         def copy_standardize_apart(self, heap, env):
-            result = self._make_new_mutable(self.name(), self.signature())
+            result = self._make_new(self.name(), self.signature())
             newinstance = False
             i = 0
             for i in arg_iter:
@@ -981,7 +952,7 @@ def generate_abstract_class(n_args, immutable=True):
                 jit.isconstant(self) or jit.isconstant(other))
         def nonvar_unify(self, other, heap, occurs_check):
             if not isinstance(other, abstract_callable):
-                return Callable.nonvar_unify(self, other, heap, occurs_check)
+                raise UnificationFailed
             if self.signature().eq(other.signature()):
                 for x in arg_iter:
                     a = getattr(self, 'val_%d' % x)
@@ -1006,24 +977,18 @@ def generate_abstract_class(n_args, immutable=True):
                 return result
             else:
                 return self
-    if immutable:
-        abstract_callable.mutable_version = generate_abstract_class(n_args, immutable=False)
-    else:
-        abstract_callable.mutable_version = abstract_callable
 
-    abstract_callable.__name__ = 'Abstract'+str(n_args) + "Mutable" * (not immutable)
+    abstract_callable.__name__ = 'Abstract'+str(n_args)
     return abstract_callable
 
-def generate_generic_class(n_args, immutable=True):
+def generate_generic_class(n_args):
     parent = callables['Abstract', n_args]
     assert parent is not None
-    if not immutable:
-        parent = parent.mutable_version
 
     class generic_callable(parent):
         _immutable_fields_ = ["_signature"]
         TYPE_STANDARD_ORDER = Term.TYPE_STANDARD_ORDER
-        
+
         def __init__(self, term_name, args, signature):
             parent._init_values(self, args)
             self._signature = signature
@@ -1034,18 +999,9 @@ def generate_generic_class(n_args, immutable=True):
             cls = generic_callable
             return cls(name, None, signature)
 
-        if immutable:
-            def _make_new_mutable(self, name, signature):
-                cls = mutable_version
-                return cls(name, None, signature)
-        else:
-            _make_new_mutable = _make_new
-
         def signature(self):
             return self._signature
-    if immutable:
-        mutable_version = generic_callable.mutable_version = generate_generic_class(n_args, False)
-    generic_callable.__name__ = 'Generic'+str(n_args) + "Mutable" * (not immutable)
+    generic_callable.__name__ = 'Generic'+str(n_args)
     return generic_callable
 
 
