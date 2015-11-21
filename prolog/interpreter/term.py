@@ -348,17 +348,23 @@ class NonVar(PrologObject):
     def unify(self, other, heap, occurs_check=False):
         other = other.dereference(heap)
         return self._unify_derefed(other, heap, occurs_check)
-    
+
     @specialize.arg(3)
-    def basic_unify(self, other, heap, occurs_check):
+    def nonvar_unify(self, other, heap, occurs_check):
+        """ Unify self and other, which can both not be Vars """
+        # default implementation
+        return self.atomic_unify(other)
+
+    def atomic_unify(self, other):
+        """ only works for non-structured stuff """
         raise NotImplementedError("abstract base class")
-    
+
     @specialize.arg(3)
     def _unify_derefed(self, other, heap, occurs_check=False):
         if isinstance(other, Var):
             other._unify_derefed(self, heap, occurs_check)
         else:
-            self.basic_unify(other, heap, occurs_check)
+            self.nonvar_unify(other, heap, occurs_check)
     
     def unify_and_standardize_apart(self, other, heap, env):
         other = other.dereference(heap)
@@ -367,11 +373,11 @@ class NonVar(PrologObject):
             other._unify_derefed(copy, heap)
             return copy
         else:
-            return self.basic_unify_and_standardize_apart(other, heap, env)
+            return self.nonvar_unify_and_standardize_apart(other, heap, env)
 
-    def basic_unify_and_standardize_apart(self, other, heap, env):
+    def nonvar_unify_and_standardize_apart(self, other, heap, env):
         # good enough default implementation:
-        self.basic_unify(other, heap, False)
+        self.nonvar_unify(other, heap, False)
         return self
 
     def enumerate_vars(self, memo):
@@ -404,9 +410,9 @@ class Callable(NonVar):
     
     def argument_count(self):
         raise NotImplementedError("abstract base")
-    
+
     @specialize.arg(3)
-    def basic_unify(self, other, heap, occurs_check):
+    def nonvar_unify(self, other, heap, occurs_check):
         if (isinstance(other, Callable) and
                 self.signature().eq(other.signature())):
             for i in range(self.argument_count()):
@@ -415,7 +421,7 @@ class Callable(NonVar):
             raise UnificationFailed
     
     @jit.unroll_safe
-    def basic_unify_and_standardize_apart(self, other, heap, env):
+    def nonvar_unify_and_standardize_apart(self, other, heap, env):
         if (isinstance(other, Callable) and
             self.signature().eq(other.signature())):
             for i in range(self.argument_count()):
@@ -596,9 +602,16 @@ class Atom(Callable):
     def signature(self):
         return self._signature
 
-    def basic_unify_and_standardize_apart(self, other, heap, env):
+    def nonvar_unify_and_standardize_apart(self, other, heap, env):
         if not isinstance(other, Atom):
             raise UnificationFailed
+        if not self.signature().eq(other.signature()):
+            raise UnificationFailed
+
+    @specialize.arg(3)
+    def nonvar_unify(self, other, heap, occurs_check):
+        if not isinstance(other, Atom):
+            return Callable.nonvar_unify(self, other, heap, occurs_check)
         if not self.signature().eq(other.signature()):
             raise UnificationFailed
 
@@ -618,8 +631,7 @@ class Number(Numeric):#, UnboxedValue):
     def __init__(self, val):
         self.num = val
 
-    @specialize.arg(3)
-    def basic_unify(self, other, heap, occurs_check):
+    def atomic_unify(self, other):
         if isinstance(other, Number) and other.num == self.num:
             return
         raise UnificationFailed
@@ -656,7 +668,7 @@ class BigInt(Numeric):
     def __init__(self, value):
         self.value = value
 
-    def basic_unify(self, other, heap, occurs_check):
+    def atomic_unify(self, other):
         if isinstance(other, BigInt) and other.value.eq(self.value):
             return
         raise UnificationFailed
@@ -684,9 +696,8 @@ class Float(Numeric):
     __slots__ = ("floatval", )
     def __init__(self, floatval):
         self.floatval = floatval
-    
-    @specialize.arg(3)
-    def basic_unify(self, other, heap, occurs_check):
+
+    def atomic_unify(self, other):
         if isinstance(other, Float) and other.floatval == self.floatval:
             return
         raise UnificationFailed
@@ -834,7 +845,7 @@ def generate_abstract_class(n_args):
             for x in arg_iter:
                 result[x] = getattr(self, 'val_%d' % x)
             return result
-        
+
         def argument_at(self, i):
             for x in arg_iter:
                 if x == i:
@@ -861,7 +872,7 @@ def generate_abstract_class(n_args):
                     return False
             return True
 
-        def basic_unify_and_standardize_apart(self, other, heap, env):
+        def nonvar_unify_and_standardize_apart(self, other, heap, env):
             if not isinstance(other, abstract_callable):
                 raise UnificationFailed
             if self.signature().eq(other.signature()):
@@ -892,7 +903,7 @@ def generate_abstract_class(n_args):
         @jit.look_inside_iff(lambda self, other, heap, occurs_check:
                 jit.isvirtual(self) or jit.isvirtual(other) or
                 jit.isconstant(self) or jit.isconstant(other))
-        def basic_unify(self, other, heap, occurs_check):
+        def nonvar_unify(self, other, heap, occurs_check):
             if not isinstance(other, abstract_callable):
                 raise UnificationFailed
             if self.signature().eq(other.signature()):
