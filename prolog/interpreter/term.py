@@ -404,7 +404,7 @@ class Callable(NonVar):
         for i in range(argcount):
             result[i] = self.argument_at(i)
         return result
-    
+
     def argument_at(self, i):
         raise NotImplementedError("abstract base")
     
@@ -900,19 +900,23 @@ def generate_abstract_class(n_args):
                 return self
 
         @specialize.arg(3)
-        @jit.look_inside_iff(lambda self, other, heap, occurs_check:
-                jit.isvirtual(self) or jit.isvirtual(other) or
-                jit.isconstant(self) or jit.isconstant(other))
         def nonvar_unify(self, other, heap, occurs_check):
             if not isinstance(other, abstract_callable):
                 raise UnificationFailed
             if self.signature().eq(other.signature()):
+                return self._nonvar_unify_jit(other, heap, occurs_check)
+            else:
+                raise UnificationFailed
+
+        @specialize.arg(3)
+        @jit.look_inside_iff(lambda self, other, heap, occurs_check:
+                jit.isvirtual(self) or jit.isvirtual(other) or
+                jit.isconstant(self) or jit.isconstant(other))
+        def _nonvar_unify_jit(self, other, heap, occurs_check):
                 for x in arg_iter:
                     a = getattr(self, 'val_%d' % x)
                     b = getattr(other, 'val_%d' % x)
                     a.unify(b, heap, occurs_check)
-            else:
-                raise UnificationFailed
 
         @specialize.arg(1)
         def _copy_term(self, copy_individual, heap, *extraargs):
