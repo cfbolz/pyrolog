@@ -1,8 +1,11 @@
 from prolog.interpreter.term import Callable, Atom, Var
 from prolog.interpreter.memo import EnumerationMemo
 from prolog.interpreter.signature import Signature
-from rpython.rlib import jit, objectmodel, unroll
 from prolog.interpreter.helper import is_callable
+from prolog.interpreter.error import UnificationFailed, CantDecide
+
+from rpython.rlib import jit, objectmodel, unroll
+
 # XXX needs tests
 
 cutsig = Signature.getsignature("!", 0)
@@ -130,19 +133,23 @@ class Rule(object):
         # those that cannot match query. Here is where e.g. indexing should
         # occur.
         while self is not None:
-            if self.headargs is not None:
-                assert isinstance(query, Callable)
-                for i in range(len(self.headargs)):
-                    arg2 = self.headargs[i]
-                    arg1 = query.argument_at(i)
-                    if not arg2.quick_unify_check(arg1):
-                        break
-                else:
-                    return self
-            else:
-                return self
-            self = self.next
+            try:
+                env = self._check_rule_applicable(query)
+            except UnificationFailed:
+                self = self.next
+            except CantDecide:
+                pass
+            return self
         return None
+
+    def _check_rule_applicable(self, query):
+        env = [None] * self.size_env
+        if self.headargs is not None:
+            assert isinstance(query, Callable)
+            for i in range(len(self.headargs)):
+                arg2 = self.headargs[i]
+                arg1 = query.argument_at(i)
+                arg2.unify_standardize_apart_no_mutation(arg1, env)
 
     def find_next_applicable_rule(self, query):
         if self.next is None:
