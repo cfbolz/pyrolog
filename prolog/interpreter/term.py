@@ -397,7 +397,7 @@ class NonVar(PrologObject):
     def unify_standardize_apart_no_mutation(self, other, env):
         other = other.dereference(None)
         if isinstance(other, Var):
-            raise UnificationFailed
+            raise error.CantDecide
         else:
             return self.nonvar_unify_standardize_apart_no_mutation(other, env)
 

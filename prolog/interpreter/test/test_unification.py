@@ -118,10 +118,7 @@ def test_unify_standardize_apart_no_mutation():
     Z.unify_standardize_apart_no_mutation(a, env)
     assert env == [a]
 
-    with py.test.raises(UnificationFailed):
-        a.unify_standardize_apart_no_mutation(BindingVar(), env)
-
-    with py.test.raises(UnificationFailed):
+    with py.test.raises(CantDecide):
         a.unify_standardize_apart_no_mutation(BindingVar(), env)
 
     env = [None]
