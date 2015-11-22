@@ -495,6 +495,7 @@ class RuleContinuation(ContinuationWithRule):
     """
 
     def __init__(self, engine, nextcont, rule):
+        rule.see_rule_creation(self)
         ContinuationWithRule.__init__(self, engine, nextcont, rule)
 
     def activate(self, fcont, heap):

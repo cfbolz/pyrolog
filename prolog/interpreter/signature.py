@@ -144,3 +144,10 @@ class Signature(object):
     @staticmethod
     def register_extr_attr(name, engine=False, default=None):
         Signature._cache.register_extr_attr(name, engine, default)
+
+class Identity(object):
+    def __init__(self):
+        pass
+
+class RulePosEncoding(object):
+    def __init__(self, 

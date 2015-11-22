@@ -1,27 +1,31 @@
 from prolog.interpreter.term import Callable, Atom, Var
 from prolog.interpreter.memo import EnumerationMemo
 from prolog.interpreter.signature import Signature
-from rpython.rlib import jit, objectmodel, unroll
 from prolog.interpreter.helper import is_callable
+from prolog.interpreter.valueprof import PrologValueProf
+
+from rpython.rlib import jit, objectmodel, unroll
 # XXX needs tests
 
 cutsig = Signature.getsignature("!", 0)
 prefixsig = Signature.getsignature(":", 2)
 
+
 class Rule(object):
     _immutable_ = True
-    _immutable_fields_ = ["headargs[*]", "groundargs[*]"]
+    _immutable_fields_ = ["headargs[*]", "groundargs[*]", "valueprofs[*]"]
     _attrs_ = ['next', 'head', 'headargs', 'groundargs', 'contains_cut',
                'body', 'size_env', 'signature', 'module', 'file_name',
-               'line_range', 'source']
+               'line_range', 'source', 'valueprofs']
     unrolling_attrs = unroll.unrolling_iterable(_attrs_)
-    
+
     def __init__(self, head, body, module, next = None):
         from prolog.interpreter import helper
         head = head.dereference(None)
         assert isinstance(head, Callable)
         memo = EnumerationMemo()
         self.head = h = head.enumerate_vars(memo)
+        self.valueprofs = [PrologValueProf() for i in range(h.argument_count())]
         if h.argument_count() > 0:
             self.headargs = h.arguments()
             # an argument is ground if enumeration left it unchanged, because
@@ -84,12 +88,42 @@ class Rule(object):
         self.contains_cut = False
 
     def build_query(self, arglist):
-        return Callable.build(self.signature.name, arglist
+        return Callable.build(self.signature.name, arglist,
                               signature=self.signature)
 
+    @jit.unroll_safe
+    def see_rule_creation(self, rule):
+        # need to tell value profiler about the rule
+        for i in range(len(self.valueprofs)):
+            valueprof = self.valueprofs[i]
+            w_value = rule._get_list(i)
+            valueprof.see_write(w_value)
 
+    def _read_from_rulecont(self, rulecont, i):
+        from prolog.interpreter.term import Number
+        valueprof = self.valueprofs[i]
+        if jit.we_are_jitted():
+            if valueprof.can_fold_read_int():
+                jit.jit_debug("recorded known int")
+                return Number(valueprof.read_constant_int())
+            elif valueprof.can_fold_read_obj():
+                jit.jit_debug("recorded known obj")
+                w_res = valueprof.try_read_constant_obj()
+                if w_res is not None:
+                    return w_res
+        w_res = rulecont._get_list(i)
+        if jit.we_are_jitted() and valueprof.class_is_known():
+            jit.jit_debug("recorded exact class")
+            assert w_res is not None
+            jit.record_exact_class(w_res, valueprof.read_constant_cls())
+        return w_res
+
+    @jit.unroll_safe
     def clone_and_unify_rulecont(self, heap, rulecont):
-        query = self.build_query(rulecont._get_full_list())
+        arglist = [None] * len(self.valueprofs)
+        for i in range(len(self.valueprofs)):
+            arglist[i] = self._read_from_rulecont(rulecont, i)
+        query = self.build_query(arglist)
         return self.clone_and_unify_head(heap, query)
 
 
