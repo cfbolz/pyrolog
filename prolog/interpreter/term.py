@@ -29,6 +29,7 @@ class PrologObject(object):
         raise NotImplementedError("abstract base class")
     
     def copy_standardize_apart(self, heap, env):
+        """ returns a tuple (copy, reused_object) """
         raise NotImplementedError("abstract base class")
 
     def unify_and_standardize_apart(self, other, heap, env):
@@ -307,11 +308,11 @@ class NumberedVar(PrologObject):
     
     def copy_standardize_apart(self, heap, env):
         if self.num < 0:
-            return heap.newvar()
+            return heap.newvar(), False
         res = env[self.num]
         if res is None:
             res = env[self.num] = heap.newvar()
-        return res
+        return res, False
 
     def unify_and_standardize_apart(self, other, heap, env):
         if self.num < 0:
@@ -342,7 +343,7 @@ class NonVar(PrologObject):
     
     # needs to be overridden in non-atomic subclasses
     def copy_standardize_apart(self, heap, memo):
-        return self
+        return self, True
     
     @specialize.arg(3)
     def unify(self, other, heap, occurs_check=False):
@@ -369,7 +370,7 @@ class NonVar(PrologObject):
     def unify_and_standardize_apart(self, other, heap, env):
         other = other.dereference(heap)
         if isinstance(other, Var):
-            copy = self.copy_standardize_apart(heap, env)
+            copy, _ = self.copy_standardize_apart(heap, env)
             other._unify_derefed(copy, heap)
             return copy
         else:
@@ -398,6 +399,8 @@ class Callable(NonVar):
     def get_prolog_signature(self):
         return Callable.build("/", [Callable.build(self.name()),
                                     Number(self.argument_count())])
+
+    @jit.unroll_safe
     def arguments(self):
         argcount = self.argument_count()
         result = [None] * argcount
@@ -433,10 +436,10 @@ class Callable(NonVar):
     
     def copy(self, heap, memo):
         return self._copy_term(_term_copy, heap, memo)
-    
+
     def copy_standardize_apart(self, heap, env):
-        return self._copy_term(_term_copy_standardize_apart, heap, env)
-    
+        return self._copy_term(_term_copy_standardize_apart, heap, env), False
+
     def enumerate_vars(self, memo):
         return self._copy_term(_term_enumerate_vars, None, memo)
 
@@ -615,6 +618,9 @@ class Atom(Callable):
         if not self.signature().eq(other.signature()):
             raise UnificationFailed
 
+    def copy_standardize_apart(self, heap, env):
+        return self, True
+
 
 class Numeric(NonVar):
     __slots__ = ()
@@ -732,7 +738,7 @@ def _term_copy(obj, i, heap, memo):
     return obj.copy(heap, memo)
 
 def _term_copy_standardize_apart(obj, i, heap, env):
-    return obj.copy_standardize_apart(heap, env)
+    return obj.copy_standardize_apart(heap, env)[0]
 
 def _term_enumerate_vars(obj, i, _, memo):
     return obj.enumerate_vars(memo)
@@ -885,19 +891,19 @@ def generate_abstract_class(n_args):
 
         def copy_standardize_apart(self, heap, env):
             result = self._make_new(self.name(), self.signature())
-            newinstance = False
+            reuse = True
             i = 0
             for i in arg_iter:
                 arg = getattr(self, 'val_%d' % i)
-                cloned = arg.copy_standardize_apart(heap, env)
-                newinstance = newinstance | (cloned is not arg)
+                cloned, arg_is_reused = arg.copy_standardize_apart(heap, env)
+                reuse = reuse & arg_is_reused
                 setattr(result, 'val_%d' % i, cloned)
                 i += 1
-            if newinstance:
-                # XXX what about the variable shunting in Callable.build
-                return result
+            if reuse:
+                return self, True
             else:
-                return self
+                # XXX what about the variable shunting in Callable.build
+                return result, False
 
         @specialize.arg(3)
         def nonvar_unify(self, other, heap, occurs_check):
