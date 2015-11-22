@@ -470,21 +470,21 @@ class BuiltinContinuation(ContinuationWithRule):
 
 @inline_small_list(immutable=True)
 class UserCallContinuation(FailureContinuation):
-    def __init__(self, engine, nextcont, orig_fcont, heap, query, rulechain):
+    def __init__(self, engine, nextcont, orig_fcont, heap, rulechain):
         FailureContinuation.__init__(self, engine, nextcont, orig_fcont, heap)
-        self.query = query
         self.rulechain = rulechain
 
     def fail(self, heap):
         heap = heap.revert_upto(self.undoheap, discard_choicepoint=True)
-        query = rulechain.build_query(self._get_full_list())
+        query = self.rulechain.build_query(self._get_full_list())
         return _make_rule_conts(self.engine, self.nextcont, self.orig_fcont,
                                 heap, query, self.rulechain)
 
 
     def __repr__(self):
+        query = self.rulechain.build_query(self._get_full_list())
         return "<UserCallContinuation query=%r rule=%r>" % (
-                self.query, self.rulechain)
+                query, self.rulechain)
 
 @inline_small_list(immutable=True)
 class RuleContinuation(ContinuationWithRule):
