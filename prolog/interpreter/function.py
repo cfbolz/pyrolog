@@ -15,7 +15,7 @@ class Rule(object):
                'body', 'size_env', 'signature', 'module', 'file_name',
                'line_range', 'source']
     unrolling_attrs = unroll.unrolling_iterable(_attrs_)
-    
+
     def __init__(self, head, body, module, next = None):
         from prolog.interpreter import helper
         head = head.dereference(None)
@@ -38,7 +38,7 @@ class Rule(object):
         else:
             self.body = None
         self.size_env = memo.size()
-        self.signature = head.signature()        
+        self.signature = head.signature()
         self.module = module
         self.next = next
         self.file_name = "<unknown>"
@@ -84,7 +84,8 @@ class Rule(object):
         self.contains_cut = False
 
     def build_query(self, arglist):
-        return Callable.build(self.signature.name, arglist
+        jit.promote(self)
+        return Callable.build(self.signature.name, arglist,
                               signature=self.signature)
 
 
