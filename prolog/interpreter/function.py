@@ -83,9 +83,13 @@ class Rule(object):
                     stack.extend(current.arguments())
         self.contains_cut = False
 
+    def build_query(self, arglist):
+        return Callable.build(self.signature.name, arglist
+                              signature=self.signature)
+
+
     def clone_and_unify_rulecont(self, heap, rulecont):
-        query = Callable.build(self.signature.name, rulecont._get_full_list(),
-                               signature=self.signature)
+        query = self.build_query(rulecont._get_full_list())
         return self.clone_and_unify_head(heap, query)
 
 

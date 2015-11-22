@@ -300,7 +300,7 @@ def _make_rule_conts(engine, scont, fcont, heap, query, rulechain):
                 engine, scont, fcont)
     restchain = rule.find_next_applicable_rule(query)
     if restchain is not None:
-        fcont = UserCallContinuation(engine, scont, fcont, heap, query, restchain)
+        fcont = UserCallContinuation.make(query.arguments(), engine, scont, fcont, heap, restchain)
         heap = heap.branch()
 
     scont = RuleContinuation.make(query.arguments(), engine, scont, rule)
@@ -468,6 +468,7 @@ class BuiltinContinuation(ContinuationWithRule):
         return "<BuiltinContinuation %r, %r>" % (self.builtin, self.query, )
 
 
+@inline_small_list(immutable=True)
 class UserCallContinuation(FailureContinuation):
     def __init__(self, engine, nextcont, orig_fcont, heap, query, rulechain):
         FailureContinuation.__init__(self, engine, nextcont, orig_fcont, heap)
@@ -476,8 +477,9 @@ class UserCallContinuation(FailureContinuation):
 
     def fail(self, heap):
         heap = heap.revert_upto(self.undoheap, discard_choicepoint=True)
+        query = rulechain.build_query(self._get_full_list())
         return _make_rule_conts(self.engine, self.nextcont, self.orig_fcont,
-                                heap, self.query, self.rulechain)
+                                heap, query, self.rulechain)
 
 
     def __repr__(self):
