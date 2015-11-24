@@ -303,7 +303,11 @@ def _make_rule_conts(engine, scont, fcont, heap, query, rulechain):
         fcont = UserCallContinuation.make(query.arguments(), engine, scont, fcont, heap, restchain)
         heap = heap.branch()
 
-    scont = RuleContinuation.make(query.arguments(), engine, scont, rule)
+    try:
+        shared_env = rule.unify_and_standardize_apart_head(heap, query)
+    except error.UnificationFailed:
+        return fcont.fail(heap)
+    scont = RuleContinuation.make(shared_env, engine, scont, rule)
     return scont, fcont, heap
 
 # ___________________________________________________________________
@@ -500,7 +504,7 @@ class RuleContinuation(ContinuationWithRule):
     def activate(self, fcont, heap):
         nextcont = self.nextcont
         rule = jit.promote(self.rule)
-        nextcall = rule.clone_and_unify_rulecont(heap, self)
+        nextcall = rule.clone_body_from_rulecont(heap, self)
         if nextcall is not None:
             return self.engine.call(nextcall, self.rule, nextcont, fcont, heap)
         else:

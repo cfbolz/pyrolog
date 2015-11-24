@@ -12,7 +12,8 @@ class Rule(object):
     _immutable_ = True
     _immutable_fields_ = ["headargs[*]", "groundargs[*]"]
     _attrs_ = ['next', 'head', 'headargs', 'groundargs', 'contains_cut',
-               'body', 'size_env', 'signature', 'module', 'file_name',
+               'body', 'env_size_shared', 'env_size_body', 'env_size_head',
+               'signature', 'module', 'file_name',
                'line_range', 'source']
     unrolling_attrs = unroll.unrolling_iterable(_attrs_)
 
@@ -22,6 +23,7 @@ class Rule(object):
         assert isinstance(head, Callable)
         memo = EnumerationMemo()
         self.head = h = head.enumerate_vars(memo)
+        memo.in_head = False
         if h.argument_count() > 0:
             self.headargs = h.arguments()
             # an argument is ground if enumeration left it unchanged, because
@@ -37,7 +39,10 @@ class Rule(object):
             self.body = body.enumerate_vars(memo)
         else:
             self.body = None
-        self.size_env = memo.size()
+        memo.assign_numbers()
+        self.env_size_body = memo.nbody
+        self.env_size_head = memo.nhead
+        self.env_size_shared = memo.nshared
         self.signature = head.signature()
         self.module = module
         self.next = next
@@ -89,14 +94,31 @@ class Rule(object):
                               signature=self.signature)
 
 
-    def clone_and_unify_rulecont(self, heap, rulecont):
-        query = self.build_query(rulecont._get_full_list())
-        return self.clone_and_unify_head(heap, query)
+    @jit.unroll_safe
+    def clone_body_from_rulecont(self, heap, rulecont):
+        body = self.body
+        if body is None:
+            return None
+        body_env = [None] * self.env_size_body
+        for i in range(self.env_size_shared):
+            body_env[i] = rulecont._get_list(i)
+        return body.copy_standardize_apart(heap, body_env)[0]
 
 
     @jit.unroll_safe
     def clone_and_unify_head(self, heap, head):
-        env = [None] * self.size_env
+        env = self.unify_and_standardize_apart_head(heap, head)
+        body = self.body
+        if body is None:
+            return None
+        body_env = [None] * self.env_size_body
+        for i in range(self.env_size_shared):
+            body_env[i] = env[i]
+        return body.copy_standardize_apart(heap, body_env)[0]
+
+    @jit.unroll_safe
+    def unify_and_standardize_apart_head(self, heap, head):
+        env = [None] * self.env_size_head
         if self.headargs is not None:
             assert isinstance(head, Callable)
             for i in range(len(self.headargs)):
@@ -106,10 +128,10 @@ class Rule(object):
                     arg2.unify(arg1, heap)
                 else:
                     arg2.unify_and_standardize_apart(arg1, heap, env)
-        body = self.body
-        if body is None:
-            return None
-        return body.copy_standardize_apart(heap, env)[0]
+        shared_env = [None] * self.env_size_body
+        for i in range(self.env_size_shared):
+            shared_env[i] = env[i]
+        return shared_env
 
     def __repr__(self):
         if self.body is None:

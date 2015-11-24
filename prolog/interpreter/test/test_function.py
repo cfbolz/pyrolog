@@ -125,3 +125,16 @@ def test_dont_clone_ground_arg():
     h = Heap()
     # should not fail, because ground args don't need cloning
     r.clone_and_unify_head(h, callhead)
+
+def test_discard_useless_env_suffix():
+    e = get_engine("""
+        f(h(A), A, B, C) :- g(B), h(D), h1(D), h(E).
+    """)
+    # classes of variables:
+    # just in head: A    (needs index at the end of env)
+    # both: B            (needs index at the beginning of env)
+    # singletons head: C (-1)
+    # singletons body: E (-1, XXX currently not optimized)
+    # just in body: D    (needs index at end of env, appended after matching head)
+    func = e.modulewrapper.current_module.lookup(Signature.getsignature("f", 4))
+    

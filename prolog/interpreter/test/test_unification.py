@@ -57,6 +57,7 @@ def test_enumerate_vars():
     t1 = Callable.build("f", [X, X, Callable.build("g", [Y, X])])
     memo = EnumerationMemo()
     t2 = t1.enumerate_vars(memo)
+    memo.assign_numbers()
     assert is_term(t2)
     assert t2.signature().eq(t1.signature())
     assert t2.argument_at(0) is t2.argument_at(1)
@@ -71,6 +72,7 @@ def test_enumerate_vars_of_bound_var():
     t1 = Callable.build("f", [X])
     memo = EnumerationMemo()
     t2 = t1.enumerate_vars(memo)
+    memo.assign_numbers()
     assert is_term(t2)
     assert t2.signature().eq(t1.signature())
     assert t1.argument_at(0).dereference(None) is t2.argument_at(0)
@@ -83,11 +85,43 @@ def test_enumerate_vars_var_occurs_once():
     t1 = Callable.build("f", [X, Y, Y, Z, Z])
     memo = EnumerationMemo()
     t2 = t1.enumerate_vars(memo)
-    assert t2.argument_at(0).num == -1
-    assert t2.argument_at(1).num == 0
-    assert t2.argument_at(2).num == 0
-    assert t2.argument_at(3).num == 1
-    assert t2.argument_at(4).num == 1
+    memo.assign_numbers()
+    a1, a2, a3, a4, a5 = t2.arguments()
+    assert a1.num == -1
+    if a2.num == 0:
+        assert a3.num == 0
+        assert a4.num == 1
+        assert a5.num == 1
+    else:
+        assert a2.num == a3.num == 1
+        assert a4.num == a5.num == 0
+
+def test_enumerate_vars_head_body():
+    from prolog.interpreter.memo import EnumerationMemo
+    A = BindingVar() # single, head
+    B = BindingVar() # double, head
+    C = BindingVar() # both
+    D = BindingVar() # single, body
+    E = BindingVar() # double, body
+    head = Callable.build("f", [A, B, B, C])
+    body = Callable.build("g", [C, D, E, E])
+    memo = EnumerationMemo()
+    head = head.enumerate_vars(memo)
+    memo.in_head = False
+    body = body.enumerate_vars(memo)
+    memo.assign_numbers()
+
+    h1, h2, h3, h4 = head.arguments()
+    assert h1.num == -1
+    assert h2 is h3
+    assert h2.num == 1
+    assert h4.num == 0
+    b1, b2, b3, b4 = body.arguments()
+    assert b1 is h4
+    assert b2.num == -1
+    assert b3 is b4
+    assert b3.num == 1
+
 
 def test_unify_and_standardize_apart():
     heap = Heap()
