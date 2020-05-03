@@ -122,13 +122,13 @@ class TraceFrame(object):
             self.next._format(out)
 
 def _construct_traceback(scont):
-    from prolog.interpreter.continuation import ContinuationWithRule
+    from prolog.interpreter.continuation import ContinuationWithRuleInLocation
     if scont is None:
         return None
     next = None
     while not scont.is_done():
-        if isinstance(scont, ContinuationWithRule):
-            next = TraceFrame(scont.rule, next)
+        if isinstance(scont, ContinuationWithRuleInLocation):
+            next = TraceFrame(scont.rule_in_location.rule, next)
         scont = scont.nextcont
     return next
 

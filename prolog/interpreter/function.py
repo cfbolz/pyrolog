@@ -14,7 +14,7 @@ class Rule(object):
     _attrs_ = ['next', 'head', 'headargs', 'groundargs', 'contains_cut',
                'body', 'env_size_shared', 'env_size_body', 'env_size_head',
                'signature', 'module', 'file_name',
-               'line_range', 'source']
+               'line_range', 'source', 'location_cache']
     unrolling_attrs = unroll.unrolling_iterable(_attrs_)
 
     def __init__(self, head, body, module, next = None):
@@ -50,7 +50,17 @@ class Rule(object):
         self.line_range = None
         self.source = None
 
+        self.location_cache = {}
+
         self._does_contain_cut()
+
+    @jit.elidable
+    def get_rule_in_location(self, location):
+        if location in self.location_cache:
+            return self.location_cache[location]
+        self.location_cache[location] = res = RuleInLocation(self, location)
+        return res
+
 
     def _init_source_info(self, tree, source_info):
         from rpython.rlib.parsing.tree import Nonterminal, Symbol
@@ -186,6 +196,14 @@ class Rule(object):
         return self.__class__ == other.__class__ and self.__dict__ == other.__dict__
     def __ne__(self, other):
         return not self == other
+
+class RuleInLocation(object):
+    _immutable_fields_ = ["rule", "location"]
+
+    def __init__(self, rule, location):
+        self.rule = rule
+        self.location = location
+
 
 def _make_toplevel_rule(module):
     # this is a rule object that is used for error messages when running

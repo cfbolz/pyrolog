@@ -5,7 +5,7 @@ from rpython.rlib.objectmodel import we_are_translated, specialize
 from prolog.interpreter import error
 from prolog.interpreter import helper
 from prolog.interpreter.term import Term, Atom, BindingVar, Callable, Var
-from prolog.interpreter.function import Function, Rule
+from prolog.interpreter.function import Function, Rule, RuleInLocation
 from prolog.interpreter.heap import Heap
 from prolog.interpreter.signature import Signature
 from prolog.interpreter.module import Module, ModuleWrapper
@@ -18,12 +18,18 @@ Signature.register_extr_attr("function", engine=True)
 # ___________________________________________________________________
 # JIT stuff
 
-def get_printable_location(rule, sconttype):
+def get_printable_location(rule_in_location, sconttype):
+    rule = None
+    if rule_in_location:
+        rule = rule_in_location.rule
     if rule:
         s = rule.signature.string()
     else:
         s = "No rule"
-    return "%s %s" % (s, sconttype)
+    res = "%s %s" % (s, sconttype)
+    if rule_in_location and rule_in_location.location and rule_in_location.location.repr:
+        res = "%s from %s" % (res, rule_in_location.location.repr)
+    return res
 
 def get_jitcell_at(where, rule):
     # XXX can be vastly simplified
@@ -37,7 +43,7 @@ predsig = Signature.getsignature(":-", 2)
 callsig = Signature.getsignature(":-", 1)
 
 jitdriver = jit.JitDriver(
-        greens=["rule", "sconttype"],
+        greens=["rule_in_location", "sconttype"],
         reds=["scont", "fcont", "heap"],
         get_printable_location=get_printable_location,
         #get_jitcell_at=get_jitcell_at,
@@ -49,17 +55,17 @@ jitdriver = jit.JitDriver(
 
 
 def driver(scont, fcont, heap):
-    rule = None
+    rule_in_location = None
     while not scont.is_done():
         #view(scont=scont, fcont=fcont, heap=heap)
         sconttype = scont.cont_type_name
-        if isinstance(scont, ContinuationWithRule):
-            rule = scont.rule
-        if isinstance(scont, RuleContinuation) and rule.body is not None:
-            jitdriver.can_enter_jit(rule=rule, sconttype=sconttype, scont=scont, fcont=fcont,
+        if isinstance(scont, ContinuationWithRuleInLocation):
+            rule_in_location = scont.rule_in_location
+        if isinstance(scont, RuleContinuation) and rule_in_location.rule.body is not None:
+            jitdriver.can_enter_jit(rule_in_location=rule_in_location, sconttype=sconttype, scont=scont, fcont=fcont,
                                     heap=heap)
         try:
-            jitdriver.jit_merge_point(rule=rule, sconttype=sconttype, scont=scont, fcont=fcont,
+            jitdriver.jit_merge_point(rule_in_location=rule_in_location, sconttype=sconttype, scont=scont, fcont=fcont,
                                       heap=heap)
             oldscont = scont
             scont, fcont, heap  = scont.activate(fcont, heap)
@@ -70,6 +76,9 @@ def driver(scont, fcont, heap):
                     raise
             scont, fcont, heap = fcont.fail(heap)
         except error.CatchableError, exc:
+            rule = None
+            if rule_in_location is not None:
+                rule = rule_in_location.rule
             scont, fcont, heap = scont.engine.throw(exc, scont, fcont, heap, rule)
         else:
             scont, fcont, heap = _process_hooks(scont, fcont, heap)
@@ -224,8 +233,9 @@ class Engine(object):
             raise error.throw_type_error('callable', query)
         signature = query.signature()        
         builtin = self.get_builtin(signature)
+        rule_in_location = rule.get_rule_in_location(query.location())
         if builtin is not None:
-            return BuiltinContinuation(self, rule, scont, builtin, query), fcont, heap
+            return BuiltinContinuation(self, rule_in_location, scont, builtin, query), fcont, heap
 
         # do a real call
         module = rule.module
@@ -235,7 +245,8 @@ class Engine(object):
         rulechain = startrulechain.find_applicable_rule(query)
         if rulechain is None:
             raise error.UnificationFailed
-        scont, fcont, heap = _make_rule_conts(self, scont, fcont, heap, query, rulechain)
+        rule_in_location = rulechain.get_rule_in_location(query.location())
+        scont, fcont, heap = _make_rule_conts(self, scont, fcont, heap, query, rule_in_location)
         return scont, fcont, heap
 
     def call_in_module(self, query, module, scont, fcont, heap):
@@ -285,7 +296,7 @@ class Engine(object):
                 scont = scont.nextcont
             else:
                 return self.call(
-                    scont.recover, scont.rule, scont.nextcont, scont.fcont, heap)
+                    scont.recover, scont.rule_in_location.rule, scont.nextcont, scont.fcont, heap)
         raise error.UncaughtError(exc_term, exc.sig_context, rule_likely_source, orig_scont)
 
 
@@ -293,21 +304,23 @@ class Engine(object):
     def __freeze__(self):
         return True
 
-def _make_rule_conts(engine, scont, fcont, heap, query, rulechain):
-    rule = jit.hint(rulechain, promote=True)
+def _make_rule_conts(engine, scont, fcont, heap, query, rule_in_location):
+    rule = jit.promote(rule_in_location).rule
     if rule.contains_cut:
         scont = CutScopeNotifier.insert_scope_notifier(
                 engine, scont, fcont)
     restchain = rule.find_next_applicable_rule(query)
     if restchain is not None:
-        fcont = UserCallContinuation.make(query.arguments(), engine, scont, fcont, heap, restchain)
+        restchain_in_location = restchain.get_rule_in_location(query.location())
+        fcont = UserCallContinuation.make(query.arguments(), engine, scont, fcont, heap, restchain_in_location)
         heap = heap.branch()
 
     try:
         shared_env = rule.unify_and_standardize_apart_head(heap, query)
     except error.UnificationFailed:
         return fcont.fail(heap)
-    scont = RuleContinuation.make(shared_env, engine, scont, rule)
+    rule_in_location = rule.get_rule_in_location(query.location())
+    scont = RuleContinuation.make(shared_env, engine, scont, rule_in_location)
     return scont, fcont, heap
 
 # ___________________________________________________________________
@@ -356,15 +369,15 @@ class Continuation(object):
 
     _dot = _dot
 
-class ContinuationWithRule(Continuation):
+class ContinuationWithRuleInLocation(Continuation):
     """ This class represents continuations which need
     to have a reference to the current rule
     (e.g. to get at the module). """
 
-    def __init__(self, engine, nextcont, rule):
+    def __init__(self, engine, nextcont, rule_in_location):
+        assert isinstance(rule_in_location, RuleInLocation)
         Continuation.__init__(self, engine, nextcont)
-        assert isinstance(rule, Rule)
-        self.rule = rule
+        self.rule_in_location = rule_in_location
 
 def view(*objects, **names):
     from dotviewer import graphclient
@@ -445,11 +458,12 @@ class DoneFailureContinuation(FailureContinuation):
         return True
 
 
-class BodyContinuation(ContinuationWithRule):
+class BodyContinuation(Continuation):
     """ Represents a bit of Prolog code that is still to be called. """
     def __init__(self, engine, rule, nextcont, body):
-        ContinuationWithRule.__init__(self, engine, nextcont, rule)
+        Continuation.__init__(self, engine, nextcont)
         self.body = body
+        self.rule = rule
 
     def activate(self, fcont, heap):
         return self.engine.call(self.body, self.rule, self.nextcont, fcont, heap)
@@ -457,15 +471,15 @@ class BodyContinuation(ContinuationWithRule):
     def __repr__(self):
         return "<BodyContinuation %r>" % (self.body, )
 
-class BuiltinContinuation(ContinuationWithRule):
+class BuiltinContinuation(ContinuationWithRuleInLocation):
     """ Represents the call to a builtin. """
     def __init__(self, engine, rule, nextcont, builtin, query):
-        ContinuationWithRule.__init__(self, engine, nextcont, rule)
+        ContinuationWithRuleInLocation.__init__(self, engine, nextcont, rule)
         self.builtin = builtin
         self.query = query
 
     def activate(self, fcont, heap):
-        return self.builtin.call(self.engine, self.query, self.rule,
+        return self.builtin.call(self.engine, self.query, self.rule_in_location.rule,
                 self.nextcont, fcont, heap)
 
     def __repr__(self):
@@ -474,45 +488,45 @@ class BuiltinContinuation(ContinuationWithRule):
 
 @inline_small_list(immutable=True)
 class UserCallContinuation(FailureContinuation):
-    def __init__(self, engine, nextcont, orig_fcont, heap, rulechain):
+    def __init__(self, engine, nextcont, orig_fcont, heap, rule_in_location):
         FailureContinuation.__init__(self, engine, nextcont, orig_fcont, heap)
-        self.rulechain = rulechain
+        self.rule_in_location = rule_in_location
 
     def fail(self, heap):
         heap = heap.revert_upto(self.undoheap, discard_choicepoint=True)
-        query = self.rulechain.build_query(self._get_full_list())
+        query = self.rule_in_location.rule.build_query(self._get_full_list())
         return _make_rule_conts(self.engine, self.nextcont, self.orig_fcont,
-                                heap, query, self.rulechain)
+                                heap, query, self.rule_in_location)
 
 
     def __repr__(self):
-        query = self.rulechain.build_query(self._get_full_list())
+        query = self.rule_in_location.rule.build_query(self._get_full_list())
         return "<UserCallContinuation query=%r rule=%r>" % (
-                query, self.rulechain)
+                query, self.rule_in_location.rule)
 
 @inline_small_list(immutable=True)
-class RuleContinuation(ContinuationWithRule):
+class RuleContinuation(ContinuationWithRuleInLocation):
     """ A Continuation that represents the application of a rule, i.e.:
         - standardizing apart of the rule
         - unifying the rule head with the query
         - calling the body of the rule
     """
 
-    def __init__(self, engine, nextcont, rule):
-        ContinuationWithRule.__init__(self, engine, nextcont, rule)
+    def __init__(self, engine, nextcont, rule_in_location):
+        ContinuationWithRuleInLocation.__init__(self, engine, nextcont, rule_in_location)
 
     def activate(self, fcont, heap):
         nextcont = self.nextcont
-        rule = jit.promote(self.rule)
+        rule = jit.promote(self.rule_in_location).rule
         nextcall = rule.clone_body_from_rulecont(heap, self)
         if nextcall is not None:
-            return self.engine.call(nextcall, self.rule, nextcont, fcont, heap)
+            return self.engine.call(nextcall, rule, nextcont, fcont, heap)
         else:
             cont = nextcont
         return cont, fcont, heap
 
     def __repr__(self):
-        return "<RuleContinuation rule=%r query=%r>" % (self.rule, self.query)
+        return "<RuleContinuation rule=%r query=%r>" % (self.rule_in_location.rule, self.query)
 
 class CutScopeNotifier(Continuation):
     def __init__(self, engine, nextcont, fcont_after_cut):
@@ -532,9 +546,10 @@ class CutScopeNotifier(Continuation):
         return self.nextcont, fcont, heap
 
 
-class CatchingDelimiter(ContinuationWithRule):
+class CatchingDelimiter(ContinuationWithRuleInLocation):
     def __init__(self, engine, rule, nextcont, fcont, catcher, recover, heap):
-        ContinuationWithRule.__init__(self, engine, nextcont, rule)
+        rule_in_location = rule.get_rule_in_location(recover.location())
+        ContinuationWithRuleInLocation.__init__(self, engine, nextcont, rule_in_location)
         self.catcher = catcher
         self.recover = recover
         self.fcont = fcont
