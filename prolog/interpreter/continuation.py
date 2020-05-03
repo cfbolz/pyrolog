@@ -79,6 +79,8 @@ def driver(scont, fcont, heap):
             rule = None
             if rule_in_location is not None:
                 rule = rule_in_location.rule
+            if isinstance(scont, BodyContinuation):
+                rule = scont.rule
             scont, fcont, heap = scont.engine.throw(exc, scont, fcont, heap, rule)
         else:
             scont, fcont, heap = _process_hooks(scont, fcont, heap)
@@ -526,7 +528,9 @@ class RuleContinuation(ContinuationWithRuleInLocation):
         return cont, fcont, heap
 
     def __repr__(self):
-        return "<RuleContinuation rule=%r query=%r>" % (self.rule_in_location.rule, self.query)
+        rule = self.rule_in_location.rule
+        return "<RuleContinuation rule=%r query=%r>" % (rule,
+                rule.build_query(self._get_full_list()))
 
 class CutScopeNotifier(Continuation):
     def __init__(self, engine, nextcont, fcont_after_cut):

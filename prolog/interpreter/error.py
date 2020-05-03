@@ -73,7 +73,9 @@ class TermedError(PrologError):
             else:
                 return "Internal error" # AKA, I have no clue what went wrong.
 
-class CatchableError(TermedError): pass
+class CatchableError(TermedError):
+    pass
+
 class UncaughtError(TermedError):
     def __init__(self, term, sig_context=None, rule_likely_source=None, scont=None):
         TermedError.__init__(self, term, sig_context)
@@ -123,12 +125,15 @@ class TraceFrame(object):
 
 def _construct_traceback(scont):
     from prolog.interpreter.continuation import ContinuationWithRuleInLocation
+    from prolog.interpreter.continuation import BodyContinuation
     if scont is None:
         return None
     next = None
     while not scont.is_done():
         if isinstance(scont, ContinuationWithRuleInLocation):
             next = TraceFrame(scont.rule_in_location.rule, next)
+        elif isinstance(scont, BodyContinuation):
+            next = TraceFrame(scont.rule, next)
         scont = scont.nextcont
     return next
 
