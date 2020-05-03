@@ -21,7 +21,7 @@ class Rule(object):
         from prolog.interpreter import helper
         head = head.dereference(None)
         assert isinstance(head, Callable)
-        memo = EnumerationMemo()
+        memo = EnumerationMemo(head.name())
         self.head = h = head.enumerate_vars(memo)
         memo.in_head = False
         if h.argument_count() > 0:

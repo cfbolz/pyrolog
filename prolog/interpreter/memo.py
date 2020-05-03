@@ -2,7 +2,8 @@ from prolog.interpreter.term import NumberedVar
 
 class EnumerationMemo(object):
     """A memo object to enumerate the variables in a term"""
-    def __init__(self):
+    def __init__(self, rulerepr=None):
+        self.rulerepr = rulerepr
         self.mapping = {}
         self.numvar_in_head = {}
         self.numvar_in_body = {}

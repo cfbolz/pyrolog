@@ -445,7 +445,25 @@ class Callable(NonVar):
         return self._copy_term(_term_copy_standardize_apart, heap, env), False
 
     def enumerate_vars(self, memo):
-        return self._copy_term(_term_enumerate_vars, None, memo)
+        from prolog.interpreter.signature import Location
+        args = [None] * self.argument_count()
+        newinstance = False
+        i = 0
+        while i < self.argument_count():
+            arg = self.argument_at(i)
+            cloned = arg.enumerate_vars(memo)
+            newinstance = newinstance | (cloned is not arg)
+            args[i] = cloned
+            i += 1
+        if not newinstance:
+            return self
+        location = self.location()
+        if not memo.in_head:
+            repr = None
+            if memo.rulerepr:
+                repr = memo.rulerepr + str(id(self))
+            location = Location(location.signature, repr) # XXX
+        return Callable.build_location(args, location)
 
     @specialize.arg(1)
     @jit.unroll_safe
@@ -461,7 +479,7 @@ class Callable(NonVar):
             i += 1
         if newinstance:
             # XXX construct the right class directly
-            return Callable.build(self.name(), args, self.signature(), heap=heap)
+            return Callable.build_location(args, self.location(), heap=heap)
         else:
             return self
     
@@ -761,9 +779,6 @@ def _term_copy(obj, i, heap, memo):
 
 def _term_copy_standardize_apart(obj, i, heap, env):
     return obj.copy_standardize_apart(heap, env)[0]
-
-def _term_enumerate_vars(obj, i, _, memo):
-    return obj.enumerate_vars(memo)
 
 def _term_unify_and_standardize_apart(obj, i, heap, other, memo):
     obj.unify_and_standardize_apart(other.argument_at(i), heap, memo)

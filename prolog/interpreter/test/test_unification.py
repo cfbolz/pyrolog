@@ -139,6 +139,18 @@ def test_enumerate_vars_head_body():
     assert b3 is b4
     assert b3.num == 1
 
+def test_enumerate_vars_new_locations():
+    from prolog.interpreter.memo import EnumerationMemo
+    memo = EnumerationMemo()
+    memo.in_head = False
+    E = BindingVar()
+    f1 = Callable.build("f", [E])
+    f2 = Callable.build("f", [E])
+    body = Callable.build(",", [f1, f2])
+    bodys = body.enumerate_vars(memo)
+    fs1, fs2 = bodys.arguments()
+    assert fs1.signature() is fs2.signature()
+    assert fs1.location() is not fs2.location()
 
 def test_unify_and_standardize_apart():
     heap = Heap()
