@@ -15,7 +15,7 @@ def test_callable_build_for_term1():
     assert t1.argument_count() == 1
 
 def test_callable_build_for_term1_from_factory():
-    t2 = Callable.build('foo', [Atom('bar')])
+    t2 = Callable.build('foo', [Atom.fromname('bar')])
     assert not isinstance(t2, Term)
     assert isinstance(t2, Callable)
     assert t2.name() == 'foo'

@@ -1,5 +1,5 @@
 from rpython.rlib.streamio import fdopen_as_stream
-from prolog.interpreter.term import NonVar
+from prolog.interpreter.term import NonVar, Atom
 from prolog.interpreter.error import UnificationFailed
 
 class StreamWrapper(object):
@@ -16,7 +16,11 @@ class StreamWrapper(object):
 class PrologStream(object):
     def __init__(self, stream):
         self.stream = stream
-        self.alias = "$stream_%d" % self.fd()
+        self.setalias("$stream_%d" % self.fd())
+
+    def setalias(self, alias):
+        self.alias = alias
+        self.alias_atom = Atom.fromname(alias)
 
     def fd(self):   
         return self.stream.try_to_find_file_descriptor()

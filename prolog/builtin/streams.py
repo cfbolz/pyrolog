@@ -63,11 +63,11 @@ def impl_open_options(engine, heap, srcpath, mode, stream, options):
 
         try:
             alias = opts["alias"]
-            prolog_stream.alias = alias
+            prolog_stream.setalias(alias)
         except KeyError:
-            alias = "$stream_%d" % prolog_stream.fd()
+            alias = prolog_stream.alias
         engine.streamwrapper.aliases[alias] = prolog_stream
-        stream.unify(term.Callable.build(alias), heap)
+        stream.unify(prolog_stream.alias_atom, heap)
 
 @expose_builtin("open", unwrap_spec=["atom", "atom", "obj"])
 def impl_open(engine, heap, srcpath, mode, stream):
@@ -216,13 +216,13 @@ def impl_put_byte_1(engine, heap, obj):
 def impl_current_input(engine, heap, obj):
     if not isinstance(obj, term.Var) and not isinstance(obj, term.Atom):
         error.throw_domain_error("stream", obj)
-    obj.unify(term.Atom(engine.streamwrapper.current_instream.alias), heap)
+    obj.unify(engine.streamwrapper.current_instream.alias_atom, heap)
 
 @expose_builtin("current_output", unwrap_spec=["obj"])
 def impl_current_output(engine, heap, obj):
     if not isinstance(obj, term.Var) and not isinstance(obj, term.Atom):
         error.throw_domain_error("stream", obj)
-    obj.unify(term.Atom(engine.streamwrapper.current_outstream.alias), heap)
+    obj.unify(engine.streamwrapper.current_outstream.alias_atom, heap)
 
 @expose_builtin("set_input", unwrap_spec=["instream"])
 def impl_set_input(engine, heap, stream):

@@ -37,7 +37,7 @@ def handle_use_module_with_library(engine, heap, module, path, imports=None):
             else:
                 assert isinstance(fd, int)
                 os.close(fd) # cleanup
-                newpath = Atom(temppath)
+                newpath = Atom.fromname(temppath)
                 break
         if not newpath:
             error.throw_existence_error("source_sink", arg)

@@ -104,7 +104,7 @@ def unwrap_instream(engine, obj):
         else:
             if not isinstance(stream, PrologInputStream):
                 error.throw_permission_error("input", "stream",
-                        term.Atom(stream.alias))
+                        stream.alias_atom)
             assert isinstance(stream, PrologInputStream)
             return stream
     error.throw_domain_error("stream", obj)
@@ -120,7 +120,7 @@ def unwrap_outstream(engine, obj):
         else:
             if not isinstance(stream, PrologOutputStream):
                 error.throw_permission_error("output", "stream",
-                        term.Atom(stream.alias))
+                        stream.alias_atom)
             assert isinstance(stream, PrologOutputStream)
             return stream
     error.throw_domain_error("stream", obj)

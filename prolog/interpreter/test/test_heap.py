@@ -267,7 +267,7 @@ def test_simple_hooks():
     v1.unify(a1, hp)
     v2.unify(a2, hp)
     t1 = Callable.build("f", [v1, v2])
-    t2 = Callable.build("f", [Atom("a"), Atom("b")])
+    t2 = Callable.build("f", [Atom.fromname("a"), Atom.fromname("b")])
     t1.unify(t2, hp)
     assert hp.hook.attvar == a2
     assert hp.hook.next.attvar == a1

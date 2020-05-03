@@ -385,6 +385,7 @@ class NonVar(PrologObject):
         return self
 
 class Callable(NonVar):
+    """ Abstract base class for compound terms and atoms. """
     __slots__ = ()
 
     def __init__(self):
@@ -394,6 +395,9 @@ class Callable(NonVar):
         return self.signature().name
         
     def signature(self):
+        raise NotImplementedError("abstract base")
+    
+    def location(self):
         raise NotImplementedError("abstract base")
     
     def get_prolog_signature(self):
@@ -494,10 +498,29 @@ class Callable(NonVar):
         return func(engine, self)
     
     @staticmethod
-    @jit.unroll_safe
     def build(term_name, args=None, signature=None, heap=None, cache=True):
         if args is None:
             args = []
+        if signature is None:
+            if cache:
+                signature = Signature.getsignature(term_name, len(args))
+            else:
+                signature = Signature(term_name, len(args))
+        else:
+            assert signature.numargs == len(args)
+        assert isinstance(signature, Signature)
+        return Callable.build_sig(args, signature, heap=heap, cache=cache)
+
+    @staticmethod
+    @jit.unroll_safe
+    def build_sig(args, signature, heap=None, cache=True):
+        location = signature.default_location
+        return Callable.build_location(args, location, heap, cache)
+
+    @staticmethod
+    @jit.unroll_safe
+    def build_location(args, location, heap=None, cache=True):
+        signature = location.signature
         if heap is not None:
             # perform variable shunting:
             # remove variables that are not needed because they are bound
@@ -509,30 +532,24 @@ class Callable(NonVar):
                     args[i] = arg.getbinding()
         if len(args) == 0:
             if cache:
-                return Atom.newatom(term_name, signature)
-            return Atom(term_name, signature)
+                return Atom.newatom(signature)
+            return Atom(signature)
         else:
-            if signature is None:
-                if cache:
-                    signature = Signature.getsignature(term_name, len(args))
-                else:
-                    signature = Signature(term_name, len(args))
-            else:
-                assert signature.numargs == len(args)
-            assert isinstance(signature, Signature)
 
-            cls = Callable._find_specialized_class(term_name, len(args))
+            cls = Callable._find_specialized_class(signature)
             if cls is not None:
-                return cls(term_name, args, signature)
-            cls = Callable._find_specialized_class('Term', len(args))
-            if cls is not None:
-                return cls(term_name, args, signature)
-            return Term(term_name, args, signature)
+                return cls(args, location)
+            return Term(args, location)
 
     @staticmethod
     @jit.elidable
-    def _find_specialized_class(term_name, numargs):
-        return specialized_term_classes.get((term_name, numargs), None)
+    def _find_specialized_class(signature):
+        term_name = signature.name
+        numargs = signature.numargs
+        res = specialized_term_classes.get((term_name, numargs), None)
+        if res is not None:
+            return res
+        return specialized_term_classes.get(('Term', numargs), None)
 
     def __repr__(self):
         return "%s(%s, %r)" % (self.__class__.__name__, self.name(),
@@ -555,15 +572,19 @@ class Callable(NonVar):
 
 class Atom(Callable):
     TYPE_STANDARD_ORDER = 2
-    __slots__ = ('_name', '_signature')
+    __slots__ = ('_signature', )
     cache = {}
     _immutable_fields_ = ["_signature"]
     
-    def __init__(self, name, signature=None):
-        if signature is None:
-            signature = Signature(name, 0)
+    def __init__(self, signature):
+        assert signature is not None
+        assert isinstance(signature, Signature)
         Callable.__init__(self)
         self._signature = signature
+
+    @staticmethod
+    def fromname(name):
+        return Atom(Signature(name, 0))
     
     def __str__(self):
         return self.name()
@@ -573,13 +594,11 @@ class Atom(Callable):
     
     @staticmethod
     @jit.elidable
-    def newatom(name, signature=None):
-        if signature is None:
-            signature = Signature.getsignature(name, 0)
+    def newatom(signature):
         result = Atom.cache.get(signature, None)
         if result is not None:
             return result
-        Atom.cache[signature] = result = Atom(name, signature)
+        Atom.cache[signature] = result = Atom(signature)
         return result
     
     def eval_arithmetic(self, engine):
@@ -605,6 +624,9 @@ class Atom(Callable):
     def signature(self):
         return self._signature
 
+    def location(self):
+        return self._signature.default_location
+    
     def nonvar_unify_and_standardize_apart(self, other, heap, env):
         if not isinstance(other, Atom):
             raise UnificationFailed
@@ -748,13 +770,12 @@ def _term_unify_and_standardize_apart(obj, i, heap, other, memo):
 
 class Term(Callable):
     TYPE_STANDARD_ORDER = 3
-    _immutable_fields_ = ["_args[*]", "_name", "_signature"]
-    __slots__ = ('_name', '_signature', '_args')
+    _immutable_fields_ = ["_args[*]", "_name", "_location"]
+    __slots__ = ('_name', '_location', '_args')
     
-    def __init__(self, term_name, args, signature):
-        assert signature.name == term_name
+    def __init__(self, args, location):
         self._args = make_sure_not_resized(args)
-        self._signature = signature
+        self._location = location
         Callable.__init__(self)
     
     def __repr__(self):
@@ -773,7 +794,11 @@ class Term(Callable):
         return len(self._args)
     
     def signature(self):
-        return self._signature
+        return self._location.signature
+
+    def location(self):
+        return self._location
+
 
 @specialize.argtype(0)
 def rcmp(a, b): # RPython does not support cmp...
@@ -809,9 +834,9 @@ def generate_class(cname, fname, n_args):
         else:
             TYPE_STANDARD_ORDER = Term.TYPE_STANDARD_ORDER
 
-        def __init__(self, term_name, args, signature):
+        def __init__(self, args, location):
+            assert location.signature is signature
             parent._init_values(self, args)
-            assert self.name() == term_name
             assert args is None or len(args) == n_args
 
         def name(self):
@@ -820,9 +845,12 @@ def generate_class(cname, fname, n_args):
         def signature(self):
             return signature
 
-        def _make_new(self, name, signature):
+        def location(self):
+            return signature.default_location
+    
+        def _make_new(self, location):
             cls = specific_class
-            return cls(name, None, signature)
+            return cls(None, location)
 
     specific_class.__name__ = cname
     return specific_class
@@ -834,7 +862,7 @@ def generate_abstract_class(n_args):
 
         _immutable_fields_ = ["val_%d" % x for x in arg_iter]
 
-        def __init__(self, term_name, args, signature):
+        def __init__(self, args, location):
             raise NotImplementedError
 
         def _init_values(self, args):
@@ -843,7 +871,7 @@ def generate_abstract_class(n_args):
             for x in arg_iter:
                 setattr(self, 'val_%d' % x, args[x])
 
-        def _make_new(self, name, signature):
+        def _make_new(self, location):
             raise NotImplementedError("abstract base class")
 
         def arguments(self):
@@ -890,7 +918,7 @@ def generate_abstract_class(n_args):
                 raise UnificationFailed
 
         def copy_standardize_apart(self, heap, env):
-            result = self._make_new(self.name(), self.signature())
+            result = self._make_new(self.location())
             reuse = True
             i = 0
             for i in arg_iter:
@@ -926,7 +954,7 @@ def generate_abstract_class(n_args):
 
         @specialize.arg(1)
         def _copy_term(self, copy_individual, heap, *extraargs):
-            result = self._make_new(self.name(), self.signature())
+            result = self._make_new(self.location())
             newinstance = False
             i = 0
             for i in arg_iter:
@@ -949,21 +977,24 @@ def generate_generic_class(n_args):
     assert parent is not None
 
     class generic_callable(parent):
-        _immutable_fields_ = ["_signature"]
+        _immutable_fields_ = ["_location"]
         TYPE_STANDARD_ORDER = Term.TYPE_STANDARD_ORDER
 
-        def __init__(self, term_name, args, signature):
+        def __init__(self, args, location):
             parent._init_values(self, args)
-            self._signature = signature
+            self._location = location
             assert args is None or len(args) == n_args
-            assert self.name() == term_name
 
-        def _make_new(self, name, signature):
+        def _make_new(self, location):
             cls = generic_callable
-            return cls(name, None, signature)
+            return cls(None, location)
 
         def signature(self):
-            return self._signature
+            return self._location.signature
+
+        def location(self):
+            return self._location
+
     generic_callable.__name__ = 'Generic'+str(n_args)
     return generic_callable
 
@@ -971,14 +1002,17 @@ def generate_generic_class(n_args):
 specialized_term_classes = {}
 callables = {}
 
+# generate base classes
 for numargs in range(1, OPTIMIZED_TERM_SIZE_MAX):
     callables['Abstract', numargs] = generate_abstract_class(numargs)
 
+# generate classes that store the signature on the class
 classes = [('Cons', '.', 2), ('Or', ';', 2), ('And', ',', 2)]
 for cname, fname, numargs in classes:
     specialized_term_classes[fname, numargs] = generate_class(
                                                         cname, fname, numargs)
 
+# generate classes that store the signature on the instance
 for numargs in range(1, 10):
     assert ('Term', numargs) not in specialized_term_classes
     specialized_term_classes['Term', numargs] = generate_generic_class(numargs)

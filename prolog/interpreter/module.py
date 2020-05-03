@@ -61,7 +61,7 @@ class Module(object):
     _immutable_fields_ = ["name", "nameatom", "_toplevel_rule"]
     def __init__(self, name):
         self.name = name
-        self.nameatom = Atom(name)
+        self.nameatom = Atom.fromname(name)
         self.functions = {}
         self.exports = []
         self._toplevel_rule = _make_toplevel_rule(self)

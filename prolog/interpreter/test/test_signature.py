@@ -62,8 +62,11 @@ def test_extra_attr_engine():
 
 def test_atom_signature():
     factory = SignatureFactory()
-    factory.register_extr_attr("foo", engine=True)
     sig1 = factory.getsignature("a", 0)
     assert sig1.atom_signature is sig1
     sig2 = factory.getsignature("a", 5)
     assert sig2.atom_signature is sig1
+
+def test_default_location():
+    sig1 = Signature("a", 0)
+    assert sig1.default_location.signature is sig1

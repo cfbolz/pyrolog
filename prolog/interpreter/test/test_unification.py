@@ -50,6 +50,23 @@ def test_term():
     assert X.dereference(heap).name()== "HALLO"
     assert Y.dereference(heap).name()== "hallo"
 
+def test_term_stores_location():
+    X = BindingVar()
+    t1 = Callable.build("f", [Callable.build("hallo"), X])
+    assert t1._location.signature.name == "f"
+
+def test_term_copy_preserves_location():
+    from prolog.interpreter.signature import Signature, Location
+    from prolog.interpreter.memo import CopyMemo
+    sig1 = Signature("f", 1)
+    loc1 = Location(sig1, "foo")
+    v1 = BindingVar()
+    v1.binding = Number(10)
+    t1 = Callable.build_location([v1], loc1)
+    t2 = t1.copy(None, CopyMemo())
+    assert t1 is not t2
+    assert t2.location() is loc1
+
 def test_enumerate_vars():
     from prolog.interpreter.memo import EnumerationMemo
     X = BindingVar()

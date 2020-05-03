@@ -62,7 +62,7 @@ class Signature(object):
 
     _cache = SignatureFactory()
 
-    _immutable_fields_ = ["name", "numargs", "atom_signature", "factory"]
+    _immutable_fields_ = ["name", "numargs", "atom_signature", "factory", "default_location"]
 
     def __init__(self, name, numargs, cached=False, factory=None):
         assert name is not None
@@ -79,6 +79,7 @@ class Signature(object):
         else:
             atom_signature = self
         self.atom_signature = atom_signature
+        self.default_location = Location(self, "default")
         factory.init_extra_attrs(self)
 
     def eq(self, other):
@@ -144,3 +145,12 @@ class Signature(object):
     @staticmethod
     def register_extr_attr(name, engine=False, default=None):
         Signature._cache.register_extr_attr(name, engine, default)
+
+
+class Location(object):
+    _immutable_fields_ = ['signature']
+
+    def __init__(self, signature, repr=None):
+        self.signature = signature
+        self.repr = repr
+
