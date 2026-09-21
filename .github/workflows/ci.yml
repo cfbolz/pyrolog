@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches-ignore:
+      - 'archive/**'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Tests and JIT translation
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    env:
+      CC: gcc-12
+      PYTHONPATH: ${{ github.workspace }}/.ci-rpython
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Check out RPython
+        uses: actions/checkout@v7
+        with:
+          repository: pypy/pypy
+          ref: 69e12f2c5c2cfe69529d5d7fcdcec048e1bd3ae4
+          path: .ci-rpython
+          persist-credentials: false
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: pypy2.7-v7.3.17
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-12 make libffi-dev libgmp-dev pkg-config
+
+      - name: Install test dependencies
+        run: |
+          pypy -m pip install --upgrade pip==20.3.4
+          pypy -m pip install -r ci/requirements.txt
+
+      - name: Run unit tests
+        run: >-
+          pypy -m pytest -q
+          prolog/interpreter/test prolog/builtin/test prolog/prolog_modules/test
+          --junitxml=unit-tests.xml
+
+      - name: Translate with the JIT
+        run: |
+          set -o pipefail
+          pypy "$PYTHONPATH/rpython/bin/rpython" --opt=jit targetprologstandalone.py 2>&1 | tee translation.log
+
+      - name: Run translated regression tests
+        env:
+          PYROLOG_EXECUTABLE: ${{ github.workspace }}/pyrolog-c
+        run: pypy -m pytest -q prolog/jittest/test_tracing.py --junitxml=translated-tests.xml
+
+      - name: Upload test results and build artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results
+          path: |
+            *-tests.xml
+            translation.log
+            pyrolog-c
+          if-no-files-found: ignore
+          retention-days: 14

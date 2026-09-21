@@ -8,6 +8,7 @@ Run from this repository's root:
 
 ```sh
 export PYTHONPATH="$HOME/projects/gitpypy"
+pypy -m pip install -r ci/requirements.txt
 
 # Unit tests
 pypy -m pytest -q prolog/interpreter/test prolog/builtin/test prolog/prolog_modules/test
