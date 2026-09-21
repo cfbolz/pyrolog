@@ -2,7 +2,7 @@
 
 Expected answers live only in inriasuite/. Keep marks specific: unexpected passes
 and exceptions of an unrelated type must fail. Collection rejects stale or
-ambiguous keys. Line numbers are deliberately not part of these keys.
+ambiguous keys.
 """
 import pytest
 from prolog.interpreter.error import (

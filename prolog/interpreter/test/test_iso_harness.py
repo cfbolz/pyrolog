@@ -2,7 +2,7 @@ import os
 import subprocess
 import sys
 import pytest
-from prolog.interpreter.test.iso import (
+from prolog.interpreter.test.test_iso import (
     Case, case_key, check_case, parameters, read_cases, split_top_level,
 )
 
@@ -73,7 +73,7 @@ def test_marked_cases_keep_strict_outcomes(tmpdir):
     testfile = tmpdir.join('test_marks.py')
     testfile.write("""
 import pytest
-from prolog.interpreter.test.iso import Case, case_key, parameters
+from prolog.interpreter.test.test_iso import Case, case_key, parameters
 
 cases = [Case('example', n, name, 'success', None)
          for n, name in enumerate(['fixed', 'different', 'known', 'fixture'])]
