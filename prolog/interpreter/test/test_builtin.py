@@ -642,6 +642,29 @@ def test_number_chars():
     prolog_raises("type_error(number, a)", "number_chars(a, X)")
     prolog_raises("syntax_error(E)", "number_chars(A, ['-', '.', '1'])")
 
+@pytest.mark.parametrize('chars, expected', [
+    ("[' ', '4', '5']", '45'),
+    (r"['\t', '\n', '\r', ' ', '-', '2', '5']", '-25'),
+    ("[' ', '4', '.', '2']", '4.2'),
+])
+def test_number_chars_leading_whitespace(chars, expected):
+    assert_true("number_chars(X, %s), X = %s." % (chars, expected))
+    assert_true("number_chars(%s, %s)." % (expected, chars))
+
+
+@pytest.mark.parametrize('chars', [
+    '[]',
+    "[' ']",
+    r"[' ', '\n', '\t']",
+    "[' ', '-', ' ', '2']",
+    "[' ', '4', ' ']",
+    "['4', ' ', '5']",
+    "['  ', '4']",
+])
+def test_number_chars_rejects_empty_or_misplaced_whitespace(chars):
+    prolog_raises('syntax_error(E)', 'number_chars(X, %s)' % chars)
+
+
 def test_atom_chars():
     assert_true("atom_chars(abc, X), X = [a, b, c].")
     assert_true("atom_chars(a12, [a, '1', '2']).")

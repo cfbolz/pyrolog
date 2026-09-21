@@ -37,6 +37,8 @@ def cons_to_num(charlist):
         if not isinstance(elem, term.Atom):
             error.throw_type_error("text", charlist)
         digit = elem.name()
+        if first and len(digit) == 1 and digit.isspace():
+            continue
         if digit not in digits:
             if digit == ".":
                 if saw_dot or first or (i == 1 and numlist[0] == "-"):
@@ -52,6 +54,8 @@ def cons_to_num(charlist):
         i += 1
         first = False
     
+    if not numlist:
+        error.throw_syntax_error("Illegal number")
     numstr = "".join(numlist)
     if numstr.find(".") == -1: # no float
         try:
