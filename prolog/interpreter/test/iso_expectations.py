@@ -29,8 +29,6 @@ EXPECTATIONS = {
         xfail('Asserting a variable clause body raises instantiation_error instead of wrapping call/1', UncaughtError),
     ('atom_chars', "atom_chars('''',L)"):
         xfail('Parser does not support doubled quotes in quoted atoms', PrologParseError),
-    ('atom_codes', "atom_codes('',L)"):
-        xfail('atom_codes/2 is not implemented', UncaughtError),
     ('atom_codes', 'atom_codes([],L)'):
         xfail("Parser does not support 0' character-code syntax", PrologParseError),
     ('atom_codes', "atom_codes('''',L)"):
@@ -43,10 +41,6 @@ EXPECTATIONS = {
         xfail("Parser does not support 0' character-code syntax", PrologParseError),
     ('atom_codes', "atom_codes('iso',[0'i, 0's])"):
         xfail("Parser does not support 0' character-code syntax", PrologParseError),
-    ('atom_codes', 'atom_codes(A,L)'):
-        xfail('atom_codes/2 is not implemented', UncaughtError),
-    ('atom_codes', 'atom_codes(f(a),L)'):
-        xfail('atom_codes/2 is not implemented', UncaughtError),
     ('atom_codes', "atom_codes(A, 0'x)"):
         xfail("Parser does not support 0' character-code syntax", PrologParseError),
     ('atom_codes', "atom_codes(A,[ 0'i, 0's, 1000])"):

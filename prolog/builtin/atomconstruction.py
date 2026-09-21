@@ -187,31 +187,43 @@ def impl_sub_atom(engine, heap, s, before, length, after, sub, scont, fcont):
     cont =  cls(engine, scont, fcont, heap, s, before, length, after, sub)
     return cont, fcont, heap
 
-def atom_to_cons(atom):
-    charlist = [term.Callable.build(c) for c in atom.name()]
+def atom_to_cons(atom, codes=False):
+    if codes:
+        charlist = [term.Number(ord(c)) for c in atom.name()]
+    else:
+        charlist = [term.Callable.build(c) for c in atom.name()]
     return helper.wrap_list(charlist)
         
-def cons_to_atom(cons):
-    result = helper.unwrap_char_list(cons)
+def cons_to_atom(cons, codes=False):
+    result = helper.unwrap_char_list(cons, codes=codes)
     return Callable.build("".join(result))
 
 @expose_builtin("atom_chars", unwrap_spec=["obj", "obj"])
 def impl_atom_chars(engine, heap, atom, charlist):
+    atom_convert(heap, atom, charlist)
+
+
+@expose_builtin("atom_codes", unwrap_spec=["obj", "obj"])
+def impl_atom_codes(engine, heap, atom, codelist):
+    atom_convert(heap, atom, codelist, codes=True)
+
+
+def atom_convert(heap, atom, charlist, codes=False):
     if not isinstance(atom, (term.Atom, term.Var)):
         error.throw_type_error("atom", atom)
     if not isinstance(charlist, term.Var):  
         if isinstance(atom, term.Atom):
-            helper.unwrap_char_list(charlist, allow_partial=True)
-            atom_to_cons(atom).unify(charlist, heap)
+            helper.unwrap_char_list(charlist, allow_partial=True, codes=codes)
+            atom_to_cons(atom, codes=codes).unify(charlist, heap)
         else:
-            cons_to_atom(charlist).unify(atom, heap)
+            cons_to_atom(charlist, codes=codes).unify(atom, heap)
     else:
         if isinstance(atom, term.Var):
             error.throw_instantiation_error()
         elif not isinstance(atom, term.Atom):
             error.throw_type_error("atom", atom)
         else:
-            atom_to_cons(atom).unify(charlist, heap)
+            atom_to_cons(atom, codes=codes).unify(charlist, heap)
 
 
 @expose_builtin("char_code", unwrap_spec=["obj", "obj"])

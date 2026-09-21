@@ -43,7 +43,7 @@ def unwrap_list(prolog_list):
         return result
     error.throw_type_error("list", prolog_list)
 
-def unwrap_char_list(prolog_list, allow_partial=False):
+def unwrap_char_list(prolog_list, allow_partial=False, codes=False):
     """Validate a character list; return None for an allowed partial list."""
     result = []
     partial = False
@@ -54,6 +54,8 @@ def unwrap_char_list(prolog_list, allow_partial=False):
             if not allow_partial:
                 error.throw_instantiation_error()
             partial = True
+        elif codes:
+            result.append(unwrap_char_code(char))
         elif not isinstance(char, term.Atom) or len(char.name()) != 1:
             error.throw_type_error("character", char)
         else:
