@@ -4,6 +4,37 @@ from prolog.builtin.register import expose_builtin
 # ___________________________________________________________________
 # arithmetic
 
+def check_natural_number(value):
+    if isinstance(value, term.Var):
+        return
+    if isinstance(value, term.Number):
+        negative = value.num < 0
+    elif isinstance(value, term.BigInt):
+        negative = value.value.get_sign() < 0
+    else:
+        error.throw_type_error('integer', value)
+        return
+    if negative:
+        error.throw_domain_error('not_less_than_zero', value)
+
+
+@expose_builtin("succ", unwrap_spec=["obj", "obj"])
+def impl_succ(engine, heap, predecessor, successor):
+    check_natural_number(predecessor)
+    check_natural_number(successor)
+    if isinstance(predecessor, term.Var):
+        if isinstance(successor, term.Var):
+            error.throw_instantiation_error()
+        assert isinstance(successor, term.Numeric)
+        if (isinstance(successor, term.Number) and successor.num == 0 or
+                isinstance(successor, term.BigInt) and successor.value.get_sign() == 0):
+            raise error.UnificationFailed
+        predecessor.unify(successor.arith_sub(term.Number(1)), heap)
+    else:
+        assert isinstance(predecessor, term.Numeric)
+        successor.unify(predecessor.arith_add(term.Number(1)), heap)
+
+
 @continuation.make_failure_continuation
 def continue_between(Choice, engine, scont, fcont, heap, lower, upper, var):
     if lower < upper:
