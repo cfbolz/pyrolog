@@ -18,29 +18,45 @@ class CycleFactorizer(object):
         self.active = {}
         self.finished = {}
         self.bindings = []
+        self.preferred = {}
 
     def visit(self, obj):
-        obj = obj.dereference(None)
-        if not isinstance(obj, Callable) or obj.argument_count() == 0:
-            return obj
-        if obj in self.finished:
-            return self.finished[obj]
-        if obj in self.active:
-            var = self.active[obj]
-            if var is None:
-                var = BindingVar()
-                self.active[obj] = var
-            return var
-        self.active[obj] = None
-        args = [self.visit(obj.argument_at(i))
-                for i in range(obj.argument_count())]
-        result = Callable.build(obj.name(), args, signature=obj.signature())
-        var = self.active.pop(obj)
-        if var is not None:
-            self.bindings.append(Callable.build("=", [var, result]))
-            result = var
-        self.finished[obj] = result
-        return result
+        todo = [(obj, False)]
+        results = []
+        while todo:
+            obj, finishing = todo.pop()
+            obj = obj.dereference(None)
+            if not isinstance(obj, Callable) or obj.argument_count() == 0:
+                results.append(obj)
+            elif finishing:
+                start = len(results) - obj.argument_count()
+                assert start >= 0
+                args = results[start:]
+                del results[start:]
+                result = Callable.build(obj.name(), args, signature=obj.signature())
+                var = self.active.pop(obj)
+                if var is not None:
+                    self.bindings.append(Callable.build("=", [var, result]))
+                    result = var
+                self.finished[obj] = result
+                results.append(result)
+            elif obj in self.finished:
+                results.append(self.finished[obj])
+            elif obj in self.active:
+                var = self.active[obj]
+                if var is None:
+                    var = self.preferred.get(obj)
+                    if var is None:
+                        var = BindingVar()
+                    self.active[obj] = var
+                results.append(var)
+            else:
+                self.active[obj] = None
+                todo.append((obj, True))
+                for i in range(obj.argument_count() - 1, -1, -1):
+                    todo.append((obj.argument_at(i), False))
+        assert len(results) == 1
+        return results[0]
 
     def factorize(self, obj):
         template = self.visit(obj)
@@ -57,6 +73,7 @@ class TermFormatter(object):
         self.cycles = cycles
         self._make_reverse_op_mapping()
         self.var_to_number = {}
+        self.variable_names = {}
         self.active_attvars = {}
     
     def from_option_list(engine, options):
@@ -165,6 +182,9 @@ class TermFormatter(object):
         return "\n".join(l)
 
     def format_var(self, var):
+        name = self.variable_names.get(var)
+        if name is not None:
+            return name
         try:
             num = self.var_to_number[var]
         except KeyError:

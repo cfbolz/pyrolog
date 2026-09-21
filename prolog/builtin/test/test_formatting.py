@@ -64,7 +64,52 @@ def test_console_formats_cyclic_list():
     variables = assert_true('X = [a|X].')
     output = []
     var_representation(variables, Engine(), output.append, None)
-    assert output == ['X = [' + ', '.join(['a'] * 19) + '|...]\n']
+    assert output == ['X = [a|X]\n']
+
+
+@pytest.mark.parametrize('query, expected', [
+    ('X = f(X,f(X)).', ['X = f(X, f(X))']),
+    ('X = f(Y), Y = g(X).', ['X = f(g(X))', 'Y = g(X)']),
+    ('X = f(X), Y = X.', ['X = f(X)', 'Y = X']),
+    ('X = f(X,A), Y = g(A,X).', ['X = f(X, A)', 'Y = g(A, X)']),
+    ('_C = f(_C), X = g(_C,_C).', ['X = g(_G0, _G0)', '_G0 = f(_G0)']),
+    ('X = f(X), Y = g(Y).', ['X = f(X)', 'Y = g(Y)']),
+    ('X = Y.', ['Y = X']),
+    ('X = f(A), Y = g(A).', ['X = f(A)', 'Y = g(A)']),
+    ("X = 'with space'(X).", ["X = 'with space'(X)"]),
+])
+def test_console_recursive_equations(query, expected):
+    from prolog.interpreter.translatedmain import var_representation
+    variables = assert_true(query)
+    output = []
+    var_representation(variables, Engine(), output.append, None)
+    assert output == [line + '\n' for line in expected]
+    # Formatting is read-only and repeatable, including generated labels.
+    repeated = []
+    var_representation(variables, Engine(), repeated.append, None)
+    assert repeated == output
+
+
+def test_console_deep_term_still_truncates():
+    from prolog.interpreter.translatedmain import var_representation
+    obj = Callable.build('a')
+    for i in range(3000):
+        obj = Callable.build('f', [obj])
+    output = []
+    var_representation({'X': obj}, Engine(), output.append, None)
+    assert output == ['X = ' + 'f(' * 20 + '...' + ')' * 20 + '\n']
+
+
+def test_answer_factorization_preserves_sharing():
+    obj = Callable.build('a')
+    for i in range(24):
+        obj = Callable.build('f', [obj, obj])
+    factorizer = formatting.CycleFactorizer()
+    copied = factorizer.visit(obj)
+    assert len(factorizer.finished) == 24
+    for i in range(24):
+        assert copied.argument_at(0) is copied.argument_at(1)
+        copied = copied.argument_at(0)
 
 
 @pytest.mark.parametrize('query, expected', [

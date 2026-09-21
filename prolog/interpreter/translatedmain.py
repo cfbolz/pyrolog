@@ -1,4 +1,5 @@
 import os, sys
+from rpython.rlib.listsort import TimSort
 from rpython.rlib.parsing.parsing import ParseError
 from rpython.rlib.parsing.deterministic import LexerError
 from prolog.interpreter.parsing import get_query_and_vars
@@ -51,15 +52,44 @@ class ContinueContinuation(Continuation):
 def var_representation(var_to_pos, engine, write, heap):
     from prolog.builtin import formatting
     f = formatting.TermFormatter(engine, quoted=True, max_depth=20)
-    for var, real_var in var_to_pos.iteritems():
-        if var.startswith("_"):
-            continue
-        value = real_var.dereference(heap)
+    factorizer = formatting.CycleFactorizer()
+    names = [name for name in var_to_pos if not name.startswith("_")]
+    TimSort(names).sort()
+    # Choose names before traversing any answer, including roots reached through
+    # another answer. Aliases consistently use the first visible name.
+    for name in names:
+        value = var_to_pos[name].dereference(heap)
+        if isinstance(value, term.Var):
+            if value not in f.variable_names:
+                f.variable_names[value] = name
+        elif isinstance(value, term.Callable) and value.argument_count() > 0:
+            if value not in factorizer.preferred:
+                label = term.BindingVar()
+                factorizer.preferred[value] = label
+                f.variable_names[label] = name
+    values = [factorizer.visit(var_to_pos[name]) for name in names]
+    definitions = {}
+    for binding in factorizer.bindings:
+        definitions[binding.argument_at(0)] = binding.argument_at(1)
+    printed = {}
+    for i in range(len(names)):
+        name = names[i]
+        value = values[i]
+        if value in definitions and f.variable_names.get(value) == name:
+            printed[value] = None
+            value = definitions[value]
+        elif (isinstance(value, term.Var) and not isinstance(value, term.AttVar)
+              and f.variable_names.get(value) == name):
+            continue  # An unconstrained variable needs no X = X equation.
         val = f.format(value)
         if isinstance(value, term.AttVar):
             write("%s\n" % val)
         else:
-            write("%s = %s\n" % (var, val))
+            write("%s = %s\n" % (name, val))
+    for binding in factorizer.bindings:
+        label = binding.argument_at(0)
+        if label not in printed:
+            write("%s = %s\n" % (f.format(label), f.format(binding.argument_at(1))))
         
 def getch():
     line = readline()
