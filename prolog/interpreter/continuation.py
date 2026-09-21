@@ -51,6 +51,9 @@ jitdriver = jit.JitDriver(
 def driver(scont, fcont, heap):
     rule = None
     while not scont.is_done():
+        if fcont.engine is not None and fcont.engine.debugger.enabled:
+            from prolog.interpreter.trace import debug_driver
+            return debug_driver(scont, fcont, heap)
         #view(scont=scont, fcont=fcont, heap=heap)
         sconttype = scont.cont_type_name
         if isinstance(scont, ContinuationWithRule):
@@ -106,6 +109,8 @@ def _process_hooks(scont, fcont, heap):
 
 class Engine(object):
     def __init__(self, load_system=False):
+        from prolog.interpreter.trace import Debugger
+        self.debugger = Debugger()
         self.operations = None
         self.modulewrapper = ModuleWrapper(self)
         if load_system:
@@ -216,6 +221,13 @@ class Engine(object):
         return self.run_query(query, module, continuation)
 
     def call(self, query, rule, scont, fcont, heap):
+        if self.debugger.enabled:
+            from prolog.interpreter.trace import should_trace, trace_call
+            if should_trace(query):
+                return trace_call(self, query, rule, scont, fcont, heap)
+        return self._call(query, rule, scont, fcont, heap)
+
+    def _call(self, query, rule, scont, fcont, heap):
         if isinstance(query, Var):
             query = query.dereference(heap)
         if not isinstance(query, Callable):
@@ -274,6 +286,9 @@ class Engine(object):
         exc_term = exc.term.copy(heap, memo.CopyMemo())
         orig_scont = scont
         while not scont.is_done():
+            from prolog.interpreter.trace import DebugExitContinuation
+            if isinstance(scont, DebugExitContinuation):
+                self.debugger.event(self, "Exception", scont.frame)
             if not isinstance(scont, CatchingDelimiter):
                 scont = scont.nextcont
                 continue
@@ -407,6 +422,9 @@ class FailureContinuation(object):
         return False
 
     _dot = _dot
+
+    def has_choices(self):
+        return not self.is_done()
 
 def make_failure_continuation(make_func):
     class C(FailureContinuation):

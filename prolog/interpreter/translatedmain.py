@@ -29,7 +29,7 @@ class ContinueContinuation(Continuation):
         self.write("yes\n")
         var_representation(self.var_to_pos, self.engine, self.write, heap)
         while 1:
-            if isinstance(fcont, DoneFailureContinuation):
+            if not fcont.has_choices():
                 self.write("\n")
                 return DoneSuccessContinuation(self.engine), fcont, heap
             res = getch()
