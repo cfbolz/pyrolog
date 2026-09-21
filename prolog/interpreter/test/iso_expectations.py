@@ -239,8 +239,4 @@ EXPECTATIONS = {
         xfail('sub_atom/5 implementation is not registered as a builtin', UncaughtError),
     ('t', 'bagof([X,Y], t_foo(X,Y), S)'):
         skip('Requires the original INRIA t_foo fixture'),
-    ('term_gt=', "'@>='(1.0,1)"):
-        xfail('Standard order compares equal-valued floats and integers as equal', pytest.fail.Exception),
-    ('term_lt', "'@<'(1.0,1)"):
-        xfail('Standard order compares equal-valued floats and integers as equal', UnificationFailed),
 }

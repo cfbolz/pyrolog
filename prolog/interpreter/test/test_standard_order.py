@@ -1,3 +1,4 @@
+import pytest
 from prolog.interpreter.test.tool import assert_false, assert_true
 from prolog.interpreter.continuation import Engine
 
@@ -5,7 +6,7 @@ e = Engine(load_system=True)
 
 # ---[ Coarse type-based comparisons ]---
 
-# Var < Float = Number = BigInt < Atom < Term
+# Var < Numeric (by value, floats first on ties) < Atom < Term
 # Note that strings are not yet implemented.
 
 def test_basic_order():
@@ -77,27 +78,27 @@ def test_float_vs_float_order():
     assert_false("0.95 @>= 1.0.", e)
 
 def test_float_vs_number_order():
-    assert_true("66.0 =@= 66.", e)
+    assert_false("66.0 =@= 66.", e)
 
-    assert_false("66.0 @< 66.", e)
+    assert_true("66.0 @< 66.", e)
     assert_false("66.0 @> 66.", e)
     assert_true("1.0 @< 2.", e)
     assert_true("1.0 @> -55.", e)
 
     assert_true("66.0 @=< 66.", e)
-    assert_true("66.0 @>= 66.", e)
+    assert_false("66.0 @>= 66.", e)
     assert_false("66.01 @=< 66.", e)
     assert_false("65.499 @>= 66.", e)
 
 def test_number_vs_float_order():
-    assert_true("66 =@= 66.0.", e)
+    assert_false("66 =@= 66.0.", e)
 
     assert_false("66 @< 66.0.", e)
-    assert_false("66 @> 66.0.", e)
+    assert_true("66 @> 66.0.", e)
     assert_true("66 @< 690.", e)
     assert_true("666 @> 555.", e)
 
-    assert_true("66 @=< 66.0.", e)
+    assert_false("66 @=< 66.0.", e)
     assert_true("66 @>= 66.0.", e)
     assert_false("66 @=< 58.1.", e)
     assert_false("66 @>= 67.6666.", e)
@@ -172,3 +173,34 @@ def test_term_vs_term_order():
     assert_true("ff(1) @=< fff(1).", e)
     assert_true("fff(1) @> ff(1).", e)
     assert_true("fff(1) @>= ff(1).", e)
+
+
+@pytest.mark.parametrize('integer, value, expected', [
+    (1, 1.0, '>'), (-1, -1.0, '>'), (0, -0.0, '>'),
+    (1, 1.5, '<'), (-1, -1.5, '>'), (0, 0.5, '<'), (0, -0.5, '>'),
+    (2 ** 53 + 1, float(2 ** 53), '>'),
+    (2 ** 53 + 3, float(2 ** 53 + 4), '<'),
+    (-(2 ** 53 + 3), float(-(2 ** 53 + 4)), '>'),
+    (2 ** 100, float(2 ** 100), '>'),
+    (2 ** 100 - 1, float(2 ** 100), '<'),
+    (10 ** 400, 1.0e300, '>'), (-(10 ** 400), -1.0e300, '<'),
+])
+def test_exact_mixed_numeric_order(integer, value, expected):
+    reverse = '<' if expected == '>' else '>'
+    literal = '%.17e' % value
+    assert_true("compare('%s', %s, %s)." % (expected, integer, literal))
+    assert_true("compare('%s', %s, %s)." % (reverse, literal, integer))
+
+
+def test_numeric_order_does_not_change_arithmetic_equality():
+    assert_true("1 =:= 1.0, compare('<', 1.0, 1), 1 \\== 1.0.")
+
+
+def test_nonfinite_numeric_order():
+    from prolog.interpreter.term import Number, Float, cmp_standard_order
+    values = [Float(float('nan')), Float(float('-inf')), Number(0),
+              Float(float('inf'))]
+    for i, left in enumerate(values):
+        for j, right in enumerate(values):
+            assert cmp_standard_order(left, right, None) == (
+                -1 if i < j else 1 if i > j else 0)
