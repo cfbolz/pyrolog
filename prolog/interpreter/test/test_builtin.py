@@ -725,3 +725,31 @@ def test_number_chars_incomplete_number(chars):
 def test_chars_first_argument_type(chars):
     prolog_raises('type_error(atom, 123)', 'atom_chars(123, %s)' % chars)
     prolog_raises('type_error(number, foo)', 'number_chars(foo, %s)' % chars)
+
+
+@pytest.mark.parametrize('text, expected', [
+    ('3.3E+0', '3.3'), ('42.0e-1', '4.2'), ('-1.25e2', '-125.0'),
+    ('  +1.5E+2', '150.0'), ('0.0e-10', '0.0'),
+])
+def test_number_chars_exponents(text, expected):
+    chars = '[' + ','.join(repr(c) for c in text) + ']'
+    assert_true('number_chars(X, %s), X == %s.' % (chars, expected))
+    assert_true('number_chars(%s, %s).' % (expected, chars))
+
+
+@pytest.mark.parametrize('text', [
+    '1.0e', '1.0e+', '1.0e-', '1.0e 2', '1.0e2 ', '1.0e2x',
+    '1.0e2.0', '1.0e++2', '1e2', '1.', '.5',
+])
+def test_number_chars_invalid_exponents(text):
+    chars = '[' + ','.join(repr(c) for c in text) + ']'
+    prolog_raises('syntax_error(E)', 'number_chars(X, %s)' % chars)
+
+
+def test_number_chars_exponent_overflow():
+    prolog_raises('evaluation_error(float_overflow)',
+                 "number_chars(X, ['1','.','0','e','4','0','0'])")
+
+
+def test_number_chars_exponent_roundtrip():
+    assert_true('number_chars(1.0e100, L), number_chars(X, L), X == 1.0e100.')

@@ -161,16 +161,10 @@ EXPECTATIONS = {
         skip('Process termination needs a subprocess test, not this engine runner'),
     ('halt', 'halt(a)'):
         xfail('halt/1 is not implemented', UncaughtError),
-    ('number_chars', "number_chars(X,['3','.','3','E','+','0'])"):
-        xfail('number_chars/2 does not parse exponent notation', UncaughtError),
-    ('number_chars', "number_chars(3.3,['3','.','3','E','+','0'])"):
-        xfail('number_chars/2 does not parse exponent notation', UncaughtError),
     ('number_chars', "number_chars(A,['0',x,f])"):
         xfail('number_chars/2 does not parse hexadecimal notation', UncaughtError),
     ('number_chars', "number_chars(A,['0','''','A'])"):
         xfail('Parser does not support doubled quotes in quoted atoms', PrologParseError),
-    ('number_chars', "number_chars(A,['4','2','.','0','e','-','1'])"):
-        xfail('number_chars/2 does not parse exponent notation', UncaughtError),
     ('number_codes', 'number_codes(33,L)'):
         xfail("Parser does not support 0' character-code syntax", PrologParseError),
     ('number_codes', "number_codes(33,[0'3,0'3])"):

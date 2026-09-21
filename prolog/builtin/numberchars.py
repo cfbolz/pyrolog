@@ -1,17 +1,11 @@
+import math
 from prolog.interpreter import term, error
 from prolog.builtin.register import expose_builtin
 from prolog.interpreter.term import Callable
-from prolog.interpreter.term import specialized_term_classes
 from rpython.rlib.rstring import ParseStringError, ParseStringOverflowError
-from rpython.rlib.rarithmetic import ovfcheck, string_to_int
+from rpython.rlib.rarithmetic import string_to_int
 from rpython.rlib.rbigint import rbigint
-from prolog.interpreter.signature import Signature
 from prolog.interpreter.helper import wrap_list
-
-conssig = Signature.getsignature(".", 2)
-num_atom_names = [str(i) for i in range(10)]
-digits = ["0", "1", "2", "3", "4",
-          "5", "6", "7", "8", "9"]
 
 def num_to_list(num):
     from prolog.interpreter.helper import wrap_list
@@ -20,6 +14,9 @@ def num_to_list(num):
         s = str(num.num)
     elif isinstance(num, term.Float):
         s = str(num.floatval)
+        exponent = s.find('e')
+        if exponent != -1 and '.' not in s:
+            s = s[:exponent] + '.0' + s[exponent:]
     elif isinstance(num, term.BigInt):
         s = num.value.str()
     else:
@@ -28,43 +25,56 @@ def num_to_list(num):
 
 def cons_to_num(charlist):
     from prolog.interpreter.helper import unwrap_char_list
-    unwrapped = unwrap_char_list(charlist)
-    numlist = []
-    saw_dot = False
-    first = True
+    return parse_number(unwrap_char_list(charlist))
+
+
+def parse_number(chars):
+    # Validate the complete decimal token before invoking host conversions.
+    text = "".join(chars).lstrip()
+    size = len(text)
     i = 0
-    for digit in unwrapped:
-        if first and len(digit) == 1 and digit.isspace():
-            continue
-        if digit not in digits:
-            if digit == ".":
-                if saw_dot or first or (i == 1 and numlist[0] == "-"):
-                    error.throw_syntax_error("Illegal number")
-                else:
-                    saw_dot = True
-            elif digit == "-":
-                if not first:
-                    error.throw_syntax_error("Illegal number")
-            else:
-                error.throw_syntax_error("Illegal number")
-        numlist.append(digit)
+    if i < size and text[i] in "+-":
         i += 1
-        first = False
-    
-    if not numlist:
+    start = i
+    while i < size and "0" <= text[i] <= "9":
+        i += 1
+    if i == start:
         error.throw_syntax_error("Illegal number")
-    numstr = "".join(numlist)
-    if numstr.find(".") == -1: # no float
+    is_float = i < size and text[i] == "."
+    if is_float:
+        i += 1
+        start = i
+        while i < size and "0" <= text[i] <= "9":
+            i += 1
+        if i == start:
+            error.throw_syntax_error("Illegal number")
+        if i < size and text[i] in "eE":
+            i += 1
+            if i < size and text[i] in "+-":
+                i += 1
+            start = i
+            while i < size and "0" <= text[i] <= "9":
+                i += 1
+            if i == start:
+                error.throw_syntax_error("Illegal number")
+    if i != size:
+        error.throw_syntax_error("Illegal number")
+    if not is_float:
         try:
-            return term.Number(string_to_int(numstr))
+            return term.Number(string_to_int(text))
         except ParseStringOverflowError:
-            return term.BigInt(rbigint.fromdecimalstr(numstr))
+            return term.BigInt(rbigint.fromdecimalstr(text))
         except ParseStringError:
             error.throw_syntax_error("Illegal number")
     try:
-        return term.Float(float(numstr))
+        value = float(text)
     except ValueError:
         error.throw_syntax_error("Illegal number")
+    except OverflowError:
+        error.throw_evaluation_error("float_overflow")
+    if math.isinf(value):
+        error.throw_evaluation_error("float_overflow")
+    return term.Float(value)
 
 @expose_builtin("number_chars", unwrap_spec=["obj", "obj"])
 def impl_number_chars(engine, heap, num, charlist):
