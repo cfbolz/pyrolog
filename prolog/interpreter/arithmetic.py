@@ -78,6 +78,7 @@ simple_functions = [
     ("round", 1, "round"),
     ("floor", 1, "floor"), #XXX
     ("ceiling", 1, "ceiling"), #XXX
+    ("float", 1, "float"),
     ("float_fractional_part", 1, "float_fractional_part"), #XXX
     ("float_integer_part", 1, "float_integer_part")
 ]
@@ -112,6 +113,9 @@ class __extend__(term.Numeric):
         return self.arith_pow(term.Float(0.5))
 
 class __extend__(term.Number):
+    def arith_float(self):
+        return term.Float(float(self.num))
+
     # ------------------ addition ------------------ 
     def arith_add(self, other):
         return other.arith_add_number(self.num)
@@ -359,6 +363,9 @@ class __extend__(term.Number):
 
 
 class __extend__(term.Float):    
+    def arith_float(self):
+        return self
+
     # ------------------ addition ------------------ 
     def arith_add(self, other):
         return other.arith_add_float(self.floatval)
@@ -520,6 +527,13 @@ class __extend__(term.Float):
 
 
 class __extend__(term.BigInt):
+    def arith_float(self):
+        try:
+            value = self.value.tofloat()
+        except OverflowError:
+            error.throw_evaluation_error("float_overflow")
+        return term.Float(value)
+
     # ------------------ addition ------------------ 
     def arith_add(self, other):
         return other.arith_add_bigint(self.value)

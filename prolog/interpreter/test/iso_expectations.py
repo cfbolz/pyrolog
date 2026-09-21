@@ -167,8 +167,6 @@ EXPECTATIONS = {
         skip('Process termination needs a subprocess test, not this engine runner'),
     ('halt', 'halt(a)'):
         xfail('halt/1 is not implemented', UncaughtError),
-    ('is', "'is'(X,float(3))"):
-        xfail('float/1 is not implemented as an arithmetic evaluator', UncaughtError),
     ('number_chars', "number_chars(X,['3','.','3','E','+','0'])"):
         xfail('number_chars/2 does not parse exponent notation', UncaughtError),
     ('number_chars', "number_chars(3.3,['3','.','3','E','+','0'])"):
