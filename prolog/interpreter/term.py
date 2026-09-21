@@ -47,6 +47,24 @@ class PrologObject(object):
         raise NotImplementedError("abstract base class")
     
     def contains_var(self, var, heap):
+        # Occurs checking can afford a memo on every call. Follow bindings
+        # explicitly so existing cycles do not hide their variable back-edges.
+        seen = {}
+        todo = [self]
+        while todo:
+            obj = todo.pop()
+            if isinstance(obj, Var):
+                if obj is var:
+                    return True
+                if obj in seen:
+                    continue
+                seen[obj] = None
+                binding = obj.getbinding()
+                if binding is not None:
+                    todo.append(binding)
+            elif isinstance(obj, Callable):
+                for i in range(obj.argument_count() - 1, -1, -1):
+                    todo.append(obj.argument_at(i))
         return False
     
     def eval_arithmetic(self, engine):
@@ -125,14 +143,6 @@ class Var(PrologObject):
         if isinstance(self, Var):
             return memo.get(self)
         return self.enumerate_vars(memo)
-
-    def contains_var(self, var, heap):
-        self = self.dereference(heap)
-        if self is var:
-            return True
-        if not isinstance(self, Var):
-            return self.contains_var(var, heap)
-        return False
 
     def __repr__(self):
         return "Var(%s)" % (self.getbinding(), )
@@ -213,6 +223,8 @@ class AttVar(BindingVar):
             return
         if isinstance(other, Var):
             return other._unify_derefed(self, heap, occurs_check)
+        if occurs_check and other.contains_var(self, heap):
+            raise UnificationFailed()
         return self.setvalue(other, heap)
 
     def setvalue(self, value, heap):
@@ -460,12 +472,6 @@ class Callable(NonVar):
             return Callable.build(self.name(), args, self.signature(), heap=heap)
         else:
             return self
-    
-    def contains_var(self, var, heap):
-        for arg in self.arguments():
-            if arg.contains_var(var, heap):
-                return True
-        return False
     
     def cmp_standard_order(self, other, heap):
         assert isinstance(other, Callable)
