@@ -793,6 +793,8 @@ def bigint_cmp(a, b):
 
 def bigint_float_cmp(integer, value):
     """Order an integer and float exactly, putting the float first on ties."""
+    # Even machine integers use bigints here: for standard term ordering we
+    # accept the allocation to avoid float rounding and overflow corner cases.
     if math.isnan(value):
         return 1
     if math.isinf(value):
