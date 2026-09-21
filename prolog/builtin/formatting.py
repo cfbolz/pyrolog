@@ -117,6 +117,15 @@ class TermFormatter(object):
                 term = CycleFactorizer().factorize(term)
         return self._format(term, depth)
 
+    def format_with_cycles(self, term):
+        # Diagnostics factor cycles before applying the normal depth limit.
+        # Use the iterative factorizer directly, even for deep finite terms.
+        factorizer = CycleFactorizer()
+        display = factorizer.visit(term)
+        if factorizer.bindings:
+            display = factorizer.factorize(term)
+        return self._format(display, 1)
+
     def _format(self, term, depth):
         if self.max_depth > 0 and depth > self.max_depth:
             return "..."

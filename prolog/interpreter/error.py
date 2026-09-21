@@ -31,7 +31,7 @@ class TermedError(PrologError):
 
         t = self.term
         if not isinstance(t, term.Callable) or not t.signature().eq(errorsig):
-            return "Unhandled exception: %s" % (f.format(t), )
+            return "Unhandled exception: %s" % (f.format_with_cycles(t), )
 
         errorterm = t.argument_at(0)
 
@@ -41,38 +41,38 @@ class TermedError(PrologError):
             elif errorterm.name() == "existence_error":
                 if isinstance(errorterm, term.Callable):
                      return "Undefined %s: %s" % (
-                        f.format(errorterm.argument_at(0)),
-                        f.format(errorterm.argument_at(1)))
+                        f.format_with_cycles(errorterm.argument_at(0)),
+                        f.format_with_cycles(errorterm.argument_at(1)))
             elif errorterm.name() == "domain_error":
                 if isinstance(errorterm, term.Callable):
                     return "Domain error: '%s' expected, found '%s'" % (
-                        f.format(errorterm.argument_at(0)),
-                        f.format(errorterm.argument_at(1)))
+                        f.format_with_cycles(errorterm.argument_at(0)),
+                        f.format_with_cycles(errorterm.argument_at(1)))
             elif errorterm.name() == "type_error":
                 if isinstance(errorterm, term.Callable):
                     return "Type error: '%s' expected, found '%s'" % (
-                        f.format(errorterm.argument_at(0)),
-                        f.format(errorterm.argument_at(1)))
+                        f.format_with_cycles(errorterm.argument_at(0)),
+                        f.format_with_cycles(errorterm.argument_at(1)))
             elif errorterm.name() == "syntax_error":
                 if isinstance(errorterm, term.Callable):
                     return "Syntax error: '%s'" % \
-                    f.format(errorterm.argument_at(0))
+                    f.format_with_cycles(errorterm.argument_at(0))
             elif errorterm.name() == "permission_error":
                 if isinstance(errorterm, term.Callable):
                     return "Permission error: '%s', '%s', '%s'" % (
-                    f.format(errorterm.argument_at(0)),
-                    f.format(errorterm.argument_at(1)),
-                    f.format(errorterm.argument_at(2)))
+                    f.format_with_cycles(errorterm.argument_at(0)),
+                    f.format_with_cycles(errorterm.argument_at(1)),
+                    f.format_with_cycles(errorterm.argument_at(2)))
             elif errorterm.name() == "representation_error":
                 if isinstance(errorterm, term.Callable):
                     return "%s: Cannot represent: %s" % (
-                    f.format(errorterm.argument_at(0)),
-                    f.format(errorterm.argument_at(1)))
+                    f.format_with_cycles(errorterm.argument_at(0)),
+                    f.format_with_cycles(errorterm.argument_at(1)))
             elif errorterm.name() == "import_error":
                 if isinstance(errorterm, term.Callable):
                     return "Exported procedure %s:%s is not defined" % (
-                    f.format(errorterm.argument_at(0)),
-                    f.format(errorterm.argument_at(1)))
+                    f.format_with_cycles(errorterm.argument_at(0)),
+                    f.format_with_cycles(errorterm.argument_at(1)))
             else:
                 return "Internal error" # AKA, I have no clue what went wrong.
 
