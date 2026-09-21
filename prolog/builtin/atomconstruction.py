@@ -192,21 +192,14 @@ def atom_to_cons(atom):
     return helper.wrap_list(charlist)
         
 def cons_to_atom(cons):
-    atomlist = helper.unwrap_list(cons)
-    result = []
-    for atom in atomlist:
-        if not isinstance(atom, term.Atom):
-            error.throw_type_error("text", atom)
-        name = atom.name()
-        if not len(name) == 1:
-            error.throw_type_error("text", atom)
-        result.append(atom.name())
+    result = helper.unwrap_char_list(cons)
     return Callable.build("".join(result))
 
 @expose_builtin("atom_chars", unwrap_spec=["obj", "obj"])
 def impl_atom_chars(engine, heap, atom, charlist):
     if not isinstance(charlist, term.Var):  
         if isinstance(atom, term.Atom):
+            helper.unwrap_char_list(charlist, allow_partial=True)
             atom_to_cons(atom).unify(charlist, heap)
         else:
             cons_to_atom(charlist).unify(atom, heap)

@@ -27,16 +27,13 @@ def num_to_list(num):
     return wrap_list([Callable.build(c) for c in s])
 
 def cons_to_num(charlist):
-    from prolog.interpreter.helper import unwrap_list, unwrap_atom
-    unwrapped = unwrap_list(charlist)
+    from prolog.interpreter.helper import unwrap_char_list
+    unwrapped = unwrap_char_list(charlist)
     numlist = []
     saw_dot = False
     first = True
     i = 0
-    for elem in unwrapped:
-        if not isinstance(elem, term.Atom):
-            error.throw_type_error("text", charlist)
-        digit = elem.name()
+    for digit in unwrapped:
         if first and len(digit) == 1 and digit.isspace():
             continue
         if digit not in digits:

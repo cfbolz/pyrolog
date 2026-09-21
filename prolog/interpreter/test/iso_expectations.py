@@ -29,12 +29,6 @@ EXPECTATIONS = {
         xfail('Asserting a variable clause body raises instantiation_error instead of wrapping call/1', UncaughtError),
     ('atom_chars', "atom_chars('''',L)"):
         xfail('Parser does not support doubled quotes in quoted atoms', PrologParseError),
-    ('atom_chars', 'atom_chars(A,[a,E,c])'):
-        xfail('atom_chars/2 reports the wrong error for an unbound or invalid character list', UncaughtError),
-    ('atom_chars', 'atom_chars(A,[a,b|L])'):
-        xfail('atom_chars/2 reports the wrong error for an unbound or invalid character list', UncaughtError),
-    ('atom_chars', 'atom_chars(A,[a,f(b)])'):
-        xfail('atom_chars/2 reports the wrong error for an unbound or invalid character list', UncaughtError),
     ('atom_codes', "atom_codes('',L)"):
         xfail('atom_codes/2 is not implemented', UncaughtError),
     ('atom_codes', 'atom_codes([],L)'):
@@ -177,8 +171,6 @@ EXPECTATIONS = {
         xfail('Parser does not support doubled quotes in quoted atoms', PrologParseError),
     ('number_chars', "number_chars(A,['4','2','.','0','e','-','1'])"):
         xfail('number_chars/2 does not parse exponent notation', UncaughtError),
-    ('number_chars', "number_chars(A,['4',2])"):
-        xfail('Invalid character reports syntax_error or type_error(text), not type_error(character)', UncaughtError),
     ('number_codes', 'number_codes(33,L)'):
         xfail("Parser does not support 0' character-code syntax", PrologParseError),
     ('number_codes', "number_codes(33,[0'3,0'3])"):

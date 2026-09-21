@@ -624,7 +624,7 @@ def test_number_chars():
     assert_true("number_chars(X, ['4', '5']), X = 45.")
     assert_true("number_chars(123, ['1', '2', '3']).")
     assert_true("number_chars(123, X), X = ['1', '2', '3'].")
-    prolog_raises("type_error(text, E)", "number_chars(X, [f(a)])")
+    prolog_raises("type_error(character, f(a))", "number_chars(X, [f(a)])")
     prolog_raises("type_error(list, E)", "number_chars(X, a)")
     prolog_raises("syntax_error(E)", "number_chars(X, ['-', '-'])")
     prolog_raises("syntax_error(E)", "number_chars(X, ['1', '-'])")
@@ -659,7 +659,6 @@ def test_number_chars_leading_whitespace(chars, expected):
     "[' ', '-', ' ', '2']",
     "[' ', '4', ' ']",
     "['4', ' ', '5']",
-    "['  ', '4']",
 ])
 def test_number_chars_rejects_empty_or_misplaced_whitespace(chars):
     prolog_raises('syntax_error(E)', 'number_chars(X, %s)' % chars)
@@ -671,11 +670,43 @@ def test_atom_chars():
     assert_true("atom_chars('', []).")
     prolog_raises("instantiation_error", "atom_chars(X, Y)")
     assert_true("atom_chars(X, [a, b, '1']), X = ab1.")
-    prolog_raises("type_error(text, E)", "atom_chars(X, [a, b, '10'])")
+    prolog_raises("type_error(character, '10')", "atom_chars(X, [a, b, '10'])")
     prolog_raises("type_error(list, E)", "atom_chars(X, a)")
-    prolog_raises("type_error(text, E)", "atom_chars(X, [f(a)])")
+    prolog_raises("type_error(character, f(a))", "atom_chars(X, [f(a)])")
     prolog_raises("type_error(list, E)", "atom_chars(X, f(a))")
-    prolog_raises("type_error(text, E)", "atom_chars(X, [[]])")
+    prolog_raises("type_error(character, [])", "atom_chars(X, [[]])")
 
 def test_atom_chars_2():
     assert_true("atom_chars(ab, [a|B]), B = [b].")
+
+
+@pytest.mark.parametrize('predicate', ['atom_chars', 'number_chars'])
+@pytest.mark.parametrize('chars', ["['1', X]", "['1'|Tail]"])
+def test_chars_unbound_elements_and_tails(predicate, chars):
+    prolog_raises('instantiation_error', '%s(Value, %s)' % (predicate, chars))
+
+
+@pytest.mark.parametrize('predicate', ['atom_chars', 'number_chars'])
+@pytest.mark.parametrize('invalid', ['2', 'f(a)', "''", "'ab'", "'  '", '[]'])
+def test_chars_invalid_element_reports_culprit(predicate, invalid):
+    prolog_raises('type_error(character, %s)' % invalid,
+                 "%s(Value, ['1', %s])" % (predicate, invalid))
+
+
+@pytest.mark.parametrize('predicate', ['atom_chars', 'number_chars'])
+def test_chars_improper_tail(predicate):
+    prolog_raises("type_error(list, ['1'|bad])",
+                 "%s(Value, ['1'|bad])" % predicate)
+
+
+def test_chars_dereference_bound_elements_and_tails():
+    assert_true("A = a, T = [b], atom_chars(X, [A|T]), X == ab.")
+    assert_true("A = '4', T = ['5'], number_chars(X, [A|T]), X == 45.")
+
+
+def test_atom_chars_known_atom_validates_and_completes_list():
+    assert_true("atom_chars(ab, [A|T]), A == a, T == [b].")
+    prolog_raises('type_error(character, 2)', 'atom_chars(ab, [a,2])')
+    prolog_raises('type_error(character, 2)', 'atom_chars(ab, [X,2])')
+    prolog_raises('type_error(list, [a|bad])', 'atom_chars(ab, [a|bad])')
+    assert_false('atom_chars(ab, [a,c]).')
