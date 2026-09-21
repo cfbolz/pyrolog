@@ -1,6 +1,6 @@
 [functor(foo(a,b,c),foo,3), success]. % The 'expected' answer
 
-[functor(foo(a,b,c),X,Y), [[X <-- foo, Y <-- 2]]]. % Must instantiate Y by 3
+[functor(foo(a,b,c),X,Y), [[X <-- foo, Y <-- 3]]].
 
 [functor(X,foo,3), [[X <-- foo(A,B,C)]]]. 
 
@@ -8,7 +8,7 @@
 
 [functor(mats(A,B),A,B), [[A <-- mats,B <-- 2]]].
 
-[functor(foo(a),foo,2), success]. % Must fail %%SKIP%%
+[functor(foo(a),foo,2), failure].
 
 [functor(foo(a),fo,1), failure].
 
@@ -16,7 +16,7 @@
 
 [functor(X,1.1,0), [[X <-- 1.1]]].
 
-[functor([_|_],'.',2), failure]. % Must succeed
+[functor([_|_],'.',2), success].
 
 [functor([],[],0), success].
 
@@ -24,7 +24,7 @@
 
 [functor(X, foo, N), instantiation_error].
 
-[functor(X, foo, a), failure]. % type_error(integer,a) expected ('a' not an integer)
+[functor(X, foo, a), type_error(integer,a)].
 
 [functor(F, 1.5, 1), type_error(atom,1.5)].
 

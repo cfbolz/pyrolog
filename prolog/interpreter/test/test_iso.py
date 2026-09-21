@@ -1,150 +1,146 @@
+"""Read the line-oriented INRIA test data without parsing its Prolog queries."""
+from collections import Counter, namedtuple
+import os
+import py
 import pytest
-import py, os
-from prolog.interpreter.parsing import TermBuilder
-from prolog.interpreter.parsing import parse_query_term, get_engine
-from prolog.interpreter.error import UnificationFailed
-from prolog.interpreter.continuation import Heap, Engine
-from prolog.interpreter import error
-from prolog.interpreter.test.tool import collect_all, assert_false, assert_true, prolog_raises
-from prolog.interpreter.error import UncaughtError
+from prolog.interpreter.test.iso_expectations import EXPECTATIONS
+
+
+Case = namedtuple('Case', 'filename lineno query expected setup')
+
+
+def split_top_level(text, separator=','):
+    """Split outside brackets and quotes, including Prolog character literals."""
+    parts = []
+    stack = []
+    quote = None
+    start = i = 0
+    while i < len(text):
+        char = text[i]
+        if quote:
+            if char == '\\':
+                if i + 1 < len(text) and text[i + 1] in 'x01234567':
+                    # ISO numeric escapes end with a backslash: '\\xa3\\'.
+                    end = text.find('\\', i + 2)
+                    assert end != -1, text
+                    i = end + 1
+                else:
+                    i += 2
+                continue
+            if char == quote:
+                if text[i:i + 2] == quote * 2:
+                    i += 2
+                    continue
+                quote = None
+        elif text[i:i + 2] == "0'":
+            # The character can itself be a quote, comma or bracket.
+            i += 2
+            if i < len(text) and text[i] == '\\':
+                i += 1
+            i += 1
+            continue
+        elif char in ("'", '"'):
+            quote = char
+        elif char in '([{':
+            stack.append(char)
+        elif char in ')]}':
+            assert stack and stack.pop() == {')': '(', ']': '[', '}': '{'}[char], text
+        elif not stack and text.startswith(separator, i):
+            parts.append(text[start:i].strip())
+            i += len(separator)
+            start = i
+            continue
+        i += 1
+    assert not quote and not stack, text
+    parts.append(text[start:].strip())
+    return parts
+
+
+def read_cases(directory):
+    cases = []
+    for filename in sorted(os.listdir(directory)):
+        with open(os.path.join(directory, filename)) as source:
+            for lineno, line in enumerate(source, 1):
+                line = line.strip()
+                if not line.startswith('['):
+                    continue
+                end = line.rfind(']')
+                assert end != -1, (filename, lineno, line)
+                fields = split_top_level(line[1:end])
+                assert len(fields) >= 2, (filename, lineno, line)
+                setup = None
+                if len(fields) == 3 and fields[1].startswith('setup('):
+                    setup = fields[1][6:-1]
+                    expected = fields[2]
+                else:
+                    # Preserve unsupported fixture fields for explicit skips.
+                    expected = ', '.join(fields[1:])
+                cases.append(Case(filename, lineno, fields[0], expected, setup))
+    return cases
+
+
+def case_key(case):
+    query = case.query
+    if case.setup is not None:
+        query = 'setup(%s), %s' % (case.setup, query)
+    return case.filename, query
+
+
+def parameters(cases, expectations):
+    counts = Counter(case_key(case) for case in cases)
+    unused = set(expectations) - set(counts)
+    assert not unused, 'Unused ISO expectations: %r' % sorted(unused)
+    ambiguous = [key for key in expectations if counts[key] != 1]
+    assert not ambiguous, 'Ambiguous ISO expectations: %r' % sorted(ambiguous)
+    result = []
+    for case in cases:
+        mark = expectations.get(case_key(case))
+        if hasattr(pytest, 'param'):
+            result.append(pytest.param(case, marks=mark or ()))
+        else:
+            # The PyPy checkout bundles pytest 2.9, before pytest.param.
+            result.append(mark(case) if mark is not None else case)
+    return result
+
+
+def check_case(case):
+    from prolog.interpreter.continuation import Engine
+    from prolog.interpreter.test.tool import assert_true, assert_false, prolog_raises
+
+    def new_engine():
+        engine = Engine()
+        if case.setup is not None:
+            assert_true(case.setup + '.', engine)
+        return engine
+
+    if case.expected == 'success':
+        assert_true(case.query + '.', new_engine())
+    elif case.expected == 'failure':
+        assert_false(case.query + '.', new_engine())
+    elif case.expected.startswith('[') and case.expected.endswith(']'):
+        # Preserve the suite's existing check: each expected binding is reachable.
+        for solution in split_top_level(case.expected[1:-1]):
+            assert solution.startswith('[') and solution.endswith(']'), solution
+            bindings = []
+            for binding in split_top_level(solution[1:-1]) if solution[1:-1].strip() else []:
+                sides = split_top_level(binding, '<--')
+                assert len(sides) == 2, binding
+                bindings.append(' = '.join(sides))
+            query = case.query
+            if bindings:
+                query += ', ' + ', '.join(bindings)
+            # Use a fresh engine for each independent solution check.
+            assert_true(query + '.', new_engine())
+    elif 'error' in case.expected:
+        prolog_raises(case.expected, case.query, new_engine())
+    else:
+        raise AssertionError('Unsupported ISO expectation: %s' % (case,))
+
 
 TESTDIR = str(py.path.local(__file__).dirpath().join('inriasuite'))
 
-FAILURE = 'failure'
-SUCCESS = 'success'
-SKIP = "_SKIP_"
-XFAIL = "_XFAIL_"
 
-def deconstruct_line(line):
-    HALT = 'halt,'
-    FAIL = 'fail,'
-    TRUE = 'true,'
-    FLOAT = '0.33'
-    ASSIGN = 'X ='
-    CUT = '!,'
-    line_0_5 = line[0:5]
-    H_F_T = (HALT, FAIL, TRUE)
-    
-    if line_0_5 in H_F_T:
-        if line_0_5 == FAIL:
-            left = 'fail'
-        elif line_0_5 == HALT:
-            left = 'halt'
-        elif line_0_5 == TRUE:
-            left = 'true'
-        right = line[6:]
-    elif line.startswith(CUT):
-        left = '!'
-        right = line[3:]
-    elif line.startswith(ASSIGN):
-        left = 'X = "fred"'
-        right = line[12:]
-    elif line.startswith(FLOAT):
-        left = '0.333 =:= 1/3'
-        right = line[15:]
-    else:
-        first_open_par = line.find('(')
-        brace_counter = 1
-        i = first_open_par
-        while brace_counter:
-            i += 1
-            if line[i] == '(':
-                brace_counter += 1
-            elif line[i] == ')':
-                brace_counter -= 1
-        left = line[0:i + 1]
-        right = line[i + 2:].strip()
-    return left, right
-    
-
-def get_lines(file_):
-    testfile = open(TESTDIR + '/' + file_)
-    for test in testfile.readlines():
-        if test.endswith('%%SKIP%%\n'):
-            yield SKIP, ""
-        elif test.find('0\'') != -1 or test.find("current_prolog_flag") != -1:
-            yield XFAIL, ""
-        elif test.startswith('['):
-            last_bracket = test.rfind(']')
-            first_bracket = test.find('[') + 1
-            assert first_bracket <= last_bracket
-            relevant = test[first_bracket:last_bracket]
-            left, right = deconstruct_line(relevant)
-            yield left, right
-
-def deconstruct_list(l):
-    pieces = [piece for piece in l.split('], [')]
-    pieces[0] = pieces[0][1:]
-    return pieces
-
-
-def get_files():
-    _, _, content = os.walk(TESTDIR).next()
-    for file in content:
-        yield file
-
-def pytest_generate_tests(metafunc):
-    for f in get_files():
-        for left, right in get_lines(f):
-            # these tests can't pass because not implemented functionality is 
-            # required, or they don't make sense at all...
-            if left in [SKIP, XFAIL]:
-                metafunc.addcall(funcargs = dict(cmd = "skip", test = "", param = left))
-            # simple test: failure or success
-            if right in (FAILURE, SUCCESS):
-                metafunc.addcall(funcargs=dict(cmd="simple", test=(left + '.'), param=right))
-            # test whether an error occurs
-            if right.find('error') != -1:
-                metafunc.addcall(funcargs=dict(cmd="error", test=left, param=right))
-            # test unification with a list of unifications
-            if right.find('[') != -1 and right.find('error') == -1:
-                lists = deconstruct_list(right[1:-2])
-                metafunc.addcall(funcargs=dict(cmd="list", test=left, param=lists))
-
-def test_all_tests(cmd, test, param):
-    if cmd == "skip":
-        if param == SKIP:
-            pytest.skip("")
-        elif param == XFAIL:
-            pytest.xfail("")
-    elif cmd == "simple":
-        try:
-            if param == FAILURE:
-                assert_false(test)
-            elif param == SUCCESS:
-                assert_true(test)
-        except (error.UncaughtError, error.CatchableError), e:
-            msg = repr(e.term)
-            if 'existence_error' in msg:
-                pytest.skip(msg)
-            else:
-                pytest.xfail("")
-        except:
-            pytest.xfail("")
-    elif cmd == "error":
-        try:
-            prolog_raises(param, test)
-        except UncaughtError, e:
-            msg = repr(e.term)
-            if 'existence_error' in msg or 'type_error' in msg:
-                pytest.skip(msg)
-            else:
-                pytest.xfail("fix me")
-        except:
-            pytest.xfail("")
-    elif cmd == "list":
-        try:
-            for goal in param:
-                check = test + ', ' + goal.replace('<--', '=') + '.'
-                try:
-                    assert_true(check)
-                except:
-                    pytest.xfail("fix me")
-        except (error.UncaughtError, error.CatchableError), e:
-            msg = repr(e.term)
-            if 'existence_error' in msg:
-                pytest.skip(msg)
-            else:
-                pytest.xfail("fix me")
-        except:
-            pytest.xfail("")
+@pytest.mark.parametrize('case', parameters(read_cases(TESTDIR), EXPECTATIONS),
+                         ids=lambda case: '%s:%d' % (case.filename, case.lineno))
+def test_all_tests(case):
+    check_case(case)

@@ -526,6 +526,8 @@ def test_atom_length():
     assert_true("atom_length('abc', X), X = 3.")
 
 def test_atom_concat():
+    assert_true("atom_concat(X, ab, ab), X == ''.")
+    assert_true("atom_concat(X, '', ''), X == ''.")
     assert_true("atom_concat(ab, cdef, abcdef).")
     assert_true("atom_concat(ab, cdef, X), X = abcdef.")
     assert_true("atom_concat(ab, X, abcdef), X = cdef.")
@@ -621,9 +623,10 @@ def test_write_term():
                   "write_term(a, asdf)")
 
 def test_number_chars():
+    assert_true("number_chars(X, ['4', '5']), X = 45.")
     assert_true("number_chars(123, ['1', '2', '3']).")
     assert_true("number_chars(123, X), X = ['1', '2', '3'].")
-    prolog_raises("type_error(text, E)", "number_chars(X, [f(a)])")
+    prolog_raises("type_error(character, f(a))", "number_chars(X, [f(a)])")
     prolog_raises("type_error(list, E)", "number_chars(X, a)")
     prolog_raises("syntax_error(E)", "number_chars(X, ['-', '-'])")
     prolog_raises("syntax_error(E)", "number_chars(X, ['1', '-'])")
@@ -631,7 +634,7 @@ def test_number_chars():
     prolog_raises("syntax_error(E)", "number_chars(X, ['1', '.', '2', '.'])")
     assert_true("number_chars(X, ['1', '2', '3']), X = 123.")
     prolog_raises("type_error(list, E)", "number_chars(123, 123)")
-    prolog_raises("type_error(list, E)", "number_chars(b, a)")
+    prolog_raises("type_error(number, b)", "number_chars(b, a)")
     assert_true("number_chars(-123, ['-', '1', '2', '3']).")
     assert_true("number_chars(123.1, ['1', '2', '3', '.', '1']).")
     assert_true("number_chars(1000000000000000, ['1','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0']).")
@@ -641,17 +644,112 @@ def test_number_chars():
     prolog_raises("type_error(number, a)", "number_chars(a, X)")
     prolog_raises("syntax_error(E)", "number_chars(A, ['-', '.', '1'])")
 
+@pytest.mark.parametrize('chars, expected', [
+    ("[' ', '4', '5']", '45'),
+    (r"['\t', '\n', '\r', ' ', '-', '2', '5']", '-25'),
+    ("[' ', '4', '.', '2']", '4.2'),
+])
+def test_number_chars_leading_whitespace(chars, expected):
+    assert_true("number_chars(X, %s), X = %s." % (chars, expected))
+    assert_true("number_chars(%s, %s)." % (expected, chars))
+
+
+@pytest.mark.parametrize('chars', [
+    '[]',
+    "[' ']",
+    r"[' ', '\n', '\t']",
+    "[' ', '-', ' ', '2']",
+    "[' ', '4', ' ']",
+    "['4', ' ', '5']",
+])
+def test_number_chars_rejects_empty_or_misplaced_whitespace(chars):
+    prolog_raises('syntax_error(E)', 'number_chars(X, %s)' % chars)
+
+
 def test_atom_chars():
     assert_true("atom_chars(abc, X), X = [a, b, c].")
     assert_true("atom_chars(a12, [a, '1', '2']).")
     assert_true("atom_chars('', []).")
     prolog_raises("instantiation_error", "atom_chars(X, Y)")
     assert_true("atom_chars(X, [a, b, '1']), X = ab1.")
-    prolog_raises("type_error(text, E)", "atom_chars(X, [a, b, '10'])")
+    prolog_raises("type_error(character, '10')", "atom_chars(X, [a, b, '10'])")
     prolog_raises("type_error(list, E)", "atom_chars(X, a)")
-    prolog_raises("type_error(text, E)", "atom_chars(X, [f(a)])")
+    prolog_raises("type_error(character, f(a))", "atom_chars(X, [f(a)])")
     prolog_raises("type_error(list, E)", "atom_chars(X, f(a))")
-    prolog_raises("type_error(text, E)", "atom_chars(X, [[]])")
+    prolog_raises("type_error(character, [])", "atom_chars(X, [[]])")
 
 def test_atom_chars_2():
     assert_true("atom_chars(ab, [a|B]), B = [b].")
+
+
+@pytest.mark.parametrize('predicate', ['atom_chars', 'number_chars'])
+@pytest.mark.parametrize('chars', ["['1', X]", "['1'|Tail]"])
+def test_chars_unbound_elements_and_tails(predicate, chars):
+    prolog_raises('instantiation_error', '%s(Value, %s)' % (predicate, chars))
+
+
+@pytest.mark.parametrize('predicate', ['atom_chars', 'number_chars'])
+@pytest.mark.parametrize('invalid', ['2', 'f(a)', "''", "'ab'", "'  '", '[]'])
+def test_chars_invalid_element_reports_culprit(predicate, invalid):
+    prolog_raises('type_error(character, %s)' % invalid,
+                 "%s(Value, ['1', %s])" % (predicate, invalid))
+
+
+@pytest.mark.parametrize('predicate', ['atom_chars', 'number_chars'])
+def test_chars_improper_tail(predicate):
+    prolog_raises("type_error(list, ['1'|bad])",
+                 "%s(Value, ['1'|bad])" % predicate)
+
+
+def test_chars_dereference_bound_elements_and_tails():
+    assert_true("A = a, T = [b], atom_chars(X, [A|T]), X == ab.")
+    assert_true("A = '4', T = ['5'], number_chars(X, [A|T]), X == 45.")
+
+
+def test_atom_chars_known_atom_validates_and_completes_list():
+    assert_true("atom_chars(ab, [A|T]), A == a, T == [b].")
+    prolog_raises('type_error(character, 2)', 'atom_chars(ab, [a,2])')
+    prolog_raises('type_error(character, 2)', 'atom_chars(ab, [X,2])')
+    prolog_raises('type_error(list, [a|bad])', 'atom_chars(ab, [a|bad])')
+    assert_false('atom_chars(ab, [a,c]).')
+
+
+@pytest.mark.parametrize('chars', [
+    "['-']", "[' ', '-']", "['+']", "['.']", "['-', '.']",
+])
+def test_number_chars_incomplete_number(chars):
+    prolog_raises('syntax_error(E)', 'number_chars(X, %s)' % chars)
+
+
+@pytest.mark.parametrize('chars', ["['1','2','3']", '[]', 'Chars'])
+def test_chars_first_argument_type(chars):
+    prolog_raises('type_error(atom, 123)', 'atom_chars(123, %s)' % chars)
+    prolog_raises('type_error(number, foo)', 'number_chars(foo, %s)' % chars)
+
+
+@pytest.mark.parametrize('text, expected', [
+    ('3.3E+0', '3.3'), ('42.0e-1', '4.2'), ('-1.25e2', '-125.0'),
+    ('  +1.5E+2', '150.0'), ('0.0e-10', '0.0'),
+])
+def test_number_chars_exponents(text, expected):
+    chars = '[' + ','.join(repr(c) for c in text) + ']'
+    assert_true('number_chars(X, %s), X == %s.' % (chars, expected))
+    assert_true('number_chars(%s, %s).' % (expected, chars))
+
+
+@pytest.mark.parametrize('text', [
+    '1.0e', '1.0e+', '1.0e-', '1.0e 2', '1.0e2 ', '1.0e2x',
+    '1.0e2.0', '1.0e++2', '1e2', '1.', '.5',
+])
+def test_number_chars_invalid_exponents(text):
+    chars = '[' + ','.join(repr(c) for c in text) + ']'
+    prolog_raises('syntax_error(E)', 'number_chars(X, %s)' % chars)
+
+
+def test_number_chars_exponent_overflow():
+    prolog_raises('evaluation_error(float_overflow)',
+                 "number_chars(X, ['1','.','0','e','4','0','0'])")
+
+
+def test_number_chars_exponent_roundtrip():
+    assert_true('number_chars(1.0e100, L), number_chars(X, L), X == 1.0e100.')

@@ -27,7 +27,7 @@ def impl_atom_concat(engine, heap, a1, a2, result, scont, fcont):
             s2 = helper.convert_to_str(a2)
             if r.endswith(s2):
                 stop = len(r) - len(s2)
-                assert stop > 0
+                assert stop >= 0
                 a1.unify(term.Callable.build(r[:stop], cache=False), heap)
             else:
                 raise error.UnificationFailed()
@@ -187,33 +187,52 @@ def impl_sub_atom(engine, heap, s, before, length, after, sub, scont, fcont):
     cont =  cls(engine, scont, fcont, heap, s, before, length, after, sub)
     return cont, fcont, heap
 
-def atom_to_cons(atom):
-    charlist = [term.Callable.build(c) for c in atom.name()]
+def atom_to_cons(atom, codes=False):
+    if codes:
+        charlist = [term.Number(ord(c)) for c in atom.name()]
+    else:
+        charlist = [term.Callable.build(c) for c in atom.name()]
     return helper.wrap_list(charlist)
         
-def cons_to_atom(cons):
-    atomlist = helper.unwrap_list(cons)
-    result = []
-    for atom in atomlist:
-        if not isinstance(atom, term.Atom):
-            error.throw_type_error("text", atom)
-        name = atom.name()
-        if not len(name) == 1:
-            error.throw_type_error("text", atom)
-        result.append(atom.name())
+def cons_to_atom(cons, codes=False):
+    result = helper.unwrap_char_list(cons, codes=codes)
     return Callable.build("".join(result))
 
 @expose_builtin("atom_chars", unwrap_spec=["obj", "obj"])
 def impl_atom_chars(engine, heap, atom, charlist):
+    atom_convert(heap, atom, charlist)
+
+
+@expose_builtin("atom_codes", unwrap_spec=["obj", "obj"])
+def impl_atom_codes(engine, heap, atom, codelist):
+    atom_convert(heap, atom, codelist, codes=True)
+
+
+def atom_convert(heap, atom, charlist, codes=False):
+    if not isinstance(atom, term.Atom) and not isinstance(atom, term.Var):
+        error.throw_type_error("atom", atom)
     if not isinstance(charlist, term.Var):  
         if isinstance(atom, term.Atom):
-            atom_to_cons(atom).unify(charlist, heap)
+            helper.unwrap_char_list(charlist, allow_partial=True, codes=codes)
+            atom_to_cons(atom, codes=codes).unify(charlist, heap)
         else:
-            cons_to_atom(charlist).unify(atom, heap)
+            cons_to_atom(charlist, codes=codes).unify(atom, heap)
     else:
         if isinstance(atom, term.Var):
             error.throw_instantiation_error()
         elif not isinstance(atom, term.Atom):
             error.throw_type_error("atom", atom)
         else:
-            atom_to_cons(atom).unify(charlist, heap)
+            atom_to_cons(atom, codes=codes).unify(charlist, heap)
+
+
+@expose_builtin("char_code", unwrap_spec=["obj", "obj"])
+def impl_char_code(engine, heap, char, code):
+    if isinstance(char, term.Var):
+        char.unify(Callable.build(helper.unwrap_char_code(code)), heap)
+    else:
+        if not isinstance(char, term.Atom) or len(char.name()) != 1:
+            error.throw_type_error("character", char)
+        if not isinstance(code, term.Var):
+            helper.unwrap_char_code(code)
+        code.unify(term.Number(ord(char.name()[0])), heap)

@@ -6,15 +6,12 @@
 [set_prolog_flag(date, 'July 1999'), domain_error(prolog_flag,date)].
 [set_prolog_flag(debug, no), domain_error(flag_value,debug+no)].
 [set_prolog_flag(max_arity, 40), permission_error(modify, flag, max_arity)].
-/* swindles to get tests of double quotes flag to work. */
+/* Each flag case is independent; the runner parses its query after setup. */
 
-[set_prolog_flag(double_quotes, atom), success].
-[X = "fred", [[X <-- fred]]].
+[X = "fred", setup(set_prolog_flag(double_quotes, atom)), [[X <-- fred]]].
 
-[set_prolog_flag(double_quotes, codes), success].
-[X = "fred", [[X <-- [102,114,101,100]]]].
+[X = "fred", setup(set_prolog_flag(double_quotes, codes)), [[X <-- [102,114,101,100]]]].
 
-[set_prolog_flag(double_quotes, chars), success].
-[X = "fred", [[X <-- [f,r,e,d]]]].
+[X = "fred", setup(set_prolog_flag(double_quotes, chars)), [[X <-- [f,r,e,d]]]].
 
 /* end of current_prolog_flag */

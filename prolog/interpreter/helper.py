@@ -43,6 +43,53 @@ def unwrap_list(prolog_list):
         return result
     error.throw_type_error("list", prolog_list)
 
+def unwrap_char_list(prolog_list, allow_partial=False, codes=False):
+    """Validate a character list; return None for an allowed partial list."""
+    result = []
+    partial = False
+    curr = prolog_list.dereference(None)
+    while isinstance(curr, term.Callable) and curr.signature().eq(conssig):
+        char = curr.argument_at(0).dereference(None)
+        if isinstance(char, term.Var):
+            if not allow_partial:
+                error.throw_instantiation_error()
+            partial = True
+        elif codes:
+            result.append(unwrap_char_code(char))
+        elif not isinstance(char, term.Atom) or len(char.name()) != 1:
+            error.throw_type_error("character", char)
+        else:
+            result.append(char.name())
+        curr = curr.argument_at(1).dereference(None)
+    if isinstance(curr, term.Var):
+        if not allow_partial:
+            error.throw_instantiation_error()
+        partial = True
+    elif not isinstance(curr, term.Callable) or not curr.signature().eq(nilsig):
+        error.throw_type_error("list", prolog_list)
+    if partial:
+        return None
+    return result
+
+
+def unwrap_char_code(obj):
+    """Convert a code to a byte character; atom signatures exclude NUL."""
+    if isinstance(obj, term.Var):
+        error.throw_instantiation_error()
+    if isinstance(obj, term.Number):
+        code = obj.num
+    elif isinstance(obj, term.BigInt):
+        try:
+            code = obj.value.toint()
+        except OverflowError:
+            raise error.throw_representation_error("character_code")
+    else:
+        raise error.throw_type_error("integer", obj)
+    if code <= 0 or code > 255:
+        error.throw_representation_error("character_code")
+    return chr(code)
+
+
 def is_callable(var, engine):
     return isinstance(var, term.Callable)
 

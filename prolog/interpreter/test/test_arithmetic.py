@@ -337,3 +337,26 @@ def test_pow_error():
 def test_sqrt():
     for x in [0, 1, 4, 9, 0.25, 0.16, 100*100]:
         assert_true("X is sqrt(%s), X = %s." % (x, x ** 0.5))
+
+
+@pytest.mark.parametrize('value', [0, 3, -3, 3.25, -3.25, 2 ** 100, -(2 ** 100)])
+def test_float_conversion(value):
+    assert_true("X is float(%s), X == %r, float(X)." % (value, float(value)))
+
+
+def test_float_evaluates_argument():
+    assert_true("X is float(1 + 2), X == 3.0.")
+    assert_true("X is float(float(3)), X == 3.0.")
+    # The existing type-test predicate still has its ordinary meaning.
+    assert_false("float(3).")
+    assert_true("float(3.0).")
+
+
+@pytest.mark.parametrize('value', [10 ** 400, -(10 ** 400)])
+def test_float_conversion_overflow(value):
+    prolog_raises("evaluation_error(float_overflow)", "X is float(%s)" % value)
+
+
+def test_float_conversion_errors():
+    prolog_raises("instantiation_error", "X is float(Y)")
+    prolog_raises("type_error(evaluable, a/0)", "X is float(a)")

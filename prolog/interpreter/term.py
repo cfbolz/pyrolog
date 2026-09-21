@@ -653,8 +653,7 @@ class Number(Numeric):#, UnboxedValue):
         if isinstance(other, Number):
             return rcmp(self.num, other.num)
         elif isinstance(other, Float):
-            # int/float mixed are always compared as floats
-            return rcmp(float(self.num), other.floatval)
+            return bigint_float_cmp(rbigint.fromint(self.num), other.floatval)
         elif isinstance(other, BigInt):
             return bigint_cmp(rbigint.fromint(self.num), other.value)
         assert 0
@@ -689,8 +688,7 @@ class BigInt(Numeric):
         if isinstance(other, Number):
             return bigint_cmp(self.value, rbigint.fromint(other.num))
         elif isinstance(other, Float):
-            # int/float mixed are always compared as floats
-            return rcmp(self.value.tofloat(), other.floatval)
+            return bigint_float_cmp(self.value, other.floatval)
         elif isinstance(other, BigInt):
             return bigint_cmp(self.value, other.value)
         assert 0
@@ -720,12 +718,15 @@ class Float(Numeric):
     def cmp_standard_order(self, other, heap):
         # XXX looks a bit terrible
         if isinstance(other, Number):
-            # int/float mixed are always compared as floats
-            return rcmp(self.floatval, float(other.num))
+            return -bigint_float_cmp(rbigint.fromint(other.num), self.floatval)
         elif isinstance(other, Float):
+            if math.isnan(self.floatval):
+                return 0 if math.isnan(other.floatval) else -1
+            if math.isnan(other.floatval):
+                return 1
             return rcmp(self.floatval, other.floatval)
         elif isinstance(other, BigInt):
-            return rcmp(self.floatval, other.value.tofloat())
+            return -bigint_float_cmp(other.value, self.floatval)
         assert 0
 
 
@@ -789,6 +790,27 @@ def bigint_cmp(a, b):
     if a.lt(b):
         return -1
     return 1
+
+def bigint_float_cmp(integer, value):
+    """Order an integer and float exactly, putting the float first on ties."""
+    # Even machine integers use bigints here: for standard term ordering we
+    # accept the allocation to avoid float rounding and overflow corner cases.
+    if math.isnan(value):
+        return 1
+    if math.isinf(value):
+        return -1 if value > 0.0 else 1
+    # Converting the float's integer part is exact, unlike rounding the integer
+    # to a float. This also works for integers beyond the finite float range.
+    truncated = rbigint.fromfloat(value)
+    result = bigint_cmp(integer, truncated)
+    if result:
+        return result
+    if value > 0.0 and value != math.floor(value):
+        return -1
+    # Negative fractional values precede their truncation; exact ties also
+    # place the float before the integer (including positive and negative zero).
+    return 1
+
 
 def cmp_standard_order(obj1, obj2, heap):
     c = rcmp(obj1.TYPE_STANDARD_ORDER, obj2.TYPE_STANDARD_ORDER)
