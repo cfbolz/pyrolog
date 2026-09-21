@@ -1,4 +1,4 @@
-import py
+import pytest
 import os
 from prolog.builtin.sourcehelper import get_source
 from prolog.interpreter.test.tool import collect_all, assert_false, assert_true
@@ -17,7 +17,8 @@ def test_get_source():
     assert file_name == os.path.abspath(name)
 
 def test_source_does_not_exist():
-    py.test.raises(CatchableError, "get_source('this_file_does_not_exist')")
+    with pytest.raises(CatchableError):
+        get_source('this_file_does_not_exist')
 
 def test_file_ending():
     content = "some content"

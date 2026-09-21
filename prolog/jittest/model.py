@@ -272,7 +272,7 @@ class OpMatcher(object):
         try:
             self.match_loop(expected_ops, ignore_ops)
         except InvalidMatch, e:
-            #raise # uncomment this and use py.test --pdb for better debugging
+            #raise # uncomment this and use pytest --pdb for better debugging
             print '@' * 40
             print "Loops don't match"
             print "================="

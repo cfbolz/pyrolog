@@ -1,4 +1,3 @@
-import py
 from prolog.interpreter.test.tool import assert_true, \
 get_engine, assert_false, collect_all
 from prolog.interpreter.continuation import Engine

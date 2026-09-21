@@ -1,4 +1,4 @@
-import py
+import pytest
 from prolog.interpreter.signature import Signature
 from prolog.interpreter.parsing import parse_file, TermBuilder, OrderTransformer
 from prolog.interpreter.parsing import parse_query_term, ParseError
@@ -250,7 +250,7 @@ def test_many_block_comments():
     assert facts[3].name() == "a4"
 
 def test_missing_dot():
-    info = py.test.raises(error.PrologParseError, parse_file, "g. f(X)")
+    info = pytest.raises(error.PrologParseError, parse_file, "g. f(X)")
     assert "ParseError: expected ." in info.value.message
 
 def test_parse_error():
@@ -258,7 +258,7 @@ def test_parse_error():
     f(a).
     f(b) :- $%.
     """
-    info = py.test.raises(error.PrologParseError, parse_file, s)
+    info = pytest.raises(error.PrologParseError, parse_file, s)
     assert "LexerError" in info.value.message
     assert " f(b) :- $%." in info.value.message
     assert "line 3" in info.value.message
@@ -267,7 +267,7 @@ def test_parse_error():
     f(a).
     f(b) :- a a b c.
     """
-    info = py.test.raises(error.PrologParseError, parse_file, s)
+    info = pytest.raises(error.PrologParseError, parse_file, s)
     assert "ParseError: expected ." in info.value.message
     assert " f(b) :- a a b c." in info.value.message
     assert "line 3" in info.value.message

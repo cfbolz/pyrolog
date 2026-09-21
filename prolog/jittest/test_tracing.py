@@ -1,7 +1,7 @@
 """Run against a translated binary (set PYROLOG_EXECUTABLE to select it)."""
 import os
 import subprocess
-import py
+import pytest
 from rpython.tool import logparser
 from rpython.tool.jitlogparser.parser import SimpleParser
 
@@ -11,8 +11,8 @@ def run_binary(tmpdir, source, queries, jit_options="threshold=40", send_halt=Tr
         os.path.join(os.path.dirname(__file__), '..', 'pyrolog-c'))
     if not os.path.isfile(executable):
         if 'PYROLOG_EXECUTABLE' in os.environ:
-            py.test.fail('PYROLOG_EXECUTABLE does not exist: ' + executable)
-        py.test.skip('build pyrolog-c or set PYROLOG_EXECUTABLE')
+            pytest.fail('PYROLOG_EXECUTABLE does not exist: ' + executable)
+        pytest.skip('build pyrolog-c or set PYROLOG_EXECUTABLE')
     program = tmpdir.join('tracing.pl')
     program.write(source)
     logfile = tmpdir.join('jit.log')
@@ -114,7 +114,7 @@ def test_meta_call_hot_loop_keeps_only_arithmetic_and_guards(tmpdir):
                                  'guard_false', 'jump'])
 
 
-@py.test.mark.parametrize('queries, expected', [
+@pytest.mark.parametrize('queries, expected', [
     ('', 'welcome!'),
     ('true.', 'yes'),
     ('halt.', 'welcome!'),

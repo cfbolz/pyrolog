@@ -1,4 +1,4 @@
-import py
+import pytest
 import os
 from prolog.interpreter.test.tool import get_engine, assert_true, assert_false, prolog_raises
 from prolog.interpreter.test.tool import create_file, delete_file, create_dir, delete_dir
@@ -1010,7 +1010,7 @@ def test_meta_predicate_colon_predicate():
     assert_true(":(a:9999999999999999999999999999999999999999999999999, b:2, (a, b)).", e)
 
 def test_meta_predicate_errors():
-    py.test.skip("todo")
+    pytest.skip("todo")
     prolog_raises("instantiation_error", "meta_predicate f(X)")
     prolog_raises("instantiation_error", "meta_predicate X")
     prolog_raises("domain_error(_, _)", "meta_predicate f(blub)")

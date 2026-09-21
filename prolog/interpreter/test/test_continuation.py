@@ -1,4 +1,4 @@
-import py
+import pytest
 from prolog.interpreter.continuation import *
 
 from prolog.interpreter.parsing import parse_query_term, get_engine
@@ -83,7 +83,7 @@ def test_failure_continuation():
         debugger = Debugger()
 
     ca = FakeF(FakeC(FakeC(DoneSuccessContinuation(None), -1), 'c'), 10)
-    py.test.raises(UnificationFailed, driver, FakeC(DoneSuccessContinuation(None), -1), ca, h)
+    pytest.raises(UnificationFailed, driver, FakeC(DoneSuccessContinuation(None), -1), ca, h)
     assert order == [10, 'c', 9, 'c', 8, 'c', 7, 'c', 6, 'c', 5, 'c', 4, 'c',
                      3, 'c', 2, 'c', 1, 'c', 0, 'c']
 
@@ -110,7 +110,7 @@ def test_full():
     X = BindingVar()
     Y = BindingVar()
     query = Callable.build(",", [Callable.build("f", [X]), Callable.build("g", [Y])])
-    py.test.raises(error.UnificationFailed,
+    pytest.raises(error.UnificationFailed,
                    e.run_query, query, e.modulewrapper.user_module, CollectContinuation())
     assert all == [("x", "a"), ("x", "b"), ("y", "a"), ("y", "b")]
 
@@ -187,7 +187,7 @@ def test_numeral():
     e.run_query_in_current(t)
     assert vars['X'].dereference(None).num == 0
     e.run_query_in_current(parse_query_term("add(0, 0, 0)."))
-    py.test.raises(UnificationFailed, e.run_query_in_current, parse_query_term("""
+    pytest.raises(UnificationFailed, e.run_query_in_current, parse_query_term("""
         add(0, 0, succ(0))."""))
     e.run_query_in_current(parse_query_term("add(succ(0), succ(0), succ(succ(0)))."))
     e.run_query_in_current(parse_query_term("mul(succ(0), 0, 0)."))
@@ -258,7 +258,7 @@ def test_indexing():
         e.run_query_in_current(t)
     t = parse_query_term("f(x, g(y, a)).")
     for i in range(200):
-        py.test.raises(UnificationFailed, e.run_query_in_current, t)
+        pytest.raises(UnificationFailed, e.run_query_in_current, t)
 
 def test_indexing2():
     e = get_engine("""
@@ -271,7 +271,7 @@ def test_indexing2():
     heaps = collect_all(e, "sibling(m, X).")
     assert len(heaps) == 3
 
-@py.test.mark.xfail
+@pytest.mark.xfail
 def test_runstring():
     e = get_engine("foo(a, c).")
     e.runstring("""

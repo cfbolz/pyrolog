@@ -1,4 +1,4 @@
-import py
+import pytest
 from prolog.interpreter.heap import Heap
 from prolog.interpreter.term import AttVar, BindingVar, Callable, Number, Atom, AttMap
 
@@ -168,7 +168,7 @@ def test_heap_dont_trail_new_attvars():
     assert h3 is h2
     
 def test_discard_with_attvars():
-    py.test.skip("not implemented yet")
+    pytest.skip("not implemented yet")
     h0 = Heap()
     v0 = h0.new_attvar()
 

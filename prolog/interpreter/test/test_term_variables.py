@@ -1,4 +1,4 @@
-import py
+import pytest
 from prolog.interpreter.test.tool import assert_true, assert_false, prolog_raises
 from prolog.interpreter.test.tool import get_engine
 
@@ -25,7 +25,7 @@ def test_var_binding():
     assert_true("X = f(A,B), term_variables(X, [A,B]).")
 
 def test_term_variables_huge_list():
-    py.test.skip("")
+    pytest.skip("")
     e = get_engine("""
         make_triple_list(0, _, []).
         make_triple_list(X, Y, [Y, Y, Y | T]) :-

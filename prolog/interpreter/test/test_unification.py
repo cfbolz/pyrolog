@@ -1,4 +1,4 @@
-import py
+import pytest
 from prolog.interpreter.error import UnificationFailed
 from prolog.interpreter.term import Atom, Var, Number, Callable, Term
 from prolog.interpreter.term import NumberedVar, BindingVar
@@ -13,7 +13,8 @@ def test_atom():
     b = Callable.build("hallo")
     # does not raise
     a.unify(b, None)
-    py.test.raises(UnificationFailed, "a.unify(Callable.build('xxx'), None)")
+    with pytest.raises(UnificationFailed):
+        a.unify(Callable.build('xxx'), None)
 
 def test_var():
     b = BindingVar()
@@ -32,7 +33,7 @@ def test_unify_var():
     heap = Heap()
     b.unify(b, heap)
     b.unify(Callable.build("hallo"), heap)
-    py.test.raises(UnificationFailed, b.unify, Callable.build("bye"), heap)
+    pytest.raises(UnificationFailed, b.unify, Callable.build("bye"), heap)
 
 def test_recursive():
     b = BindingVar()

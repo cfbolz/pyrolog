@@ -1,4 +1,4 @@
-import py
+import pytest
 import os
 from prolog.interpreter.error import UnificationFailed
 from prolog.interpreter.parsing import parse_query_term, get_engine
@@ -18,7 +18,7 @@ def assert_false(query, e=None):
     if e is None:
         e = Engine()
     term = e.parse(query)[0][0]
-    py.test.raises(UnificationFailed, e.run_query_in_current, term)
+    pytest.raises(UnificationFailed, e.run_query_in_current, term)
 
 def prolog_raises(exc, query, e=None):
     prolog_catch = "catch(((%s), fail), error(%s), true)." % (query, exc)
@@ -42,7 +42,7 @@ def collect_all(engine, s):
     terms, vars = engine.parse(s)
     term, = terms
     collector = CollectAllContinuation(engine.modulewrapper.user_module, vars)
-    py.test.raises(UnificationFailed, engine.run_query, term,
+    pytest.raises(UnificationFailed, engine.run_query, term,
             engine.modulewrapper.current_module, collector)
     return collector.heaps
 

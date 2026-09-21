@@ -1,4 +1,4 @@
-import py
+import pytest
 from prolog.interpreter.test.tool import prolog_raises, \
 assert_true, assert_false
 from prolog.interpreter.parsing import get_engine
@@ -56,7 +56,7 @@ def test_fail_restores_call_bindings():
 
 def test_undefined_predicate_and_exception_unwinding():
     e, events = traced_engine("p :- missing.")
-    py.test.raises(error.UncaughtError, assert_true, "p.", e)
+    pytest.raises(error.UncaughtError, assert_true, "p.", e)
     assert events == [('Call', 1, 'p'), ('Call', 2, 'missing'),
                       ('Exception', 2, 'missing'), ('Exception', 1, 'p')]
 
@@ -69,7 +69,7 @@ def test_caught_exception_keeps_outer_frame():
         ('Call', 3), ('Exit', 3), ('Exit', 2), ('Exit', 1)]
 
 
-@py.test.mark.parametrize('body, expected', [
+@pytest.mark.parametrize('body, expected', [
     ('(X = a; X = b)', ['a', 'b']),
     ('(X = a; X = b), !', ['a']),
     ('once((X = a; X = b))', ['a']),
@@ -155,13 +155,13 @@ def test_console_skip_and_goal_display():
     assert e.debugger.skip_frame is None
 
 
-@py.test.mark.parametrize('source, query, port', [
+@pytest.mark.parametrize('source, query, port', [
     ('p :- fail.', 'p.', 'Fail'),
     ('p :- missing.', 'p.', 'Exception'),
 ])
 def test_skip_stops_at_failure_or_exception(source, query, port):
     e, io = console_engine(source, ['s', '\n'])
-    py.test.raises((error.UnificationFailed, error.UncaughtError), assert_true, query, e)
+    pytest.raises((error.UnificationFailed, error.UncaughtError), assert_true, query, e)
     assert port + ': (1) p' in ''.join(io.output)
     assert not io.commands
     assert e.debugger.skip_frame is None
@@ -179,7 +179,7 @@ def test_leashing_and_tracing_predicate():
     assert_false('tracing.', e)
 
 
-@py.test.mark.parametrize('query', [
+@pytest.mark.parametrize('query', [
     'leash(X).', 'leash([X]).', 'leash([+X]).',
     'leash([+]).', 'leash([+missing]).', 'leash([+1]).',
     'leash([-all,+missing]).',
@@ -187,7 +187,7 @@ def test_leashing_and_tracing_predicate():
 def test_invalid_leash_is_atomic(query):
     e = Engine()
     before = e.debugger.leashed.copy()
-    py.test.raises(error.UncaughtError, assert_true, query, e)
+    pytest.raises(error.UncaughtError, assert_true, query, e)
     assert e.debugger.leashed == before
 
 
@@ -202,7 +202,7 @@ def test_leap_disables_output_but_preserves_backtracking():
 def test_abort_is_not_caught_by_prolog_and_clears_debug_state():
     from prolog.interpreter.traceconsole import DebugAbort
     e, io = console_engine('p.', ['a'])
-    py.test.raises(DebugAbort, assert_true, 'catch(p, X, true).', e)
+    pytest.raises(DebugAbort, assert_true, 'catch(p, X, true).', e)
     assert e.debugger.query_depth == 0
     assert e.debugger.skip_frame is None
     io.commands = ['\n', '\n']

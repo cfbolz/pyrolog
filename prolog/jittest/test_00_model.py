@@ -2,6 +2,7 @@ from __future__ import with_statement
 import sys, os
 import types
 import subprocess
+import pytest
 import py
 from lib_pypy import disassembler
 from rpython.tool.udir import udir
@@ -17,7 +18,7 @@ strexecutable = str(executable)
 class BaseTestPyrologC(object):
     def setup_class(cls):
         if not executable.check():
-            py.test.skip("missing pyrolog-c at %s" % (executable.dirpath(), ))
+            pytest.skip("missing pyrolog-c at %s" % (executable.dirpath(), ))
         cls.tmpdir = udir.join('test-pyrolog-jit')
         cls.tmpdir.ensure(dir=True)
 
@@ -49,7 +50,7 @@ class BaseTestPyrologC(object):
         pipe.stdin.write(call + "\n")
         stdout, stderr = pipe.communicate()
         if stderr.startswith('SKIP:'):
-            py.test.skip(stderr)
+            pytest.skip(stderr)
         if stderr.startswith('debug_alloc.h:'):   # lldebug builds
             stderr = ''
         assert not stderr
@@ -107,7 +108,8 @@ class TestOpMatcher(object):
         assert match_var('v0', '_')
         assert match_var('v0', 'V0')
         assert match_var('ConstPtr(ptr0)', '_')
-        py.test.raises(AssertionError, "match_var('_', 'v0')")
+        with pytest.raises(AssertionError):
+            match_var('_', 'v0')
 
     def test_parse_op(self):
         res = OpMatcher.parse_op("  a =   int_add(  b,  3 ) # foo")

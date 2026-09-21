@@ -1,4 +1,4 @@
-import py
+import pytest
 from prolog.interpreter import translatedmain
 from prolog.interpreter.continuation import Engine
 
@@ -23,15 +23,15 @@ def test_readline_preserves_final_unterminated_line(monkeypatch):
     terminal_input(monkeypatch, 'true.\nfalse.')
     assert translatedmain.readline() == 'true.\n'
     assert translatedmain.readline() == 'false.'
-    py.test.raises(translatedmain.EndOfInput, translatedmain.readline)
+    pytest.raises(translatedmain.EndOfInput, translatedmain.readline)
 
 
 def test_getch_eof(monkeypatch):
     terminal_input(monkeypatch, '')
-    py.test.raises(translatedmain.EndOfInput, translatedmain.getch)
+    pytest.raises(translatedmain.EndOfInput, translatedmain.getch)
 
 
-@py.test.mark.parametrize('text, expected', [
+@pytest.mark.parametrize('text, expected', [
     ('', 'welcome!'),
     ('\n', 'welcome!'),
     ('true.', 'yes'),

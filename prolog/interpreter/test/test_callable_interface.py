@@ -3,7 +3,7 @@ from prolog.interpreter.term import Atom, Number, Term, Callable, \
         specialized_term_classes, NumberedVar
 from prolog.interpreter.test.tool import parse
 from prolog.interpreter.heap import Heap
-import py
+import pytest
 
 def parse(inp):
     t = parse_file(inp)
@@ -25,7 +25,8 @@ def test_atom_arguemtn_count():
     assert atom.argument_count() == 0
     
 def test_atom_get_argument_at():
-    assert py.test.raises(IndexError, 'atom.argument_at(0)')
+    with pytest.raises(IndexError):
+        atom.argument_at(0)
     
 def test_term_get_signature():
     r = term.get_prolog_signature()
@@ -41,7 +42,8 @@ def test_term_get_arguments():
     assert len(t) == 5
     
 def test_term_get_argument_out_of_range():
-    py.test.raises(IndexError, 'term.argument_at(5)')
+    with pytest.raises(IndexError):
+        term.argument_at(5)
 
 def test_term_get_argument_in_range():
     t =  term.argument_at(2)
@@ -52,11 +54,13 @@ def test_term_argument_count():
     
 def test_callable_name():
     c = Callable()
-    py.test.raises(NotImplementedError, 'c.name()')
+    with pytest.raises(NotImplementedError):
+        c.name()
     
 def test_callable_signature():
     c = Callable()
-    py.test.raises(NotImplementedError, 'c.signature()')
+    with pytest.raises(NotImplementedError):
+        c.signature()
     
 def test_atom_name():
     assert atom.name() == 'a'
