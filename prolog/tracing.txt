@@ -29,6 +29,9 @@ At a prompt:
     a         abort the query and return to the console
     h/?       show help
 
+Ctrl-D exits the console cleanly, including at debugger and next-answer
+prompts. A final input line without a newline is processed before exiting.
+
 leash/1 controls which ports prompt for input. For example:
 
     leash([-all]).                 % print without prompting

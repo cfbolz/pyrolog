@@ -6,7 +6,7 @@ from rpython.tool import logparser
 from rpython.tool.jitlogparser.parser import SimpleParser
 
 
-def run_binary(tmpdir, source, queries, jit_options="threshold=40"):
+def run_binary(tmpdir, source, queries, jit_options="threshold=40", send_halt=True):
     executable = os.environ.get('PYROLOG_EXECUTABLE',
         os.path.join(os.path.dirname(__file__), '..', 'pyrolog-c'))
     if not os.path.isfile(executable):
@@ -21,7 +21,9 @@ def run_binary(tmpdir, source, queries, jit_options="threshold=40"):
     process = subprocess.Popen(
         [executable, '--jit', jit_options, str(program)], env=env,
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout, stderr = process.communicate(queries + '\nhalt.\n')
+    if send_halt:
+        queries += '\nhalt.\n'
+    stdout, stderr = process.communicate(queries)
     assert process.returncode == 0, stderr
     assert not stderr
     assert 'ERROR:' not in stdout
@@ -110,3 +112,24 @@ def test_meta_call_hot_loop_keeps_only_arithmetic_and_guards(tmpdir):
         assert set(names) <= set(['guard_not_invalidated', 'int_sub_ovf',
                                  'guard_no_overflow', 'int_is_zero', 'int_eq',
                                  'guard_false', 'jump'])
+
+
+@py.test.mark.parametrize('queries, expected', [
+    ('', 'welcome!'),
+    ('true.', 'yes'),
+    ('halt.', 'welcome!'),
+    ('(X = a; X = b).\n', 'X = a'),
+    ('trace.\ntrue.\n', 'Call: (1) true'),
+    ('trace.\ntrue.\n\n', 'Exit: (1) true'),
+])
+def test_compiled_console_eof(tmpdir, queries, expected):
+    output, loops = run_binary(tmpdir, '', queries, send_halt=False)
+    assert expected in output
+    if queries != 'halt.':
+        assert output.endswith('\n')
+
+
+def test_compiled_eof_during_startup_directive(tmpdir):
+    output, loops = run_binary(tmpdir, ':- trace, true.', '', send_halt=False)
+    assert 'Call: (1) true' in output
+    assert 'welcome!' not in output

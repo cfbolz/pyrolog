@@ -3,7 +3,7 @@ A simple standalone target for the prolog interpreter.
 """
 
 import sys
-from prolog.interpreter.translatedmain import repl, execute
+from prolog.interpreter.translatedmain import run_console
 
 # __________  Entry point  __________
 
@@ -30,15 +30,13 @@ def entry_point(argv):
             jit.set_user_param(jitdriver, jitarg)
             break
 
-    if len(argv) == 2:
-        execute(e, argv[1])
     if len(argv) > 2:
         print "too many arguments"
         return 2
-    try:
-        repl(e)
-    except SystemExit:
-        return 1
+    filename = None
+    if len(argv) == 2:
+        filename = argv[1]
+    run_console(e, filename)
     return 0
 
 # _____ Define and setup target ___

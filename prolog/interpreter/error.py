@@ -1,5 +1,8 @@
 from rpython.rlib import rstring
 
+class EndOfInput(Exception):
+    """Terminal EOF, including while choosing an answer or debugging."""
+
 class PrologError(Exception):
     pass
 
@@ -203,4 +206,3 @@ def throw_evaluation_error(error):
     from prolog.interpreter import term
     raise wrap_error(
         term.Callable.build("evaluation_error", [term.Callable.build(error)]))
-

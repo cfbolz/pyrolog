@@ -11,6 +11,24 @@ app_main = str(app_main)
 
 
 class TestInteraction:
+    @py.test.mark.parametrize('query, prompt', [
+        ('', '>?- '),
+        ('(X = a; X = b).', 'X = a'),
+        ('trace.\ntrue.', 'Call: (1) true'),
+    ])
+    def test_ctrl_d(self, query, prompt):
+        child = self.spawn([])
+        import pexpect
+        if query:
+            child.expect(re.escape('>?- '))
+            child.sendline(query)
+        child.expect(re.escape(prompt))
+        child.sendcontrol('d')
+        child.expect(pexpect.EOF)
+        assert 'Traceback' not in child.before
+        child.close()
+        assert child.exitstatus == 0
+
     def _spawn(self, *args, **kwds):
         try:
             import pexpect

@@ -6,6 +6,7 @@ from prolog.interpreter.parsing import get_engine
 from prolog.interpreter.continuation import Continuation, Engine, \
         DoneSuccessContinuation, DoneFailureContinuation
 from prolog.interpreter import error, term
+from prolog.interpreter.error import EndOfInput
 from prolog.interpreter.traceconsole import DebugAbort
 import prolog.interpreter.term
 prolog.interpreter.term.DEBUG = False
@@ -19,6 +20,7 @@ helptext = """
 
 class StopItNow(Exception):
     pass
+
 
 class ContinueContinuation(Continuation):
     def __init__(self, engine, var_to_pos, write):
@@ -73,13 +75,13 @@ def readline():
     result = []
     while 1:
         s = os.read(0, 1)
+        if s == '':
+            if result:
+                break
+            raise EndOfInput
         result.append(s)
         if s == "\n":
             break
-        if s == '':
-            if len(result) > 1:
-                break
-            raise SystemExit
     return "".join(result)
 
 def run(query, var_to_pos, engine):
@@ -118,7 +120,7 @@ def repl(engine):
             module = "[trace] " + module
         printmessage(module + ">?- ")
         line = readline()
-        if line == "halt.\n":
+        if line.strip() == "halt.":
             break
         try:
             goals, var_to_pos = engine.parse(line, file_name="<stdin>")
@@ -131,9 +133,22 @@ def repl(engine):
 def execute(e, filename):
     run(term.Callable.build("consult", [term.Callable.build(filename)]), {}, e)
 
+
+def run_console(engine, filename=None):
+    # Keep EOF outside Prolog error handling. In particular, EOF in a traced
+    # startup directive must end the session just like EOF at the REPL prompt.
+    try:
+        if filename is not None:
+            execute(engine, filename)
+        repl(engine)
+    except EndOfInput:
+        printmessage("\n")
+
+
 if __name__ == '__main__':
     from sys import argv
     e = Engine(load_system=True)
+    filename = None
     if len(argv) == 2:
-        execute(e, argv[1])
-    repl(e)
+        filename = argv[1]
+    run_console(e, filename)
