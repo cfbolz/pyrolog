@@ -1,4 +1,3 @@
-import py
 from prolog.builtin.register import expose_builtin
 from prolog.interpreter.term import Atom, Callable, Var, Term, Number
 from prolog.interpreter import error
