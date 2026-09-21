@@ -1,4 +1,4 @@
-:- module(list, [append/3, reverse/2, member/2, is_list/1, select/3, nextto/3, memberchk/2, subtract/3, min_member/2, max_member/2, delete/3, length/2, last/2]).
+:- module(list, [append/3, reverse/2, member/2, select/3, nextto/3, memberchk/2, subtract/3, min_member/2, max_member/2, delete/3, length/2, last/2]).
 
 append([], L, L).
 append([H|T], L, [H|R]) :- append(T, L, R).
@@ -13,14 +13,16 @@ reverse([Head|Tail], Acc, Reversed, [_|Bound]) :-
 member(E, [E|_]).
 member(E, [_|T]) :- member(E, T).
 
-is_list([]).
-is_list([_|T]) :- is_list(T).
-
 % length/2
 length(List, Len) :-
-	(nonvar(Len) -> Len > -1; true),
-	is_list(List),
-	length(List, 0, Len).
+	'$check_length_list'(List, Len),
+	(nonvar(Len) -> length_fixed(List, Len); length(List, 0, Len)).
+
+% A fixed length bounds construction, including when asking for more answers.
+length_fixed([], 0).
+length_fixed([_ | Tail], Len) :-
+	succ(Prev, Len),
+	length_fixed(Tail, Prev).
 
 length([], Len, Len).
 length([Head | Tail], LenIn, LenOut) :-

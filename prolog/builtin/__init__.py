@@ -1,6 +1,7 @@
 # imports to register builtins
 import prolog.builtin.allsolution
 import prolog.builtin.arithmeticbuiltin
+import prolog.builtin.lists
 import prolog.builtin.atomconstruction
 import prolog.builtin.control
 import prolog.builtin.database

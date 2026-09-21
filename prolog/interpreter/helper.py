@@ -26,13 +26,32 @@ class ListSpineDetector(object):
         self.remaining = 1
 
     def advance(self, tail, root):
-        if tail is self.checkpoint:
+        if self.is_cycle(tail):
             error.throw_type_error("list", root)
+
+    def is_cycle(self, tail):
+        if tail is self.checkpoint:
+            return True
         self.remaining -= 1
         if self.remaining == 0:
             self.checkpoint = tail
             self.power *= 2
             self.remaining = self.power
+        return False
+
+
+def list_spine_tail(root):
+    """Return [] or the open/improper tail; a cons cell denotes a cycle.
+
+    This is read-only, including for open lists and attributed variables.
+    """
+    curr = root.dereference(None)
+    detector = ListSpineDetector(curr)
+    while isinstance(curr, term.Callable) and curr.signature().eq(conssig):
+        curr = curr.argument_at(1).dereference(None)
+        if detector.is_cycle(curr):
+            return curr
+    return curr
 
 
 def wrap_list(python_list):
