@@ -1,5 +1,6 @@
 from prolog.interpreter import helper, term, error
 from prolog.builtin.register import expose_builtin
+from rpython.rlib.objectmodel import specialize
 
 # ___________________________________________________________________
 # type verifications
@@ -56,13 +57,63 @@ def impl_callable(engine, heap, var):
     if not helper.is_callable(var, engine):
         raise error.UnificationFailed()
 
+GROUND_BUDGET = 64
+
+
+class GroundState(object):
+    remaining = 0
+    seen = None
+
+    def reset(self):
+        self.remaining = GROUND_BUDGET
+        self.seen = None
+
+    def consume(self):
+        self.remaining -= 1
+        if self.remaining < 0:
+            raise RetryGround()
+
+
+class RetryGround(Exception):
+    pass
+
+
+# ground does not invoke Prolog code or attribute hooks, so this scratch state
+# is not reentered. Reset it for each call; allocate a memo only on retry.
+ground_state = GroundState()
+
+
+@specialize.arg(1)
+def ground_visit(var, memoized):
+    while True:
+        if not memoized:
+            ground_state.consume()
+        if not isinstance(var, term.Var):
+            break
+        binding = var.getbinding()
+        if binding is None:
+            raise error.UnificationFailed()
+        if memoized:
+            seen = ground_state.seen
+            if var in seen:
+                return
+            seen[var] = None
+        # Follow bindings explicitly: dereference() would hide the cycle edges.
+        var = binding
+    if isinstance(var, term.Callable):
+        for i in range(var.argument_count()):
+            ground_visit(var.argument_at(i), memoized)
+
+
 @expose_builtin("ground", unwrap_spec=["raw"])
 def impl_ground(engine, heap, var):
-    var = var.dereference(heap)
-    if isinstance(var, term.Var):
-        raise error.UnificationFailed()
-    if isinstance(var, term.Callable):
-        for arg in var.arguments():
-            impl_ground(engine, heap, arg)
-
-
+    ground_state.reset()
+    try:
+        ground_visit(var, False)
+    except RetryGround:
+        ground_state.seen = {}
+        try:
+            ground_visit(var, True)
+        finally:
+            # Do not retain the term graph between calls, including failures.
+            ground_state.seen = None
