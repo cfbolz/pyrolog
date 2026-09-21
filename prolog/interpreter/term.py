@@ -222,7 +222,7 @@ class AttVar(BindingVar):
 
     def __repr__(self):
         attrs = []
-        attmap = jit.hint(self.attmap, promote=True)
+        attmap = jit.promote(self.attmap)
         if self.value_list is not None:
             for key, index in attmap.indexes.iteritems():
                 value = self.value_list[index]
@@ -256,7 +256,7 @@ class AttVar(BindingVar):
         return self.copy(heap, memo)
 
     def add_attribute(self, attname, attribute):
-        attmap = jit.hint(self.attmap, promote=True)
+        attmap = jit.promote(self.attmap)
         index = attmap.get_index(attname)
         if index != -1:
             self.value_list[index] = attribute
@@ -404,6 +404,16 @@ class Callable(NonVar):
         return Callable.build("/", [Callable.build(self.name()),
                                     Number(self.argument_count())])
 
+
+    def eq_signature(self, other):
+        self_location = self.location()
+        other_location = other.location()
+        if jit.isconstant(self_location):
+            jit.promote(other_location)
+        elif jit.isconstant(other_location):
+            jit.promote(self_location)
+        return self.signature().eq(other.signature())
+
     @jit.unroll_safe
     def arguments(self):
         argcount = self.argument_count()
@@ -421,7 +431,7 @@ class Callable(NonVar):
     @specialize.arg(3)
     def nonvar_unify(self, other, heap, occurs_check):
         if (isinstance(other, Callable) and
-                self.signature().eq(other.signature())):
+                self.eq_signature(other)):
             for i in range(self.argument_count()):
                 self.argument_at(i).unify(other.argument_at(i), heap, occurs_check)
         else:
@@ -430,7 +440,7 @@ class Callable(NonVar):
     @jit.unroll_safe
     def nonvar_unify_and_standardize_apart(self, other, heap, env):
         if (isinstance(other, Callable) and
-            self.signature().eq(other.signature())):
+            self.eq_signature(other)):
             for i in range(self.argument_count()):
                 argself = self.argument_at(i)
                 argother = other.argument_at(i)
@@ -461,8 +471,8 @@ class Callable(NonVar):
         if not memo.in_head:
             repr = None
             if memo.rulerepr:
-                repr = memo.rulerepr + str(id(self))
-            location = Location(location.signature, repr) # XXX
+                repr = memo.rulerepr + str(compute_unique_id(self))
+            location = Location(location.signature, repr)
         return Callable.build_location(args, location)
 
     @specialize.arg(1)
@@ -580,7 +590,7 @@ class Callable(NonVar):
             return True
         if not isinstance(other, Callable):
             return False
-        if not self.signature().eq(other.signature()):
+        if not self.eq_signature(other):
             return False
         for i in range(self.argument_count()):
             if not self.argument_at(i).quick_unify_check(other.argument_at(i)):
@@ -648,14 +658,14 @@ class Atom(Callable):
     def nonvar_unify_and_standardize_apart(self, other, heap, env):
         if not isinstance(other, Atom):
             raise UnificationFailed
-        if not self.signature().eq(other.signature()):
+        if not self.eq_signature(other):
             raise UnificationFailed
 
     @specialize.arg(3)
     def nonvar_unify(self, other, heap, occurs_check):
         if not isinstance(other, Atom):
             return Callable.nonvar_unify(self, other, heap, occurs_check)
-        if not self.signature().eq(other.signature()):
+        if not self.eq_signature(other):
             raise UnificationFailed
 
     def copy_standardize_apart(self, heap, env):
@@ -910,7 +920,7 @@ def generate_abstract_class(n_args):
                 return True
             if not isinstance(other, Callable):
                 return False
-            if not self.signature().eq(other.signature()):
+            if not self.eq_signature(other):
                 return False
             if not isinstance(other, abstract_callable):
                 return Callable.quick_unify_check(self, other)
@@ -924,7 +934,7 @@ def generate_abstract_class(n_args):
         def nonvar_unify_and_standardize_apart(self, other, heap, env):
             if not isinstance(other, abstract_callable):
                 raise UnificationFailed
-            if self.signature().eq(other.signature()):
+            if self.eq_signature(other):
                 for x in arg_iter:
                     a = getattr(self, 'val_%d' % x)
                     b = getattr(other, 'val_%d' % x)
@@ -952,7 +962,7 @@ def generate_abstract_class(n_args):
         def nonvar_unify(self, other, heap, occurs_check):
             if not isinstance(other, abstract_callable):
                 raise UnificationFailed
-            if self.signature().eq(other.signature()):
+            if self.eq_signature(other):
                 return self._nonvar_unify_jit(other, heap, occurs_check)
             else:
                 raise UnificationFailed

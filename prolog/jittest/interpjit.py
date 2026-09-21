@@ -6,6 +6,8 @@ class o:
 conftest.option = o
 from rpython.jit.metainterp.test.test_ajit import LLJitMixin
 
+from rpython.rlib import jit
+
 from prolog.interpreter.parsing import parse_query_term, get_engine
 from prolog.interpreter.parsing import get_query_and_vars
 from prolog.interpreter.continuation import jitdriver
@@ -128,7 +130,7 @@ class TestLLtype(LLJitMixin):
         t6 = parse_query_term("partition([6, 6, 6, 6, 6, 6, 66, 3, 6, 1, 2, 6, 8, 9, 0,4, 2, 5, 1, 106, 3, 6, 1, 2, 6, 8, 9, 0,4, 2, 5, 1, 10, 3, 6, 1, 2, 6, 8, 9, 0,4, 2, 5, 1, 10], 5, X, Y).")
         t7 = parse_query_term("findall(X+Y, app([X|_], [Y|_], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]), L).")
         def interp_w(c):
-            jitdriver.set_param("inlining", True)
+            jit.set_param(jitdriver, "inlining", True)
             if c == 1:
                 t = t1
             elif c == 2:
@@ -145,11 +147,11 @@ class TestLLtype(LLJitMixin):
                 t = t7
             else:
                 raise ValueError
-            e.run(t, e.modulewrapper.user_module)
+            e.run_query(t, e.modulewrapper.user_module)
         # XXX
         #interp_w(2)
 
-        self.meta_interp(interp_w, [2], listcomp=True, backendopt=True,
+        self.meta_interp(interp_w, [6], listcomp=True, backendopt=True,
                          listops=True)
         #self.meta_interp(interp_w, [3], listcomp=True,
         #                 listops=True)
