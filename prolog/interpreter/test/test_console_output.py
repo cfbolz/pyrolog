@@ -51,6 +51,13 @@ class TestInteraction:
         env = {"PYTHONPATH": str(path), "PATH": os.environ["PATH"]}
         return self._spawn(sys.executable, [app_main] + argv, env=env)
 
+    def expect_bindings(self, child, bindings):
+        child.expect(re.escape('>?- '))
+        # Variable dictionary iteration order is not part of the console API.
+        actual = [line.strip() for line in child.before.splitlines()
+                  if re.match(r'^[A-Z][A-Za-z0-9_]* = ', line.strip())]
+        assert sorted(actual) == sorted(bindings)
+
     def test_simple_unifications(self):
         child = self.spawn([])
         child.expect("welcome!")
@@ -62,15 +69,11 @@ class TestInteraction:
 
         child.sendline("X = Y.")
         child.expect("yes")
-        child.expect("Y = _G0")
-        child.expect("X = _G0")
-        child.expect(">?- ")
+        self.expect_bindings(child, ["X = _G0", "Y = _G0"])
 
         child.sendline("X = f(a, Y), Y = 8.")
         child.expect("yes")
-        child.expect("Y = 8")
-        child.expect(re.escape("X = f(a, 8)"))
-        child.expect(">?- ")
+        self.expect_bindings(child, ["X = f(a, 8)", "Y = 8"])
 
         child.sendline("X = 1, X = 2.")
         child.expect("Nein")
@@ -78,10 +81,8 @@ class TestInteraction:
 
         child.sendline("X = [a, b, Y], Y = [1, 2], Z = Y.")
         child.expect("yes")
-        child.expect(re.escape("Y = [1, 2]"))
-        child.expect(re.escape("X = [a, b, [1, 2]]"))
-        child.expect(re.escape("Z = [1, 2]"))
-        child.expect(">?- ")
+        self.expect_bindings(child, ["X = [a, b, [1, 2]]",
+                                     "Y = [1, 2]", "Z = [1, 2]"])
 
     def test_more_than_one_solution(self):
         child = self.spawn([])
@@ -144,4 +145,3 @@ class TestInteraction:
         child.expect(re.escape("Traceback (most recent call last):"))
         child.expect(re.escape('  File "<unknown>" in user:f/1'))
         child.expect(re.escape("arguments not sufficiently instantiated"))
-
