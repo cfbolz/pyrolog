@@ -1,4 +1,4 @@
-import py
+import pytest
 from prolog.interpreter.parsing import TermBuilder
 from prolog.interpreter.parsing import parse_query_term, get_engine
 from prolog.interpreter.error import UnificationFailed
@@ -66,9 +66,8 @@ def test_nonvar():
     assert_true("g(X, X).", e)
     assert_false("f(X, X).", e)
 
-def test_consult():
-    p = py.test.ensuretemp("prolog")
-    f = p.join("test.pl")
+def test_consult(tmpdir):
+    f = tmpdir.join("test.pl")
     f.write("g(a, a). g(a, b).")
     e = get_engine("g(c, c).")
     assert_true("g(c, c).", e)
@@ -486,7 +485,7 @@ def test_between():
 def test_is():
     assert_true("5 is 1 + 1 + 1 + 1 + 1.")
 
-@py.test.mark.xfail
+@pytest.mark.xfail
 def test_parser_access():
     assert_true("current_op(200, xfx, **).")
     f = collect_all(Engine(), "current_op(200, Form, X).")
@@ -498,7 +497,7 @@ def test_parser_access():
     assert_true("a foo b.", e)
     assert_true("op(0, xfy, foo).", e)
     # XXX really a ParseError
-    py.test.raises(Exception, assert_false, "a foo b.", e) 
+    pytest.raises(Exception, assert_false, "a foo b.", e)
     # change precedence of + for funny results :-)
     assert_true("14 is 2 + 3 * 4.", e)
     assert_true("op(350, xfy, +).", e)
@@ -537,31 +536,31 @@ def test_atom_concat():
         "atom_concat(X, Y, abcd), atom(X), atom(Y).")
     assert len(heaps) == 5
 
-@py.test.mark.xfail
+@pytest.mark.xfail
 def test_sub_atom():
     assert_true("sub_atom(abc, B, L, A, bc), B=1, L=2, A=0.")
-@py.test.mark.xfail
+@pytest.mark.xfail
 def test_sub_atom2():
     assert_false("sub_atom(abc, B, 1, A, bc).")
-@py.test.mark.xfail
+@pytest.mark.xfail
 def test_sub_atom3():
     assert_true("sub_atom(abcabcabc, 3, 3, A, abc), A=3.")
-@py.test.mark.xfail
+@pytest.mark.xfail
 def test_sub_atom4():
     assert_true("sub_atom(abcabcabc, B, L, 3, abc), B=3, L=3.")
 
-@py.test.mark.xfail
+@pytest.mark.xfail
 def test_sub_atom_with_non_var_sub():
     assert_true("sub_atom(abcabc, Before, Length, After, a), Before=3, Length=1, After=2.")
     assert_false("sub_atom(abcabc, Before, Length, After, b), Before==3, Length==1, After==2.")
 
-@py.test.mark.xfail
+@pytest.mark.xfail
 def test_sub_atom_with_var_after():
     assert_true("sub_atom(abcabd, 2, 1, After, Sub), After=3, Sub=c.")
     assert_true("sub_atom(abcabc, Before, Length, After, Sub), Before=1, Length=3, After=2, Sub=bca.")
     assert_false("sub_atom(abcabc, 1, 3, After, Sub), Sub=abc.")
 
-@py.test.mark.xfail
+@pytest.mark.xfail
 def test_sub_atom_var_sub_and_non_var_after():
     assert_true("sub_atom(abcabd, 2, 1, 3, Sub), Sub=c.")
     assert_true("sub_atom(abcabc, Before, Length, 2, Sub), Before=1, Length=3, Sub=bca.")
@@ -615,7 +614,7 @@ def test_once():
     assert_true("once(repeat).")
 
 def test_write_term():
-    py.test.skip("test behaves funnily")
+    pytest.skip("test behaves funnily")
     prolog_raises("domain_error(write_option, E)",
                   "write_term(a, [quoted(af)])")
     prolog_raises("type_error(list, E)",

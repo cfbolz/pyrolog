@@ -1,4 +1,3 @@
-import py
 from prolog.interpreter import helper, term, error
 from prolog.interpreter import continuation
 from prolog.builtin.register import expose_builtin

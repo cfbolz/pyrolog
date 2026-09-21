@@ -1,3 +1,4 @@
+import pytest
 import py, os
 from prolog.interpreter.parsing import TermBuilder
 from prolog.interpreter.parsing import parse_query_term, get_engine
@@ -103,9 +104,9 @@ def pytest_generate_tests(metafunc):
 def test_all_tests(cmd, test, param):
     if cmd == "skip":
         if param == SKIP:
-            py.test.skip("")
+            pytest.skip("")
         elif param == XFAIL:
-            py.test.xfail("")
+            pytest.xfail("")
     elif cmd == "simple":
         try:
             if param == FAILURE:
@@ -115,22 +116,22 @@ def test_all_tests(cmd, test, param):
         except (error.UncaughtError, error.CatchableError), e:
             msg = repr(e.term)
             if 'existence_error' in msg:
-                py.test.skip(msg)
+                pytest.skip(msg)
             else:
-                py.test.xfail("")
+                pytest.xfail("")
         except:
-            py.test.xfail("")
+            pytest.xfail("")
     elif cmd == "error":
         try:
             prolog_raises(param, test)
         except UncaughtError, e:
             msg = repr(e.term)
             if 'existence_error' in msg or 'type_error' in msg:
-                py.test.skip(msg)
+                pytest.skip(msg)
             else:
-                py.test.xfail("fix me")
+                pytest.xfail("fix me")
         except:
-            py.test.xfail("")
+            pytest.xfail("")
     elif cmd == "list":
         try:
             for goal in param:
@@ -138,12 +139,12 @@ def test_all_tests(cmd, test, param):
                 try:
                     assert_true(check)
                 except:
-                    py.test.xfail("fix me")
+                    pytest.xfail("fix me")
         except (error.UncaughtError, error.CatchableError), e:
             msg = repr(e.term)
             if 'existence_error' in msg:
-                py.test.skip(msg)
+                pytest.skip(msg)
             else:
-                py.test.xfail("fix me")
+                pytest.xfail("fix me")
         except:
-            py.test.xfail("")
+            pytest.xfail("")

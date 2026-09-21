@@ -1,6 +1,5 @@
 # coding=utf-8
 
-import py
 from prolog.interpreter.continuation import Engine
 from prolog.interpreter.parsing import get_engine
 from prolog.interpreter.stream import PrologInputStream , PrologOutputStream

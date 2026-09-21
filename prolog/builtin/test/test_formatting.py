@@ -1,4 +1,3 @@
-import py
 from prolog.builtin import formatting
 from prolog.interpreter.parsing import parse_query_term
 from prolog.interpreter.continuation import Engine

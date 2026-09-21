@@ -1,4 +1,5 @@
 from __future__ import with_statement
+import pytest
 import py
 import sys, os, re
 from rpython.tool.udir import udir
@@ -11,7 +12,7 @@ app_main = str(app_main)
 
 
 class TestInteraction:
-    @py.test.mark.parametrize('query, prompt', [
+    @pytest.mark.parametrize('query, prompt', [
         ('', '>?- '),
         ('(X = a; X = b).', 'X = a'),
         ('trace.\ntrue.', 'Call: (1) true'),
@@ -33,11 +34,11 @@ class TestInteraction:
         try:
             import pexpect
         except ImportError, e:
-            py.test.skip(str(e))
+            pytest.skip(str(e))
         else:
             version = map(int, pexpect.__version__.split('.'))
             if version < [2, 1]:
-                py.test.skip(
+                pytest.skip(
                     "pexpect version too old, requires 2.1 or newer: %r" % (
                         pexpect.__version__,))
 

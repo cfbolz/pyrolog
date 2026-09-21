@@ -8,6 +8,7 @@ Run from this repository's root:
 
 ```sh
 export PYTHONPATH="$HOME/projects/gitpypy"
+pypy -m pip install -r ci/requirements.txt
 
 # Unit tests
 pypy -m pytest -q prolog/interpreter/test prolog/builtin/test prolog/prolog_modules/test
@@ -16,5 +17,5 @@ pypy -m pytest -q prolog/interpreter/test prolog/builtin/test prolog/prolog_modu
 CC=gcc-12 pypy "$PYTHONPATH/rpython/bin/rpython" --opt=jit targetprologstandalone.py
 
 # Translated tracing, JIT, and terminal regression tests
-PYROLOG_EXECUTABLE="$PWD/pyrolog-c" pypy -m pytest -q prolog/jittest/test_tracing.py
+PYROLOG_EXECUTABLE="$PWD/pyrolog-c" pypy -m pytest -q prolog/jittest
 ```

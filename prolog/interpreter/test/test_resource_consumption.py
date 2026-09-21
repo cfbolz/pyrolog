@@ -1,4 +1,4 @@
-import py
+import pytest
 from prolog.interpreter.continuation import *
 from prolog.interpreter.parsing import parse_query_term, get_engine
 from prolog.interpreter.parsing import get_query_and_vars
@@ -46,7 +46,7 @@ def test_cut():
     query = Callable.build("f", [Number(100)])
     e.run_query(query, e.modulewrapper.user_module, CheckContinuation(e))
 
-@py.test.mark.xfail # bug introduced in aa127d31df0c
+@pytest.mark.xfail # bug introduced in aa127d31df0c
 def test_exception():
     e = get_engine("""
         f(0).

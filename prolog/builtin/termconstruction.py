@@ -1,4 +1,3 @@
-import py
 from prolog.interpreter import helper, term, error, continuation
 from prolog.builtin.register import expose_builtin
 from rpython.rlib import jit

@@ -1,5 +1,4 @@
 import prolog
-import py
 import time
 from prolog.interpreter import helper, term, error
 from prolog.builtin.register import expose_builtin

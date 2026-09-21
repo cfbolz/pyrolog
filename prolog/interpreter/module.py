@@ -1,4 +1,3 @@
-import py
 from rpython.rlib import jit
 from prolog.interpreter.signature import Signature
 from prolog.interpreter import error, term

@@ -9,3 +9,9 @@ __pycache__/
 
 # Editor swap files
 *.swp
+
+# Local translation and CI outputs
+/pyrolog-c
+/translation.log
+/*-tests.xml
+/.ci-rpython/

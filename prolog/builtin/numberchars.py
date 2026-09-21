@@ -1,4 +1,3 @@
-import py
 from prolog.interpreter import term, error
 from prolog.builtin.register import expose_builtin
 from prolog.interpreter.term import Callable

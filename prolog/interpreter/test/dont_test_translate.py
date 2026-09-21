@@ -1,3 +1,4 @@
+import pytest
 from rpython.translator.interactive import Translation
 from rpython.rpython.test.test_llinterp import interpret
 from prolog.interpreter import parsing
@@ -6,7 +7,7 @@ from prolog.interpreter.test.tool import *
 
 from prolog.interpreter.conftest import option
 if not option.slow:
-    py.test.skip("slow tests")
+    pytest.skip("slow tests")
 
 def test_parser():
     def f(x):

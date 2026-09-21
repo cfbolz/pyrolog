@@ -1,4 +1,4 @@
-import py
+import pytest
 import sys
 from prolog.interpreter.parsing import TermBuilder
 from prolog.interpreter.parsing import parse_query_term, get_engine
@@ -90,28 +90,42 @@ class TestArithmeticMethod(object):
         assert Number(5).arith_div(BigInt(rbigint.fromdecimalstr('5'))).num == 1
         assert BigInt(rbigint.fromdecimalstr('5')).arith_div(Number(5)).num == 1
 
-        py.test.raises(error.CatchableError, 'BigInt(rbigint.fromdecimalstr(\'1\')).arith_div(BigInt(rbigint.fromdecimalstr(\'0\')))')
-        py.test.raises(error.CatchableError, 'BigInt(rbigint.fromdecimalstr(\'1\')).arith_div(Number(0))')
-        py.test.raises(error.CatchableError, 'BigInt(rbigint.fromdecimalstr(\'1\')).arith_div(Float(0))')
-        py.test.raises(error.CatchableError, 'Float(1).arith_div(Number(0))')
-        py.test.raises(error.CatchableError, 'Number(1).arith_div(Number(0))')
-        py.test.raises(error.CatchableError, 'Number(1).arith_div(Float(0))')
+        with pytest.raises(error.CatchableError):
+            BigInt(rbigint.fromdecimalstr('1')).arith_div(BigInt(rbigint.fromdecimalstr('0')))
+        with pytest.raises(error.CatchableError):
+            BigInt(rbigint.fromdecimalstr('1')).arith_div(Number(0))
+        with pytest.raises(error.CatchableError):
+            BigInt(rbigint.fromdecimalstr('1')).arith_div(Float(0))
+        with pytest.raises(error.CatchableError):
+            Float(1).arith_div(Number(0))
+        with pytest.raises(error.CatchableError):
+            Number(1).arith_div(Number(0))
+        with pytest.raises(error.CatchableError):
+            Number(1).arith_div(Float(0))
 
     def test_floordiv(self):
         assert Number(5).arith_floordiv(Number(2)).num == 2
         assert Number(15).arith_floordiv(Number(5)).num == 3
-        py.test.raises(error.CatchableError, "Number(5).arith_floordiv(Float(2.5))")
-        py.test.raises(error.CatchableError, "Float(2.5).arith_floordiv(Number(5))")
-        py.test.raises(error.CatchableError, "Float(-10).arith_floordiv(Float(2.5))")
+        with pytest.raises(error.CatchableError):
+            Number(5).arith_floordiv(Float(2.5))
+        with pytest.raises(error.CatchableError):
+            Float(2.5).arith_floordiv(Number(5))
+        with pytest.raises(error.CatchableError):
+            Float(-10).arith_floordiv(Float(2.5))
         assert BigInt(rbigint.fromdecimalstr('50000000000000000')).arith_floordiv(BigInt(rbigint.fromdecimalstr('25000000000000000'))).num == 2
-        py.test.raises(error.CatchableError, "BigInt(rbigint.fromdecimalstr('100000000000000000000')).arith_floordiv(Float(100000000000000000000.0))")
-        py.test.raises(error.CatchableError, "Float(100000000000000000000).arith_floordiv(BigInt(rbigint.fromdecimalstr('100000000000000000000')))")
+        with pytest.raises(error.CatchableError):
+            BigInt(rbigint.fromdecimalstr('100000000000000000000')).arith_floordiv(Float(100000000000000000000.0))
+        with pytest.raises(error.CatchableError):
+            Float(100000000000000000000).arith_floordiv(BigInt(rbigint.fromdecimalstr('100000000000000000000')))
         assert Number(5).arith_floordiv(BigInt(rbigint.fromdecimalstr('5'))).num == 1
         assert BigInt(rbigint.fromdecimalstr('5')).arith_floordiv(Number(5)).num == 1
 
-        py.test.raises(error.CatchableError, 'BigInt(rbigint.fromdecimalstr(\'1\')).arith_floordiv(BigInt(rbigint.fromdecimalstr(\'0\')))')
-        py.test.raises(error.CatchableError, 'BigInt(rbigint.fromdecimalstr(\'1\')).arith_floordiv(Number(0))')
-        py.test.raises(error.CatchableError, 'Number(1).arith_floordiv(Number(0))')
+        with pytest.raises(error.CatchableError):
+            BigInt(rbigint.fromdecimalstr('1')).arith_floordiv(BigInt(rbigint.fromdecimalstr('0')))
+        with pytest.raises(error.CatchableError):
+            BigInt(rbigint.fromdecimalstr('1')).arith_floordiv(Number(0))
+        with pytest.raises(error.CatchableError):
+            Number(1).arith_floordiv(Number(0))
 
     def test_power(self):
         assert Number(5).arith_pow(Number(2)).num == 25
@@ -129,7 +143,8 @@ class TestArithmeticMethod(object):
         assert BigInt(rbigint.fromint(256)).arith_shr(BigInt(rbigint.fromint(5))).num == 8
         assert Number(256).arith_shr(BigInt(rbigint.fromint(5))).num == 8
 
-        py.test.raises(ValueError, 'BigInt(rbigint.fromint(2)).arith_shr(BigInt(rbigint.fromdecimalstr(\'100000000000000000000000000000000000000000000000\')))')
+        with pytest.raises(ValueError):
+            BigInt(rbigint.fromint(2)).arith_shr(BigInt(rbigint.fromdecimalstr('100000000000000000000000000000000000000000000000')))
 
     def test_shl(self):
         assert Number(2).arith_shl(Number(5)).num == 64
@@ -159,9 +174,12 @@ class TestArithmeticMethod(object):
         assert BigInt(rbigint.fromint(46546)).arith_mod(Number(33)).num == 16
         assert Number(46546).arith_mod(BigInt(rbigint.fromint(33))).num == 16
 
-        py.test.raises(error.CatchableError, 'BigInt(rbigint.fromdecimalstr("12342424234")).arith_mod(BigInt(rbigint.fromint(0)))')
-        py.test.raises(error.CatchableError, 'Number(34535).arith_mod(BigInt(rbigint.fromint(0)))')
-        py.test.raises(error.CatchableError, 'BigInt(rbigint.fromdecimalstr("12342424234")).arith_mod(Number(0))')
+        with pytest.raises(error.CatchableError):
+            BigInt(rbigint.fromdecimalstr("12342424234")).arith_mod(BigInt(rbigint.fromint(0)))
+        with pytest.raises(error.CatchableError):
+            Number(34535).arith_mod(BigInt(rbigint.fromint(0)))
+        with pytest.raises(error.CatchableError):
+            BigInt(rbigint.fromdecimalstr("12342424234")).arith_mod(Number(0))
 
     def test_invert(self):
         assert Number(2345).arith_not().num == -2346
@@ -202,7 +220,7 @@ class TestArithmeticMethod(object):
 
     def test_data_types_32_bit(self):
         if is_64_bit():
-            py.test.skip("only test on 32 bit")
+            pytest.skip("only test on 32 bit")
         assert BigInt(rbigint.fromdecimalstr('348765738456378457436537854637845')).arith_mod(BigInt(rbigint.fromdecimalstr('845763478537534095'))).value.str() == '738607793931799615'
         assert BigInt(rbigint.fromdecimalstr('10')).arith_pow(BigInt(rbigint.fromdecimalstr('10'))).value.str() == '10000000000'
         assert BigInt(rbigint.fromdecimalstr('34876573845637845')).arith_xor(BigInt(rbigint.fromdecimalstr('845763478537534095'))).value.str() == '848692582328774746'
@@ -312,7 +330,7 @@ def test_comparison():
     assert_false("1 =\\= 1.0.")
     assert_true("1 =\\= 32.")
 
-@py.test.mark.xfail
+@pytest.mark.xfail
 def test_pow_error():
     prolog_raises("_", "X is (-2) ** 0.5")
 

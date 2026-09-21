@@ -1,4 +1,3 @@
-import py
 import os
 from prolog.interpreter.test.tool import get_engine, assert_true
 

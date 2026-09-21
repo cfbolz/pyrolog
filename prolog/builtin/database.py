@@ -1,4 +1,3 @@
-import py
 from prolog.interpreter import helper, term, error
 from prolog.interpreter.signature import Signature
 from prolog.builtin.register import expose_builtin

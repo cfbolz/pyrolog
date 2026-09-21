@@ -1,4 +1,4 @@
-import py
+import pytest
 import time
 from prolog.interpreter.continuation import Engine
 from prolog.interpreter.test.tool import assert_true
@@ -12,7 +12,7 @@ def test_statistics_builds_list():
     assert_true('statistics(runtime, [A,B]), number(A), number(B).', Engine())
 
 
-@py.test.mark.parametrize('stat, clock', [
+@pytest.mark.parametrize('stat, clock', [
     ('runtime', 'clock'), ('walltime', 'time'),
 ])
 def test_statistics_elapsed_milliseconds(monkeypatch, stat, clock):
@@ -35,7 +35,7 @@ def test_statistics_elapsed_milliseconds(monkeypatch, stat, clock):
     assert_true('statistics(%s, [250, 250]).' % stat, engine)
 
 
-@py.test.mark.parametrize('stat, clock', [
+@pytest.mark.parametrize('stat, clock', [
     ('runtime', 'clock'), ('walltime', 'time'),
 ])
 def test_statistics_first_call_reports_total(monkeypatch, stat, clock):

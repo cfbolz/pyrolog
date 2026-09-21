@@ -1,4 +1,3 @@
-import py
 from prolog.interpreter.test.tool import assert_true, assert_false
 
 # sionu ~=~ structural identical or not unifiable

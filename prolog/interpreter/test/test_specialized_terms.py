@@ -1,6 +1,5 @@
 from prolog.interpreter.term import Atom, Number, Term, Callable, specialized_term_classes
 from prolog.interpreter.test.tool import parse
-import py
 
     
 def test_callable_build_for_term1():

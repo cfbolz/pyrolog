@@ -1,4 +1,4 @@
-import py
+import pytest
 from prolog.interpreter.test.tool import prolog_raises, \
 assert_true, assert_false
 from prolog.interpreter.parsing import get_engine
@@ -207,7 +207,7 @@ def test_term_attvars():
     assert_true("put_attr(X, m, Y), term_variables(X, L), L == [X].")
 
 def test_term_attvars_fail_fast():
-    py.test.skip("")
+    pytest.skip("")
     e = get_engine("""
     f(1, [X]) :-
         put_attr(X, m, 1).

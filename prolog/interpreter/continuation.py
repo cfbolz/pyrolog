@@ -1,4 +1,3 @@
-import py
 import time
 from rpython.rlib import jit
 from rpython.rlib.objectmodel import we_are_translated, specialize
@@ -387,6 +386,7 @@ class ContinuationWithRule(Continuation):
 
 def view(*objects, **names):
     from dotviewer import graphclient
+    from rpython.tool.udir import udir
     content = ["digraph G{"]
     seen = set()
     for obj in list(objects) + names.values():
@@ -394,7 +394,7 @@ def view(*objects, **names):
     for key, value in names.items():
         content.append("%s -> %s" % (key, id(value)))
     content.append("}")
-    p = py.test.ensuretemp("prolog").join("temp.dot")
+    p = udir.join("prolog-temp.dot")
     p.write("\n".join(content))
     graphclient.display_dot_file(str(p))
 

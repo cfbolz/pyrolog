@@ -1,0 +1,6 @@
+# Python 2.7-compatible test dependencies.
+pytest==4.6.11
+py==1.11.0
+pexpect==4.9.0
+# PyPy bundles CFFI, which depends on pycparser.
+pycparser==2.21

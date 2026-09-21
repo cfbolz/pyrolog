@@ -1,4 +1,3 @@
-import py
 from prolog.interpreter.helper import convert_to_str, unwrap_list
 from prolog.interpreter.term import Callable, BigInt, BindingVar, Atom
 from prolog.interpreter.heap import Heap

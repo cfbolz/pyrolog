@@ -1,4 +1,4 @@
-import py, pytest
+import pytest
 
 from prolog.interpreter.parsing import get_engine
 from prolog.interpreter.parsing import get_query_and_vars
