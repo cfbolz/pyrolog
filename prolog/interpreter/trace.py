@@ -101,7 +101,12 @@ def trace_call(engine, query, rule, scont, fcont, heap):
     frame = DebugFrame(query, parent, engine.debugger.generation)
     failure = DebugFailureContinuation(engine, scont, fcont, heap, frame)
     exitcont = DebugExitContinuation(engine, scont, frame, failure)
-    return DebugCallContinuation(engine, rule, exitcont, frame), failure, heap.branch()
+    debug_heap = heap.branch()
+    # A catcher can bind an attributed variable immediately before scheduling
+    # its recovery goal. The extra debugger checkpoint must not hide its hooks.
+    debug_heap.hook = heap.hook
+    heap.hook = None
+    return DebugCallContinuation(engine, rule, exitcont, frame), failure, debug_heap
 
 
 class DebugCallContinuation(ContinuationWithRule):
@@ -172,7 +177,8 @@ def has_alternatives(fcont, stop):
     while fcont is not stop:
         if fcont.is_done():
             return False
-        if not isinstance(fcont, (DebugFailureContinuation, DebugRedoContinuation)):
+        if (not isinstance(fcont, DebugFailureContinuation) and
+                not isinstance(fcont, DebugRedoContinuation)):
             return True
         fcont = fcont.orig_fcont
     return False
@@ -182,7 +188,7 @@ def has_alternatives(fcont, stop):
 def debug_driver(scont, fcont, heap):
     """Stay outside the JIT for the rest of this query, even after notrace.
 
-Outstanding debug delimiters must still unwind when tracing is switched off.
+    Outstanding debug delimiters must still unwind when tracing is switched off.
     """
     rule = None
     while not scont.is_done():

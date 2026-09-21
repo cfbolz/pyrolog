@@ -109,6 +109,18 @@ def test_findall_and_attribute_hooks():
     assert_true("freeze(X, Y = a), X = b, Y == a.", e)
 
 
+def test_attributed_catcher_wakes_pending_hooks():
+    e, events = traced_engine(load_system=True)
+    assert_true("freeze(X, Y = a), catch(throw(ball), X, true), Y == a.", e)
+
+
+def test_backtracking_after_attributed_catcher():
+    e, events = traced_engine(load_system=True)
+    assert_true("freeze(X, Y = a), "
+                "(catch(throw(ball), X, true), fail; var(X), var(Y)), "
+                "X = b, Y == a.", e)
+
+
 class ScriptedIO(object):
     def __init__(self, commands):
         self.commands = list(commands)
