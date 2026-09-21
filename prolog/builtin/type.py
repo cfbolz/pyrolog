@@ -117,3 +117,65 @@ def impl_ground(engine, heap, var):
         finally:
             # Do not retain the term graph between calls, including failures.
             ground_state.seen = None
+
+
+ACYCLIC_BUDGET = 64
+
+
+class AcyclicState(object):
+    remaining = 0
+    seen = None
+
+    def reset(self):
+        self.remaining = ACYCLIC_BUDGET
+        self.seen = None
+
+    def consume(self):
+        self.remaining -= 1
+        if self.remaining < 0:
+            raise RetryAcyclic()
+
+
+class RetryAcyclic(Exception):
+    pass
+
+
+# Like ground, this traversal invokes no callbacks and cannot reenter itself.
+acyclic_state = AcyclicState()
+
+
+@specialize.arg(1)
+def acyclic_visit(obj, memoized):
+    if not memoized:
+        acyclic_state.consume()
+    if isinstance(obj, term.Var):
+        binding = obj.getbinding()
+        if binding is None:
+            return
+        if memoized:
+            seen = acyclic_state.seen
+            if obj in seen:
+                if not seen[obj]:
+                    raise error.UnificationFailed()
+                return
+            # False means active on this path; True means fully checked.
+            seen[obj] = False
+        acyclic_visit(binding, memoized)
+        if memoized:
+            acyclic_state.seen[obj] = True
+    elif isinstance(obj, term.Callable):
+        for i in range(obj.argument_count()):
+            acyclic_visit(obj.argument_at(i), memoized)
+
+
+@expose_builtin("acyclic_term", unwrap_spec=["raw"])
+def impl_acyclic_term(engine, heap, obj):
+    acyclic_state.reset()
+    try:
+        acyclic_visit(obj, False)
+    except RetryAcyclic:
+        acyclic_state.seen = {}
+        try:
+            acyclic_visit(obj, True)
+        finally:
+            acyclic_state.seen = None
