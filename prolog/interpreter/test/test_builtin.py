@@ -712,3 +712,10 @@ def test_atom_chars_known_atom_validates_and_completes_list():
     prolog_raises('type_error(character, 2)', 'atom_chars(ab, [X,2])')
     prolog_raises('type_error(list, [a|bad])', 'atom_chars(ab, [a|bad])')
     assert_false('atom_chars(ab, [a,c]).')
+
+
+@pytest.mark.parametrize('chars', [
+    "['-']", "[' ', '-']", "['+']", "['.']", "['-', '.']",
+])
+def test_number_chars_incomplete_number(chars):
+    prolog_raises('syntax_error(E)', 'number_chars(X, %s)' % chars)

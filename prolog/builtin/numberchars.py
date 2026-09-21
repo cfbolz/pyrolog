@@ -2,7 +2,7 @@ from prolog.interpreter import term, error
 from prolog.builtin.register import expose_builtin
 from prolog.interpreter.term import Callable
 from prolog.interpreter.term import specialized_term_classes
-from rpython.rlib.rstring import ParseStringOverflowError
+from rpython.rlib.rstring import ParseStringError, ParseStringOverflowError
 from rpython.rlib.rarithmetic import ovfcheck, string_to_int
 from rpython.rlib.rbigint import rbigint
 from prolog.interpreter.signature import Signature
@@ -59,6 +59,8 @@ def cons_to_num(charlist):
             return term.Number(string_to_int(numstr))
         except ParseStringOverflowError:
             return term.BigInt(rbigint.fromdecimalstr(numstr))
+        except ParseStringError:
+            error.throw_syntax_error("Illegal number")
     try:
         return term.Float(float(numstr))
     except ValueError:
