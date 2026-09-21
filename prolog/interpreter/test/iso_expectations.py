@@ -87,24 +87,10 @@ EXPECTATIONS = {
         xfail('Errors use error/1 instead of the expected error/2 with context', UncaughtError),
     ('char_code', 'char_code(a,Code)'):
         xfail("Parser does not support 0' character-code syntax", PrologParseError),
-    ('char_code', 'char_code(Char,99)'):
-        xfail('char_code/2 is not implemented', UncaughtError),
     ('char_code', "char_code(Char,0'c)"):
         xfail("Parser does not support 0' character-code syntax", PrologParseError),
     ('char_code', 'char_code(Char,163)'):
-        xfail('char_code/2 is not implemented', UncaughtError),
-    ('char_code', 'char_code(b,98)'):
-        xfail('char_code/2 is not implemented', UncaughtError),
-    ('char_code', 'char_code(b,4)'):
-        xfail('char_code/2 is not implemented', UncaughtError),
-    ('char_code', "char_code('ab',Code)"):
-        xfail('char_code/2 is not implemented', UncaughtError),
-    ('char_code', 'char_code(a,x)'):
-        xfail('char_code/2 is not implemented', UncaughtError),
-    ('char_code', 'char_code(Char,Code)'):
-        xfail('char_code/2 is not implemented', UncaughtError),
-    ('char_code', 'char_code(Char,-2)'):
-        xfail('char_code/2 is not implemented', UncaughtError),
+        xfail('Quoted atoms do not decode numeric character escapes', UnificationFailed),
     ('clause', 'clause(x,Body)'):
         xfail('clause/2 is not implemented', UncaughtError),
     ('clause', 'clause(_,B)'):

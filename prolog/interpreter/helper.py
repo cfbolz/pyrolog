@@ -70,6 +70,24 @@ def unwrap_char_list(prolog_list, allow_partial=False):
     return result
 
 
+def unwrap_char_code(obj):
+    """Convert a code to a byte character; atom signatures exclude NUL."""
+    if isinstance(obj, term.Var):
+        error.throw_instantiation_error()
+    if isinstance(obj, term.Number):
+        code = obj.num
+    elif isinstance(obj, term.BigInt):
+        try:
+            code = obj.value.toint()
+        except OverflowError:
+            error.throw_representation_error("character_code")
+    else:
+        error.throw_type_error("integer", obj)
+    if code <= 0 or code > 255:
+        error.throw_representation_error("character_code")
+    return chr(code)
+
+
 def is_callable(var, engine):
     return isinstance(var, term.Callable)
 

@@ -212,3 +212,15 @@ def impl_atom_chars(engine, heap, atom, charlist):
             error.throw_type_error("atom", atom)
         else:
             atom_to_cons(atom).unify(charlist, heap)
+
+
+@expose_builtin("char_code", unwrap_spec=["obj", "obj"])
+def impl_char_code(engine, heap, char, code):
+    if isinstance(char, term.Var):
+        char.unify(Callable.build(helper.unwrap_char_code(code)), heap)
+    else:
+        if not isinstance(char, term.Atom) or len(char.name()) != 1:
+            error.throw_type_error("character", char)
+        if not isinstance(code, term.Var):
+            helper.unwrap_char_code(code)
+        code.unify(term.Number(ord(char.name()[0])), heap)
