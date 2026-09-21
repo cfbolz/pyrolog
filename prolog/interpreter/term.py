@@ -249,6 +249,8 @@ class AttVar(BindingVar):
             if res is not None:
                 return res
             newvar = heap.new_attvar()
+            # Attributes may lead back to this variable.
+            memo.set(self, newvar)
             own_list = self.value_list
             newvar.attmap = self.attmap
             if own_list is None:
@@ -263,7 +265,6 @@ class AttVar(BindingVar):
                         new_values[i] = own_list[i].copy(heap, memo)
                 newvar.value_list = new_values
 
-            memo.set(self, newvar)
             return newvar
         return self.copy(heap, memo)
 
@@ -447,7 +448,17 @@ class Callable(NonVar):
             raise UnificationFailed
     
     def copy(self, heap, memo):
-        return self._copy_term(_term_copy, heap, memo)
+        result = memo.get(self)
+        if result is not None:
+            return result
+        # Memoize compounds too: dereferencing can expose shared subterms
+        # without a bound variable at every edge. Only cycles need placeholders.
+        placeholder = memo.start_compound(self, heap)
+        if placeholder is not None:
+            return placeholder
+        result = self._copy_term(_term_copy, heap, memo)
+        memo.finish_compound(self, result, heap)
+        return result
 
     def copy_standardize_apart(self, heap, env):
         return self._copy_term(_term_copy_standardize_apart, heap, env), False
