@@ -11,6 +11,7 @@ def test_driver():
     order = []
     done = DoneFailureContinuation(None)
     class FakeC(object):
+        engine = None
         rule = None
         cont_type_name = "FakeC"
         def __init__(self, next, val):
@@ -78,7 +79,8 @@ def test_failure_continuation():
             return self.next, fcont, heap
 
     class FakeE(object):
-        pass
+        from prolog.interpreter.trace import Debugger
+        debugger = Debugger()
 
     ca = FakeF(FakeC(FakeC(DoneSuccessContinuation(None), -1), 'c'), 10)
     py.test.raises(UnificationFailed, driver, FakeC(DoneSuccessContinuation(None), -1), ca, h)
