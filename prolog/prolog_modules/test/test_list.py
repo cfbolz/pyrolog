@@ -1,7 +1,46 @@
 from prolog.interpreter.continuation import Engine
 from prolog.interpreter.test.tool import collect_all, assert_false, assert_true
+import pytest
 
 e = Engine(load_system=True)
+
+@pytest.mark.parametrize('query', [
+    'reverse([], X), X == []',
+    'reverse([a,b,c], X), X == [c,b,a]',
+    'reverse(X, [a,b,c]), X == [c,b,a]',
+    'reverse([a,b,c], [c,b,a])',
+    'reverse([a|T], [c,b,a]), T == [b,c]',
+    'reverse([a,b,c], [c|T]), T == [b,a]',
+    'reverse([X,Y,X], [a,b,a]), X == a, Y == b',
+    'X = f(X), reverse([X,a], [a,Y]), X == Y',
+])
+def test_reverse(query):
+    assert_true(query + '.', e)
+
+
+@pytest.mark.parametrize('query', [
+    'reverse([a], [])', 'reverse([], [a])',
+    'reverse([a,b], [a,b])', 'reverse([a|bad], _)',
+    'reverse(_, [a|bad])',
+    'X = [a|X], reverse(X, [a,a])',
+    'X = [a|X], reverse([a,a], X)',
+])
+def test_reverse_failure(query):
+    assert_false(query + '.', e)
+
+
+@pytest.mark.parametrize('query', [
+    'reverse([a,b,c], X).', 'reverse(X, [a,b,c]).',
+    'reverse([a|T], [c,b,a]).', 'reverse([a,b,c], [c|T]).',
+])
+def test_reverse_exhausts_solutions(query):
+    assert len(collect_all(e, query)) == 1
+
+
+def test_reverse_generates_lists():
+    # With two open lists, successively longer solutions remain available.
+    assert_true('reverse(X, Y), X = [a,b,c], Y == [c,b,a].', e)
+
 def test_member():
     assert_true("member(1, [1,2,3]).", e)
 

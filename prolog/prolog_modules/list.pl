@@ -1,7 +1,14 @@
-:- module(list, [append/3, member/2, is_list/1, select/3, nextto/3, memberchk/2, subtract/3, min_member/2, max_member/2, delete/3, length/2, last/2]).
+:- module(list, [append/3, reverse/2, member/2, is_list/1, select/3, nextto/3, memberchk/2, subtract/3, min_member/2, max_member/2, delete/3, length/2, last/2]).
 
 append([], L, L).
 append([H|T], L, [H|R]) :- append(T, L, R).
+
+% The fourth argument bounds traversal by the output's length, so either
+% proper list makes the search finite (including on backtracking).
+reverse(List, Reversed) :- reverse(List, [], Reversed, Reversed).
+reverse([], Acc, Acc, []).
+reverse([Head|Tail], Acc, Reversed, [_|Bound]) :-
+    reverse(Tail, [Head|Acc], Reversed, Bound).
 
 member(E, [E|_]).
 member(E, [_|T]) :- member(E, T).
