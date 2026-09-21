@@ -1,35 +1,7 @@
 """Run against a translated binary (set PYROLOG_EXECUTABLE to select it)."""
-import os
-import subprocess
-import pytest
-from rpython.tool import logparser
 from rpython.tool.jitlogparser.parser import SimpleParser
-
-
-def run_binary(tmpdir, source, queries, jit_options="threshold=40", send_halt=True):
-    executable = os.environ.get('PYROLOG_EXECUTABLE',
-        os.path.join(os.path.dirname(__file__), '..', 'pyrolog-c'))
-    if not os.path.isfile(executable):
-        if 'PYROLOG_EXECUTABLE' in os.environ:
-            pytest.fail('PYROLOG_EXECUTABLE does not exist: ' + executable)
-        pytest.skip('build pyrolog-c or set PYROLOG_EXECUTABLE')
-    program = tmpdir.join('tracing.pl')
-    program.write(source)
-    logfile = tmpdir.join('jit.log')
-    env = os.environ.copy()
-    env['PYPYLOG'] = 'jit-log-opt,jit-summary:' + str(logfile)
-    process = subprocess.Popen(
-        [executable, '--jit', jit_options, str(program)], env=env,
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    if send_halt:
-        queries += '\nhalt.\n'
-    stdout, stderr = process.communicate(queries)
-    assert process.returncode == 0, stderr
-    assert not stderr
-    assert 'ERROR:' not in stdout
-    rawlog = logparser.parse_log_file(str(logfile))
-    loops = logparser.extract_category(rawlog, 'jit-log-opt-loop')
-    return stdout, loops
+from prolog.jittest.support import run_binary
+import pytest
 
 
 def test_compiled_loop_can_enable_tracing_and_run_again(tmpdir):

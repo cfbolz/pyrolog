@@ -63,7 +63,7 @@ jobs:
       - name: Run translated regression tests
         env:
           PYROLOG_EXECUTABLE: ${{ github.workspace }}/pyrolog-c
-        run: pypy -m pytest -q prolog/jittest/test_tracing.py --junitxml=translated-tests.xml
+        run: pypy -m pytest -q prolog/jittest --junitxml=translated-tests.xml
 
       - name: Upload test results and build artifacts
         if: always()
