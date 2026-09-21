@@ -1,0 +1,63 @@
+Predicate debugger
+==================
+
+Use trace. to enable the debugger and notrace. to disable it. The mode persists
+across console queries; the prompt displays [trace] while it is enabled.
+tracing/0 succeeds precisely when tracing is enabled.
+
+Ports are Call, Exit, Redo, Fail, and Exception. Call is reported before clause
+selection and head unification. Exit reports each solution; Redo reports a
+resumption when the call still has alternatives. Fail reports exhaustion after
+restoring the call's binding checkpoint. Exception reports each call unwound
+by throw/error propagation, stopping at a matching catch/3.
+
+Conjunction, disjunction, if-then, module qualification, cut, and the debugger
+control predicates themselves are hidden. Other builtins are visible.
+Depth describes nested predicate calls, not clause attempts. Redo displays a
+call-time text snapshot, because the next choice point has not yet undone the
+previous solution's bindings. Other ports display the current bindings.
+
+At a prompt:
+
+    enter/c   continue to the next port
+    s         skip descendants until this call exits, fails, or throws
+              (available at Call and Redo)
+    g         display the current goal and its callers
+    p         print the goal
+    w         write the goal without operator notation
+    l         disable tracing and continue
+    a         abort the query and return to the console
+    h/?       show help
+
+leash/1 controls which ports prompt for input. For example:
+
+    leash([-all]).                 % print without prompting
+    leash([-all, +call, +fail]).    % stop only at Call and Fail
+    leash([+all]).                 % restore the default
+
+Retry, forced failure, spy points, and breakpoints are not implemented. In
+particular, l does not implement "run to the next breakpoint". Aborting a
+query does not undo I/O or database updates. The debugger's abort cannot be
+intercepted by Prolog catch/3.
+
+Implementation
+--------------
+
+trace.py separates DebugFrame (goal, parent, depth) from execution state.
+Small success/failure delimiters observe calls without replacing the engine's
+clause-selection logic. The failure delimiter owns a binding checkpoint; redo
+observers own no checkpoint. Observers are excluded from the console's test
+for remaining solutions. traceconsole.py implements presentation and commands.
+Embedding code can replace engine.debugger.observer with a TraceObserver
+subclass; callbacks receive the engine, port name, and debug frame. A callback
+must copy/format bindings immediately if it wants to keep an event history.
+
+With tracing disabled, no debug frames or delimiters are allocated. Enabling
+tracing invalidates compiled assumptions about the mode and transfers the
+rest of that query to debug_driver, which has no JIT entry points. notrace
+suppresses events and new frames; existing delimiters still unwind normally.
+Subsequent queries may use the normal JIT driver again. Mode generations keep
+old frames silent if tracing is disabled and re-enabled within one query.
+
+This design follows the behavior tested on the historical tracing-support
+branch, but does not reuse its continuation wrapping or retry implementation.

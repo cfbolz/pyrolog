@@ -214,7 +214,11 @@ class Engine(object):
         if continuation is None:
             continuation = CutScopeNotifier(self, DoneSuccessContinuation(self), fcont)
         continuation = BodyContinuation(self, rule, continuation, query)
-        return driver(continuation, fcont, Heap())
+        self.debugger.enter_query()
+        try:
+            return driver(continuation, fcont, Heap())
+        finally:
+            self.debugger.leave_query()
 
     def run_query_in_current(self, query, continuation=None):
         module = self.modulewrapper.current_module

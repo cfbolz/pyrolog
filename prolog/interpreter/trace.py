@@ -20,9 +20,14 @@ class Debugger(object):
     _immutable_fields_ = ["enabled?"]
 
     def __init__(self):
+        from prolog.interpreter.traceconsole import ConsoleTraceObserver
         self.enabled = False
         self.generation = 0
-        self.observer = TraceObserver()
+        self.observer = ConsoleTraceObserver()
+        self.leashed = {"Call": True, "Exit": True, "Redo": True,
+                        "Fail": True, "Exception": True}
+        self.skip_frame = None
+        self.query_depth = 0
 
     def enable(self):
         if not self.enabled:
@@ -31,9 +36,23 @@ class Debugger(object):
 
     def disable(self):
         self.enabled = False
+        self.skip_frame = None
+
+    def enter_query(self):
+        self.query_depth += 1
+
+    def leave_query(self):
+        self.query_depth -= 1
+        if self.query_depth == 0:
+            self.skip_frame = None
 
     def event(self, engine, port, frame):
         if self.enabled and frame.generation == self.generation:
+            if self.skip_frame is not None:
+                if self.skip_frame is frame and port in ("Exit", "Fail", "Exception"):
+                    self.skip_frame = None
+                else:
+                    return
             self.observer.event(engine, port, frame)
 
 

@@ -107,3 +107,121 @@ def test_findall_and_attribute_hooks():
     e, events = traced_engine(load_system=True)
     assert_true("findall(X, (X = a; X = b), [a,b]).", e)
     assert_true("freeze(X, Y = a), X = b, Y == a.", e)
+
+
+class ScriptedIO(object):
+    def __init__(self, commands):
+        self.commands = list(commands)
+        self.output = []
+
+    def read_command(self):
+        assert self.commands, 'unexpected debugger prompt'
+        return self.commands.pop(0)
+
+    def write(self, text):
+        self.output.append(text)
+
+
+def console_engine(source, commands):
+    e = get_engine(source)
+    io = ScriptedIO(commands)
+    e.debugger.observer.io = io
+    e.debugger.enable()
+    return e, io
+
+
+def test_console_skip_and_goal_display():
+    e, io = console_engine("p :- q. q.", ['g', 'p', 'w', 'h', 'r', 'f', 's', '\n'])
+    assert_true("p.", e)
+    output = ''.join(io.output)
+    assert 'Call: (1) p' in output
+    assert 'Exit: (1) p' in output
+    assert 'Call: (2)' not in output
+    assert '[1] p' in output
+    assert 'not implemented yet' in output
+    assert not io.commands
+    assert e.debugger.skip_frame is None
+
+
+@py.test.mark.parametrize('source, query, port', [
+    ('p :- fail.', 'p.', 'Fail'),
+    ('p :- missing.', 'p.', 'Exception'),
+])
+def test_skip_stops_at_failure_or_exception(source, query, port):
+    e, io = console_engine(source, ['s', '\n'])
+    py.test.raises((error.UnificationFailed, error.UncaughtError), assert_true, query, e)
+    assert port + ': (1) p' in ''.join(io.output)
+    assert not io.commands
+    assert e.debugger.skip_frame is None
+
+
+def test_leashing_and_tracing_predicate():
+    e, io = console_engine('p.', [])
+    assert_true('leash([-all]), tracing, p.', e)
+    assert ''.join(io.output) == 'Call: (1) p\nExit: (1) p\n'
+    assert_true('leash([+call,+fail]).', e)
+    assert sorted(e.debugger.leashed) == ['Call', 'Fail']
+    assert_true('leash([+all,-exception]).', e)
+    assert sorted(e.debugger.leashed) == ['Call', 'Exit', 'Fail', 'Redo']
+    assert_true('notrace.', e)
+    assert_false('tracing.', e)
+
+
+@py.test.mark.parametrize('query', [
+    'leash(X).', 'leash([X]).', 'leash([+X]).',
+    'leash([+]).', 'leash([+missing]).', 'leash([+1]).',
+    'leash([-all,+missing]).',
+])
+def test_invalid_leash_is_atomic(query):
+    e = Engine()
+    before = e.debugger.leashed.copy()
+    py.test.raises(error.UncaughtError, assert_true, query, e)
+    assert e.debugger.leashed == before
+
+
+def test_leap_disables_output_but_preserves_backtracking():
+    e, io = console_engine('p(a). p(b).', ['l'])
+    answers = collect_all(e, 'p(X).')
+    assert [answer['X'].name() for answer in answers] == ['a', 'b']
+    assert ''.join(io.output) == 'Call: (1) p(_G0) ? Tracing disabled.\n'
+    assert not e.debugger.enabled
+
+
+def test_abort_is_not_caught_by_prolog_and_clears_debug_state():
+    from prolog.interpreter.traceconsole import DebugAbort
+    e, io = console_engine('p.', ['a'])
+    py.test.raises(DebugAbort, assert_true, 'catch(p, X, true).', e)
+    assert e.debugger.query_depth == 0
+    assert e.debugger.skip_frame is None
+    io.commands = ['\n', '\n']
+    assert_true('p.', e)
+    assert not io.commands
+
+
+def test_console_queries_and_answer_redo(monkeypatch):
+    from prolog.interpreter import translatedmain
+    e = get_engine('p(a). p(b).')
+    lines = iter(['trace.\n', 'p(X).\n', '\n', '\n', ';\n',
+                  '\n', '\n', 'notrace.\n', 'halt.\n'])
+    output = []
+    monkeypatch.setattr(translatedmain, 'readline', lambda: next(lines))
+    monkeypatch.setattr(translatedmain, 'printmessage', output.append)
+    translatedmain.repl(e)
+    output = ''.join(output)
+    assert '[trace] >?- ' in output
+    assert 'X = a' in output and 'X = b' in output
+    assert 'Redo: (1) p(_G0)' in output
+    assert output.count('Call: (1) p') == 1
+    assert not e.debugger.enabled
+
+
+def test_console_abort_returns_to_prompt(monkeypatch):
+    from prolog.interpreter import translatedmain
+    e = get_engine('p.')
+    lines = iter(['trace.\n', 'p.\n', 'a\n', 'notrace.\n', 'p.\n', 'halt.\n'])
+    output = []
+    monkeypatch.setattr(translatedmain, 'readline', lambda: next(lines))
+    monkeypatch.setattr(translatedmain, 'printmessage', output.append)
+    translatedmain.repl(e)
+    assert 'Execution aborted\n' in output
+    assert output.count('yes\n') == 3

@@ -6,6 +6,7 @@ from prolog.interpreter.parsing import get_engine
 from prolog.interpreter.continuation import Continuation, Engine, \
         DoneSuccessContinuation, DoneFailureContinuation
 from prolog.interpreter import error, term
+from prolog.interpreter.traceconsole import DebugAbort
 import prolog.interpreter.term
 prolog.interpreter.term.DEBUG = False
 
@@ -102,6 +103,8 @@ def run(query, var_to_pos, engine):
     #     printmessage("INTERNAL ERROR: %s\n" % (e.message, ))
     except StopItNow:
         printmessage("yes\n")
+    except DebugAbort:
+        printmessage("Execution aborted\n")
 
 def repl(engine):
     printmessage("welcome!\n")
@@ -111,6 +114,8 @@ def repl(engine):
             module = ""
         else:
             module += ":  "
+        if engine.debugger.enabled:
+            module = "[trace] " + module
         printmessage(module + ">?- ")
         line = readline()
         if line == "halt.\n":
