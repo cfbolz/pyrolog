@@ -66,6 +66,82 @@ def test_console_formats_cyclic_list():
     var_representation(variables, Engine(), output.append, None)
     assert output == ['X = [' + ', '.join(['a'] * 19) + '|...]\n']
 
+
+@pytest.mark.parametrize('query, expected', [
+    ('X = f(X).', '@(_G0, [_G0=f(_G0)])'),
+    ('X = [a|X].', '@(_G0, [_G0=[a|_G0]])'),
+    ('X = 1+X.', '@(_G0, [_G0=1+_G0])'),
+    ('X = (a,X).', '@(_G0, [_G0=(a, _G0)])'),
+    ('X = f(Y), Y = g(X).', '@(_G0, [_G0=f(g(_G0))])'),
+    ('C = f(C), X = pair(C,C).', '@(pair(_G0, _G0), [_G0=f(_G0)])'),
+    ('X = f(X,A).', '@(_G0, [_G0=f(_G0, _G1)])'),
+])
+def test_cycle_notation(query, expected):
+    obj = assert_true(query)['X']
+    formatter = formatting.TermFormatter(Engine())
+    assert formatter.format(obj) == expected
+
+
+@pytest.mark.parametrize('ignore_ops', [False, True])
+def test_cycle_notation_can_be_reconstructed(ignore_ops):
+    from prolog.interpreter.continuation import Heap
+    from prolog.interpreter.helper import unwrap_list
+    from prolog.builtin.unify import identical
+    obj = assert_true("A = 'with space'(A), B = [a|B], X = pair(A,B,A).")['X']
+    formatter = formatting.TermFormatter(Engine(), quoted=True, ignore_ops=ignore_ops)
+    text = formatter.format(obj)
+    display = parse_query_term(text + '.')
+    assert display.name() == '@'
+    heap = Heap()
+    for equation in unwrap_list(display.argument_at(1)):
+        equation.argument_at(0).unify(equation.argument_at(1), heap)
+    assert identical(obj, display.argument_at(0))
+
+
+def test_cycle_display_preserves_input_and_variable_names():
+    variables = assert_true('X = f(X,A).')
+    obj, free = variables['X'], variables['A']
+    formatter = formatting.TermFormatter(Engine())
+    assert formatter.format(free) == '_G0'
+    assert formatter.format(obj) == '@(_G1, [_G1=f(_G1, _G0)])'
+    assert free.getbinding() is None
+    assert obj.argument_at(0).dereference(None) is obj
+    assert formatter.format(parse_query_term('plain.')) == 'plain'
+
+
+def test_acyclic_sharing_is_not_factorized():
+    obj = assert_true('T = f(A), X = pair(T,T).')['X']
+    assert formatting.TermFormatter(Engine()).format(obj) == 'pair(f(_G0), f(_G0))'
+
+
+def test_write_cycle_options(capfd):
+    from prolog.interpreter.test.tool import prolog_raises
+    assert_true('X = [a|X], write(X).')
+    out, err = capfd.readouterr()
+    assert out == '@(_G0, [_G0=[a|_G0]])'
+    assert_true('X = f(X), write_term(X, [cycles(true),max_depth(2)]).')
+    out, err = capfd.readouterr()
+    assert out == 'f(f(...))'
+    prolog_raises('domain_error(cyclic_term, T)',
+                  'X = f(X), write_term(X, [cycles(false)])')
+    prolog_raises('domain_error(cyclic_term, T)',
+                  'X = f(X), write_term(X, [cycles(false),max_depth(2)])')
+    assert_true('write_term(f(a), [cycles(false)]).')
+    out, err = capfd.readouterr()
+    assert out == 'f(a)'
+
+
+def test_unrestricted_attribute_cycle():
+    from prolog.interpreter.continuation import Heap
+    var = Heap().new_attvar()
+    var.add_attribute('m', var)
+    formatter = formatting.TermFormatter(Engine())
+    assert formatter.format(var) == 'put_attr(_G0, m, _G0)'
+    assert not formatter.active_attvars
+    cyclic = assert_true('X = f(X).')['X']
+    var.add_attribute('m', cyclic)
+    assert formatter.format(var) == 'put_attr(_G0, m, @(_G1, [_G1=f(_G1)]))'
+
 def test_list():
     f = formatting.TermFormatter(Engine(), quoted=False, ignore_ops=False)
     t = parse_query_term("[1, 2, 3, 4, 5 | X].")
