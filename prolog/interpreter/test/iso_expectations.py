@@ -173,16 +173,12 @@ EXPECTATIONS = {
         xfail('number_chars/2 does not parse exponent notation', UncaughtError),
     ('number_chars', "number_chars(3.3,['3','.','3','E','+','0'])"):
         xfail('number_chars/2 does not parse exponent notation', UncaughtError),
-    ('number_chars', "number_chars(A,['-','2','5'])"):
-        xfail('Missing comma in the digit table concatenates 4 and 5', UncaughtError),
     ('number_chars', "number_chars(A,['\\n',' ','3'])"):
         xfail('number_chars/2 does not accept leading whitespace', UncaughtError),
     ('number_chars', "number_chars(A,['0',x,f])"):
         xfail('number_chars/2 does not parse hexadecimal notation', UncaughtError),
     ('number_chars', "number_chars(A,['0','''','A'])"):
         xfail('Parser does not support doubled quotes in quoted atoms', PrologParseError),
-    ('number_chars', "number_chars(A,['4','.','2'])"):
-        xfail('Missing comma in the digit table concatenates 4 and 5', UncaughtError),
     ('number_chars', "number_chars(A,['4','2','.','0','e','-','1'])"):
         xfail('number_chars/2 does not parse exponent notation', UncaughtError),
     ('number_chars', "number_chars(A,['4',2])"):

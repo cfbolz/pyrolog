@@ -10,7 +10,7 @@ from prolog.interpreter.helper import wrap_list
 
 conssig = Signature.getsignature(".", 2)
 num_atom_names = [str(i) for i in range(10)]
-digits = ["0", "1", "2", "3", "4"
+digits = ["0", "1", "2", "3", "4",
           "5", "6", "7", "8", "9"]
 
 def num_to_list(num):

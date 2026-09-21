@@ -621,6 +621,7 @@ def test_write_term():
                   "write_term(a, asdf)")
 
 def test_number_chars():
+    assert_true("number_chars(X, ['4', '5']), X = 45.")
     assert_true("number_chars(123, ['1', '2', '3']).")
     assert_true("number_chars(123, X), X = ['1', '2', '3'].")
     prolog_raises("type_error(text, E)", "number_chars(X, [f(a)])")
