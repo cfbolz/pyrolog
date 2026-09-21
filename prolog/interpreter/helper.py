@@ -12,6 +12,29 @@ nilsig = Signature.getsignature("[]", 0)
 
 emptylist = term.Callable.build("[]")
 
+
+class ListSpineDetector(object):
+    """Brent's cycle check, advanced alongside the consumer's traversal.
+
+    Only dereferenced tails are compared: cycles in elements are irrelevant.
+    The checkpoint moves after 1, 2, 4, ... steps, requiring constant space
+    and no extra traversal or visited dictionary.
+    """
+    def __init__(self, root):
+        self.checkpoint = root
+        self.power = 1
+        self.remaining = 1
+
+    def advance(self, tail, root):
+        if tail is self.checkpoint:
+            error.throw_type_error("list", root)
+        self.remaining -= 1
+        if self.remaining == 0:
+            self.checkpoint = tail
+            self.power *= 2
+            self.remaining = self.power
+
+
 def wrap_list(python_list):
     curr = emptylist
     for i in range(len(python_list) - 1, -1, -1):
@@ -23,7 +46,8 @@ def unwrap_list(prolog_list):
     # Grrr, stupid JIT
     result = [None]
     used = 0
-    curr = prolog_list
+    curr = prolog_list.dereference(None)
+    detector = ListSpineDetector(curr)
     while isinstance(curr, term.Callable) and curr.signature().eq(conssig):
         if used == len(result):
             nresult = [None] * (used * 2)
@@ -34,6 +58,7 @@ def unwrap_list(prolog_list):
         used += 1
         curr = curr.argument_at(1)
         curr = curr.dereference(None)
+        detector.advance(curr, prolog_list)
     if isinstance(curr, term.Callable) and curr.signature().eq(nilsig):
         if used != len(result):
             nresult = [None] * used
@@ -48,6 +73,7 @@ def unwrap_char_list(prolog_list, allow_partial=False, codes=False):
     result = []
     partial = False
     curr = prolog_list.dereference(None)
+    detector = ListSpineDetector(curr)
     while isinstance(curr, term.Callable) and curr.signature().eq(conssig):
         char = curr.argument_at(0).dereference(None)
         if isinstance(char, term.Var):
@@ -61,6 +87,7 @@ def unwrap_char_list(prolog_list, allow_partial=False, codes=False):
         else:
             result.append(char.name())
         curr = curr.argument_at(1).dereference(None)
+        detector.advance(curr, prolog_list)
     if isinstance(curr, term.Var):
         if not allow_partial:
             error.throw_instantiation_error()
