@@ -60,3 +60,38 @@ def test_atom_codes_validation():
     prolog_raises('representation_error(character_code)', 'atom_codes(a, [0])')
     assert_true("atom_codes(Atom, [1,128,255]), atom_codes(Atom, Codes), "
                 "Codes == [1,128,255].")
+
+
+def test_number_codes():
+    assert_true("number_codes(45, Codes), Codes == [52,53].")
+    assert_true("number_codes(N, [32,45,50,53]), N == -25.")
+    assert_true("number_codes(N, [52,46,50,101,43,49]), N == 42.0.")
+    assert_true("number_codes(45, [A|Tail]), A == 52, Tail == [53].")
+    assert_true("A = 52, Tail = [53], number_codes(N, [A|Tail]), N == 45.")
+    assert_false("number_codes(45, [52,54]).")
+    assert_false("number_codes(45, [52,53,46,48]).")
+
+
+@pytest.mark.parametrize('number', ['1000000000000000000000000000000', '1.0e100'])
+def test_number_codes_roundtrip(number):
+    assert_true("number_codes(%s, Codes), number_codes(N, Codes), N == %s."
+                % (number, number))
+
+
+@pytest.mark.parametrize('codes', ['Codes', '[52,X]', '[52|Tail]'])
+def test_number_codes_instantiation(codes):
+    prolog_raises('instantiation_error', 'number_codes(N, %s)' % codes)
+
+
+def test_number_codes_errors():
+    prolog_raises('type_error(number, a)', 'number_codes(a, [49])')
+    prolog_raises('type_error(integer, a)', 'number_codes(N, [a])')
+    prolog_raises('type_error(list, [49|bad])', 'number_codes(N, [49|bad])')
+    prolog_raises('representation_error(character_code)', 'number_codes(N, [256])')
+    prolog_raises('representation_error(character_code)', 'number_codes(N, [0])')
+    prolog_raises('syntax_error(E)', 'number_codes(N, [45])')
+    prolog_raises('syntax_error(E)', 'number_codes(N, [49,32])')
+
+
+def test_number_chars_completes_partial_list():
+    assert_true("number_chars(45, [A|Tail]), A == '4', Tail == ['5'].")

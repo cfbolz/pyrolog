@@ -149,8 +149,6 @@ EXPECTATIONS = {
         xfail("Parser does not support 0' character-code syntax", PrologParseError),
     ('number_codes', "number_codes(33,[0'3,0'3])"):
         xfail("Parser does not support 0' character-code syntax", PrologParseError),
-    ('number_codes', 'number_codes(33.0,L)'):
-        xfail('number_codes/2 is not implemented', UncaughtError),
     ('number_codes', "number_codes(33.0,[0'3,0'.,0'3,0'E,0'+,0'0,0'1])"):
         xfail("Parser does not support 0' character-code syntax", PrologParseError),
     ('number_codes', "number_codes(A,[0'-,0'2,0'5])"):
@@ -165,12 +163,6 @@ EXPECTATIONS = {
         xfail("Parser does not support 0' character-code syntax", PrologParseError),
     ('number_codes', "number_codes(A,[0'4,0'2,0'.,0'0,0'e,0'-,0'1])"):
         xfail("Parser does not support 0' character-code syntax", PrologParseError),
-    ('number_codes', 'number_codes(A,L)'):
-        xfail('number_codes/2 is not implemented', UncaughtError),
-    ('number_codes', 'number_codes(a,L)'):
-        xfail('number_codes/2 is not implemented', UncaughtError),
-    ('number_codes', 'number_codes(A,4)'):
-        xfail('number_codes/2 is not implemented', UncaughtError),
     ('number_codes', "number_codes(A,[ 0'1, 0'2, 1000])"):
         xfail("Parser does not support 0' character-code syntax", PrologParseError),
     ('set_prolog_flag', '(set_prolog_flag(unknown, fail), current_prolog_flag(unknown, V))'):
