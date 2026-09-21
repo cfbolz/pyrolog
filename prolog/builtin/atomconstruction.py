@@ -27,7 +27,7 @@ def impl_atom_concat(engine, heap, a1, a2, result, scont, fcont):
             s2 = helper.convert_to_str(a2)
             if r.endswith(s2):
                 stop = len(r) - len(s2)
-                assert stop > 0
+                assert stop >= 0
                 a1.unify(term.Callable.build(r[:stop], cache=False), heap)
             else:
                 raise error.UnificationFailed()

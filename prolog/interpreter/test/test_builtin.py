@@ -526,6 +526,8 @@ def test_atom_length():
     assert_true("atom_length('abc', X), X = 3.")
 
 def test_atom_concat():
+    assert_true("atom_concat(X, ab, ab), X == ''.")
+    assert_true("atom_concat(X, '', ''), X == ''.")
     assert_true("atom_concat(ab, cdef, abcdef).")
     assert_true("atom_concat(ab, cdef, X), X = abcdef.")
     assert_true("atom_concat(ab, X, abcdef), X = cdef.")
