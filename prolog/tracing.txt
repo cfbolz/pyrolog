@@ -61,3 +61,11 @@ old frames silent if tracing is disabled and re-enabled within one query.
 
 This design follows the behavior tested on the historical tracing-support
 branch, but does not reuse its continuation wrapping or retry implementation.
+
+Validation
+----------
+
+Interpreter tests live in interpreter/test/test_tracing.py. The translated
+integration tests in jittest/test_tracing.py accept PYROLOG_EXECUTABLE, or look
+for prolog/pyrolog-c by default. Build with --opt=jit to exercise the handoff
+from compiled execution and check that traced recursion does not compile.
