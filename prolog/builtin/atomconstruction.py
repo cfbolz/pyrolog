@@ -197,6 +197,8 @@ def cons_to_atom(cons):
 
 @expose_builtin("atom_chars", unwrap_spec=["obj", "obj"])
 def impl_atom_chars(engine, heap, atom, charlist):
+    if not isinstance(atom, (term.Atom, term.Var)):
+        error.throw_type_error("atom", atom)
     if not isinstance(charlist, term.Var):  
         if isinstance(atom, term.Atom):
             helper.unwrap_char_list(charlist, allow_partial=True)

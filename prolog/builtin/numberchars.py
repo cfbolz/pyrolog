@@ -68,6 +68,8 @@ def cons_to_num(charlist):
 
 @expose_builtin("number_chars", unwrap_spec=["obj", "obj"])
 def impl_number_chars(engine, heap, num, charlist):
+    if not isinstance(num, (term.Numeric, term.Var)):
+        error.throw_type_error("number", num)
     if not isinstance(charlist, term.Var):
         cons_to_num(charlist).unify(num, heap)
     else:

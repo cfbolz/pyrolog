@@ -634,7 +634,7 @@ def test_number_chars():
     prolog_raises("syntax_error(E)", "number_chars(X, ['1', '.', '2', '.'])")
     assert_true("number_chars(X, ['1', '2', '3']), X = 123.")
     prolog_raises("type_error(list, E)", "number_chars(123, 123)")
-    prolog_raises("type_error(list, E)", "number_chars(b, a)")
+    prolog_raises("type_error(number, b)", "number_chars(b, a)")
     assert_true("number_chars(-123, ['-', '1', '2', '3']).")
     assert_true("number_chars(123.1, ['1', '2', '3', '.', '1']).")
     assert_true("number_chars(1000000000000000, ['1','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0']).")
@@ -719,3 +719,9 @@ def test_atom_chars_known_atom_validates_and_completes_list():
 ])
 def test_number_chars_incomplete_number(chars):
     prolog_raises('syntax_error(E)', 'number_chars(X, %s)' % chars)
+
+
+@pytest.mark.parametrize('chars', ["['1','2','3']", '[]', 'Chars'])
+def test_chars_first_argument_type(chars):
+    prolog_raises('type_error(atom, 123)', 'atom_chars(123, %s)' % chars)
+    prolog_raises('type_error(number, foo)', 'number_chars(foo, %s)' % chars)
