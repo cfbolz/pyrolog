@@ -29,16 +29,9 @@ def run_log(tmpdir, source, queries, jit_options="threshold=40", send_halt=True)
     assert 'ERROR' not in stdout, stdout
     assert 'ParseError' not in stdout, stdout
     rawlog = logparser.parse_log_file(str(logfile))
-    loops = logparser.extract_category(rawlog, 'jit-log-opt-loop')
     log = Log(logparser.extract_category(rawlog, 'jit-log-opt-'))
     log.result = stdout
-    log.rawloops = loops
     return log
-
-
-def run_binary(*args, **kwds):
-    log = run_log(*args, **kwds)
-    return log.result, log.rawloops
 
 
 class BaseTestPyrologC(object):
