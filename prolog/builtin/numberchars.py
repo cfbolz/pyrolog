@@ -15,7 +15,7 @@ def num_to_list(num, codes=False):
     elif isinstance(num, term.Float):
         s = str(num.floatval)
         exponent = s.find('e')
-        if exponent != -1 and '.' not in s:
+        if exponent >= 0 and '.' not in s:
             s = s[:exponent] + '.0' + s[exponent:]
     elif isinstance(num, term.BigInt):
         s = num.value.str()
@@ -66,9 +66,9 @@ def parse_number(chars):
     try:
         value = float(text)
     except ValueError:
-        error.throw_syntax_error("Illegal number")
+        raise error.throw_syntax_error("Illegal number")
     except OverflowError:
-        error.throw_evaluation_error("float_overflow")
+        raise error.throw_evaluation_error("float_overflow")
     if math.isinf(value):
         error.throw_evaluation_error("float_overflow")
     return term.Float(value)
@@ -84,7 +84,7 @@ def impl_number_codes(engine, heap, num, codelist):
 
 
 def number_convert(heap, num, charlist, codes=False):
-    if not isinstance(num, (term.Numeric, term.Var)):
+    if not isinstance(num, term.Numeric) and not isinstance(num, term.Var):
         error.throw_type_error("number", num)
     chars = helper.unwrap_char_list(charlist, allow_partial=True, codes=codes)
     if chars is not None:

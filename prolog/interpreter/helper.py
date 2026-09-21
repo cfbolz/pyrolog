@@ -82,9 +82,9 @@ def unwrap_char_code(obj):
         try:
             code = obj.value.toint()
         except OverflowError:
-            error.throw_representation_error("character_code")
+            raise error.throw_representation_error("character_code")
     else:
-        error.throw_type_error("integer", obj)
+        raise error.throw_type_error("integer", obj)
     if code <= 0 or code > 255:
         error.throw_representation_error("character_code")
     return chr(code)

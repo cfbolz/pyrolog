@@ -529,10 +529,9 @@ class __extend__(term.Float):
 class __extend__(term.BigInt):
     def arith_float(self):
         try:
-            value = self.value.tofloat()
+            return term.Float(self.value.tofloat())
         except OverflowError:
             error.throw_evaluation_error("float_overflow")
-        return term.Float(value)
 
     # ------------------ addition ------------------ 
     def arith_add(self, other):

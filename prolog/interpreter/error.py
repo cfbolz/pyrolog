@@ -165,9 +165,10 @@ def throw_instantiation_error(obj = None):
 
 def throw_representation_error(signature, msg=None):
     from prolog.interpreter import term
-    args = [term.Callable.build(signature)]
-    if msg is not None:
-        args.append(term.Callable.build(msg))
+    if msg is None:
+        args = [term.Callable.build(signature)]
+    else:
+        args = [term.Callable.build(signature), term.Callable.build(msg)]
     t = term.Callable.build("representation_error", args)
     raise wrap_error(t)
 

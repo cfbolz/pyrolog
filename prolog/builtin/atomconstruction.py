@@ -209,7 +209,7 @@ def impl_atom_codes(engine, heap, atom, codelist):
 
 
 def atom_convert(heap, atom, charlist, codes=False):
-    if not isinstance(atom, (term.Atom, term.Var)):
+    if not isinstance(atom, term.Atom) and not isinstance(atom, term.Var):
         error.throw_type_error("atom", atom)
     if not isinstance(charlist, term.Var):  
         if isinstance(atom, term.Atom):
