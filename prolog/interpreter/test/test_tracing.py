@@ -28,6 +28,15 @@ def test_simple_trace():
     assert_true("notrace.")
 
 
+def test_trace_cyclic_list():
+    engine, events = traced_engine()
+    assert_true('X = [a|X], ground(X).', engine)
+    ground_events = [goal for port, depth, goal in events
+                     if goal.startswith('ground(')]
+    assert len(ground_events) == 2
+    assert all('|...' in goal and len(goal) < 200 for goal in ground_events)
+
+
 def test_ports_and_call_before_head_matching():
     e, events = traced_engine("p(a). p(b).")
     answers = collect_all(e, "p(X).")

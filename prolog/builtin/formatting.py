@@ -19,7 +19,6 @@ class TermFormatter(object):
         self.quoted = quoted
         self.max_depth = max_depth
         self.ignore_ops = ignore_ops
-        self.curr_depth = 0
         self._make_reverse_op_mapping()
         self.var_to_number = {}
     
@@ -50,11 +49,10 @@ class TermFormatter(object):
         return TermFormatter(engine, quoted, max_depth, ignore_ops)
     from_option_list = staticmethod(from_option_list)
 
-    def format(self, term):
-        self.curr_depth += 1
-        term = term.dereference(None)
-        if self.max_depth > 0 and self.curr_depth > self.max_depth:
+    def format(self, term, depth=1):
+        if self.max_depth > 0 and depth > self.max_depth:
             return "..."
+        term = term.dereference(None)
         if isinstance(term, Atom):
             return self.format_atom(term.name())
         elif isinstance(term, Number):
@@ -63,9 +61,9 @@ class TermFormatter(object):
             return self.format_float(term)
         elif helper.is_term(term):
             assert isinstance(term, Callable)
-            return self.format_term(term)
+            return self.format_term(term, depth)
         elif isinstance(term, AttVar):
-            return self.format_attvar(term)
+            return self.format_attvar(term, depth)
         elif isinstance(term, Var):
             return self.format_var(term)
         elif isinstance(term, PrologStream):
@@ -92,14 +90,14 @@ class TermFormatter(object):
     def format_float(self, num):
         return str(num.floatval)
 
-    def format_attvar(self, attvar):
+    def format_attvar(self, attvar, depth):
         l = []
         if attvar.value_list is not None:
             for name, index in attvar.attmap.indexes.iteritems():
                 value = attvar.value_list[index]
                 if value is not None:
                     l.append("put_attr(%s, %s, %s)" % (self.format_var(attvar),
-                            name, self.format(value)))
+                            name, self.format(value, depth + 1)))
         return "\n".join(l)
 
     def format_var(self, var):
@@ -109,51 +107,62 @@ class TermFormatter(object):
             num = self.var_to_number[var] = len(self.var_to_number)
         return "_G%s" % (num, )
 
-    def format_term_normally(self, term):
+    def format_term_normally(self, term, depth):
         return "%s(%s)" % (self.format_atom(term.name()),
-                           ", ".join([self.format(a) for a in term.arguments()]))
+                           ", ".join([self.format(a, depth + 1) for a in term.arguments()]))
 
-    def format_term(self, term):
+    def format_term(self, term, depth):
         if self.ignore_ops:
-            return self.format_term_normally(term)
+            return self.format_term_normally(term, depth)
         else:
-            return self.format_with_ops(term)[1]
+            return self.format_with_ops(term, depth)[1]
 
     def format_stream(self, stream):
         return "'$stream'(%d)" % stream.fd()
 
-    def format_with_ops(self, term):
+    def format_with_ops(self, term, depth):
+        if self.max_depth > 0 and depth > self.max_depth:
+            return (0, "...")
+        term = term.dereference(None)
         if not helper.is_term(term):
-            return (0, self.format(term))
+            return (0, self.format(term, depth))
         assert isinstance(term, Callable)
         if term.signature().eq(conssig):
             result = ["["]
             while helper.is_term(term) and isinstance(term, Callable) and term.signature().eq(conssig):
                 first = term.argument_at(0)
                 second = term.argument_at(1).dereference(None)
-                result.append(self.format(first))
+                result.append(self.format(first, depth + 1))
                 result.append(", ")
                 term = second
+                depth += 1
+                if (self.max_depth > 0 and depth >= self.max_depth and
+                    not (isinstance(term, Atom) and term.signature().eq(nilsig))):
+                    result[-1] = "|...]"
+                    return (0, "".join(result))
             if isinstance(term, Atom) and term.signature().eq(nilsig):
                 result[-1] = "]"
             else:
                 result[-1] = "|"
-                result.append(self.format(term))
+                result.append(self.format(term, depth))
                 result.append("]")
             return (0, "".join(result))
         if term.signature().eq(tuplesig):
             result = ["("]
-            while helper.is_term(term) and isinstance(term, Callable) and term.signature().eq(tuplesig):
+            while (helper.is_term(term) and isinstance(term, Callable) and
+                   term.signature().eq(tuplesig) and
+                   (self.max_depth <= 0 or depth <= self.max_depth)):
                 first = term.argument_at(0)
-                second = term.argument_at(1)
-                result.append(self.format(first))
+                second = term.argument_at(1).dereference(None)
+                result.append(self.format(first, depth + 1))
                 result.append(", ")
                 term = second
-            result.append(self.format(term))
+                depth += 1
+            result.append(self.format(term, depth))
             result.append(")")
             return (0, "".join(result))
         if (term.argument_count(), term.name()) not in self.op_mapping:
-            return (0, self.format_term_normally(term))
+            return (0, self.format_term_normally(term, depth))
         form, prec = self.op_mapping[(term.argument_count(), term.name())]
         result = []
         assert 0 <= term.argument_count() <= 2
@@ -162,7 +171,7 @@ class TermFormatter(object):
             if c == "f":
                 result.append(self.format_atom(term.name()))
             else:
-                childprec, child = self.format_with_ops(term.argument_at(curr_index))
+                childprec, child = self.format_with_ops(term.argument_at(curr_index), depth + 1)
                 parentheses = (c == "x" and childprec >= prec or
                                c == "y" and childprec > prec)
                 if parentheses:
