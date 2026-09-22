@@ -17,6 +17,22 @@ def plain_name(name):
     return True
 
 
+def skip_layout_backwards(text, end, colors):
+    while end > 0:
+        if text[end - 1] in ' \t\r\n':
+            end -= 1
+            continue
+        previous = end
+        for color in colors:
+            if color.tag == 'COMMENT' and color.span.end == end:
+                end = color.span.start
+                break
+        if previous == end:
+            break
+    assert end >= 0
+    return end
+
+
 class PrologCompleter(Completer):
     def __init__(self, engine):
         self.engine = engine
@@ -30,20 +46,30 @@ class PrologCompleter(Completer):
             start -= 1
         assert start >= 0
         stem = text[start:pos]
-        qualified = start > 0 and text[start - 1] == ':'
+        colors = self.highlighter.gen_colors(text)
+        separator_end = skip_layout_backwards(text, start, colors)
+        qualified = separator_end > 0 and text[separator_end - 1] == ':'
         # Start with unquoted predicate identifiers; neither variables nor
         # quoted text, comments, filenames or operators expand. An empty
         # qualified stem lists the predicates available in that module.
         if not plain_name(stem) and not (qualified and not stem):
             return Completion(pos, [])
         probe = start - 1 if not stem else start
-        for color in self.highlighter.gen_colors(text):
+        for color in colors:
             if (color.tag in ('STRING', 'COMMENT') and
                     color.span.start <= probe < color.span.end):
+                comment_start = color.span.start
+                assert comment_start >= 0
+                if (not stem and color.tag == 'COMMENT' and color.span.end == pos
+                        and text[comment_start:comment_start + 2] == '/*' and pos >= 2):
+                    last = pos - 2
+                    assert last >= 0
+                    if text[last:pos] == '*/':
+                        continue  # Just after a closed block comment.
                 return Completion(pos, [])
         module = self.engine.modulewrapper.current_module
         if qualified:
-            end = start - 1
+            end = skip_layout_backwards(text, separator_end - 1, colors)
             begin = end
             while begin > 0 and identifier_char(text[begin - 1]):
                 begin -= 1

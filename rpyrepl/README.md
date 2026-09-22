@@ -53,6 +53,7 @@ completion does not add parentheses or arguments.
 
 For example, `list:reve<Tab>` becomes `list:reverse`. `list:<Tab><Tab>`
 lists that module's predicates; `list:t<Tab>` does not suggest the builtin `true`.
+Whitespace and comments around the colon preserve the same module scope.
 
 Resize is reflected on the next input event, clearing and redrawing the
 visible terminal area. Ordinary redraws stay within the editor's area.

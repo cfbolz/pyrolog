@@ -26,7 +26,8 @@ def test_local_imported_system_and_builtin_names():
 
 @pytest.mark.parametrize('text', ['Ap', '_ap', "'ap", '"ap', '% ap',
                                   '/* ap', "f('ap')", '', ' ', '123ap',
-                                  '/* user:', '% user:', "'user:", '"user:'])
+                                  '/* user:', '% user:', "'user:", '"user:',
+                                  'user: % */'])
 def test_no_variables_quotes_comments_or_empty_completion(text):
     e = get_engine('apple.')
     assert matches(e, text) == []
@@ -72,3 +73,21 @@ def test_empty_qualified_stem_lists_predicates():
     assert matches(e, 'list:t') == []
     assert 'list:' not in result.candidates
     assert matches(e, 'missing:') == []
+
+
+@pytest.mark.parametrize('before, after', [
+    ('', ' '), (' ', ''), (' ', ' '), ('\n', '\t'),
+    (' /* qualifier */ ', ' /* predicate */ '),
+    ('/* qualifier */', '/* predicate */'),
+    (' % qualifier\n', ' % predicate\n'),
+])
+def test_qualified_completion_ignores_layout(before, after):
+    e = get_engine('', load_system=True)
+    prefix = 'list' + before + ':' + after
+    assert matches(e, prefix + 't') == []
+    assert matches(e, prefix + 'rev') == ['reverse']
+    assert matches(e, prefix) == matches(e, 'list:')
+    result = PrologCompleter(e).complete(prefix + 'rev(X)', len(prefix) + 3)
+    assert result.start == len(prefix)
+    assert result.candidates == ['reverse']
+    assert matches(e, 'missing' + before + ':' + after + 'rev') == []
