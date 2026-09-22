@@ -4,6 +4,7 @@ from prolog.interpreter.continuation import Engine
 
 
 def terminal_input(monkeypatch, text):
+    monkeypatch.setattr(translatedmain.rpyrepl, 'make_reader', lambda: None)
     chars = iter(text)
     read = translatedmain.os.read
 
@@ -70,3 +71,27 @@ def test_standalone_eof_returns_success(monkeypatch):
     import targetprologstandalone
     terminal_input(monkeypatch, '')
     assert targetprologstandalone.entry_point(['pyrolog']) == 0
+
+
+def test_query_editor_cancellation_and_eof(monkeypatch):
+    output = terminal_input(monkeypatch, '')
+
+    class Reader(object):
+        def __init__(self):
+            self.calls = 0
+
+        def readline(self, prompt):
+            assert prompt == u'>?- '
+            self.calls += 1
+            if self.calls == 1:
+                raise translatedmain.rpyrepl.CancelledInput
+            if self.calls == 2:
+                return u'X = a.'
+            raise translatedmain.rpyrepl.EndOfInput
+
+    reader = Reader()
+    monkeypatch.setattr(translatedmain.rpyrepl, 'make_reader', lambda: reader)
+    translatedmain.run_console(Engine())
+    assert reader.calls == 3
+    assert 'X = a' in ''.join(output)
+    assert 'ERROR' not in ''.join(output)

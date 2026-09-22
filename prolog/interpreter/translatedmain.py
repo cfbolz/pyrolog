@@ -1,4 +1,5 @@
 import os, sys
+import rpyrepl
 from rpython.rlib.listsort import TimSort
 from rpython.rlib.parsing.parsing import ParseError
 from rpython.rlib.parsing.deterministic import LexerError
@@ -140,6 +141,7 @@ def run(query, var_to_pos, engine):
 
 def repl(engine):
     printmessage("welcome!\n")
+    reader = rpyrepl.make_reader()
     while 1:
         module = engine.modulewrapper.current_module.name
         if module == "user":
@@ -148,8 +150,18 @@ def repl(engine):
             module += ":  "
         if engine.debugger.enabled:
             module = "[trace] " + module
-        printmessage(module + ">?- ")
-        line = readline()
+        prompt = module + ">?- "
+        if reader is None:
+            printmessage(prompt)
+            line = readline()
+        else:
+            try:
+                line = reader.readline(prompt.decode('utf-8')).encode('utf-8')
+            except rpyrepl.EndOfInput:
+                raise EndOfInput
+            except rpyrepl.CancelledInput:
+                printmessage("\n")
+                continue
         if line.strip() == "halt.":
             break
         try:

@@ -42,7 +42,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-12 make libffi-dev libgmp-dev pkg-config
+          sudo apt-get install -y gcc-12 make libffi-dev libgmp-dev libncurses-dev pkg-config
 
       - name: Install test dependencies
         run: |
@@ -53,7 +53,13 @@ jobs:
         run: >-
           pypy -m pytest -q
           prolog/interpreter/test prolog/builtin/test prolog/prolog_modules/test
+          rpyrepl/test --ignore=rpyrepl/test/test_translated.py
           --junitxml=unit-tests.xml
+
+      - name: Translate and test the standalone editor
+        run: |
+          PYTHONPATH="$PWD:$PYTHONPATH" pypy "$PYTHONPATH/rpython/bin/rpython" --batch --output=rpyrepl-c rpyrepl/test/targetrpyrepl.py
+          RPYREPL_EXECUTABLE="$PWD/rpyrepl-c" pypy -m pytest -q rpyrepl/test/test_translated.py --junitxml=editor-tests.xml
 
       - name: Translate with the JIT
         run: |
