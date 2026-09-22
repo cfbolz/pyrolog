@@ -26,6 +26,12 @@ def test_errstr_user():
     assert error.get_errstr(e) == "Unhandled exception: foo"
 
 
+def test_resource_error_display():
+    e = get_engine('')
+    error = get_uncaught_error('throw(error(resource_error(memory))).', e)
+    assert error.get_errstr(e) == 'Resource error: memory'
+
+
 @pytest.mark.parametrize('query, expected', [
     ('L = [1|L], length(L, N).',
      "Type error: 'list' expected, found ''@'(_G0, [_G0=[1|_G0]])'"),

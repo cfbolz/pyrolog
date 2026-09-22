@@ -231,16 +231,19 @@ class __extend__(term.Numeric):
         if not isinstance(self, term.Number) and not isinstance(self, term.BigInt):
             error.throw_type_error("integer", self)
         count = shift_count(other, True)
-        if isinstance(self, term.Number):
-            if count < rarithmetic.LONG_BIT:
-                try:
-                    return term.Number(rarithmetic.ovfcheck(self.num << count))
-                except OverflowError:
-                    pass
-            return make_int(term.BigInt(
-                rbigint.lshift_int_int_bigint_result(self.num, count)))
-        assert isinstance(self, term.BigInt)
-        return make_int(term.BigInt(self.value.lshift(count)))
+        try:
+            if isinstance(self, term.Number):
+                if count < rarithmetic.LONG_BIT:
+                    try:
+                        return term.Number(rarithmetic.ovfcheck(self.num << count))
+                    except OverflowError:
+                        pass
+                return make_int(term.BigInt(
+                    rbigint.lshift_int_int_bigint_result(self.num, count)))
+            assert isinstance(self, term.BigInt)
+            return make_int(term.BigInt(self.value.lshift(count)))
+        except MemoryError:
+            error.throw_resource_error("memory")
 
     def arith_shr(self, other):
         if not isinstance(self, term.Number) and not isinstance(self, term.BigInt):

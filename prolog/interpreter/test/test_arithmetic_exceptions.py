@@ -4,6 +4,8 @@ Invalid shifts must raise a catchable Prolog error. Valid comparisons and
 large right shifts must return their result rather than raise any error.
 """
 import pytest
+import subprocess
+import sys
 
 from prolog.interpreter.test.tool import assert_true, prolog_raises
 
@@ -70,3 +72,56 @@ def test_shift_requires_integer_operands(operator, left, right):
     culprit = left if left == '1.0' else right
     prolog_raises('type_error(integer, %s)' % culprit,
                   'X is %s %s %s' % (left, operator, right))
+
+
+def test_gigantic_left_shift_allocation_error_is_catchable():
+    if not sys.platform.startswith('linux'):
+        pytest.skip('uses /proc to set an allocation limit above current usage')
+    code = r'''
+import os
+import resource
+import sys
+from prolog.interpreter.continuation import Engine
+from prolog.interpreter.test.tool import assert_true
+
+engine = Engine()
+assert_true('true.', engine)
+queries = []
+for value in [1, -1, 2 ** 100, -(2 ** 100)]:
+    for count in [sys.maxint, sys.maxint - 1]:
+        query = ('catch((X is (%s) << %s, fail), '
+                 'error(resource_error(memory)), true).') % (value, count)
+        queries.append(engine.parse(query)[0][0])
+with open('/proc/self/statm') as status:
+    virtual_bytes = int(status.read().split()[0]) * os.sysconf('SC_PAGE_SIZE')
+limit = virtual_bytes + 32 * 1024 * 1024
+_, hard = resource.getrlimit(resource.RLIMIT_AS)
+if hard != resource.RLIM_INFINITY:
+    limit = min(limit, hard)
+resource.setrlimit(resource.RLIMIT_AS, (limit, hard))
+resource.setrlimit(resource.RLIMIT_CPU, (10, 10))
+for query in queries:
+    engine.run_query_in_current(query)
+# Recovery must leave the engine usable, and shifting zero needs no allocation.
+assert_true('X is 2 + 3, X = 5.', engine)
+assert_true('X is 0 << %s, X = 0.' % sys.maxint, engine)
+print('recovered')
+'''
+    process = subprocess.Popen([sys.executable, '-c', code],
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout, stderr = process.communicate()
+    assert process.returncode == 0, stderr
+    assert stdout.strip() == 'recovered'
+
+
+@pytest.mark.parametrize('value', [1, BIG])
+def test_left_shift_allocation_failure(value, monkeypatch):
+    from rpython.rlib.rbigint import rbigint
+
+    def no_memory(*args):
+        raise MemoryError
+
+    monkeypatch.setattr(rbigint, 'lshift', no_memory)
+    monkeypatch.setattr(rbigint, 'lshift_int_int_bigint_result',
+                        staticmethod(no_memory))
+    prolog_raises('resource_error(memory)', 'X is %s << 100' % value)
