@@ -1,4 +1,6 @@
-:- module(structural_comparison, ['=@='/2]).
+:- module(structural_comparison, ['=@='/2, '?='/2]).
+
+'?='(X, Y) :- \+ unifiable(X, Y, [_|_]).
 
 '=@='(A, B) :-
 	copy_term(A, A1),
