@@ -77,3 +77,55 @@ def test_every_prefix_can_be_highlighted():
         highlighted(text[:pos])
         pos = rutf8.next_codepoint_pos(text, pos)
     highlighted(text)
+
+
+def delimiter_spans(text, pos):
+    spans = PrologHighlighter().get_colors(text, pos)
+    end = 0
+    result = []
+    for color in spans:
+        assert end <= color.span.start < color.span.end <= len(text)
+        end = color.span.end
+        if color.tag in ('MATCHING_DELIMITER', 'MISMATCHED_DELIMITER'):
+            result.append((color.span.start, color.tag))
+    return result
+
+
+@pytest.mark.parametrize('text, pos, pair', [
+    ('f(a)', 1, [1, 3]), ('f(a)', 2, [1, 3]),
+    ('f(a)', 3, [1, 3]), ('f(a)', 4, [1, 3]),
+    ('([])', 1, [1, 2]), ('([])', 3, [1, 2]),
+    ('([])', 4, [0, 3]), ('[]', 2, [0, 1]), ('{}', 0, [0, 1]),
+    ('f([a,\n{b}])', 8, [6, 8]),
+    ("f(')', /* ] */ [a])", 1, [1, 18]),
+    (u'f(\'\u754c\')'.encode('utf-8'), 8, [1, 7]),
+])
+def test_matching_delimiters(text, pos, pair):
+    assert delimiter_spans(text, pos) == [(i, 'MATCHING_DELIMITER') for i in pair]
+
+
+@pytest.mark.parametrize('text, pos, bad', [
+    (')', 0, 0), (')', 1, 0), ('[)', 2, 1),
+    ('([)]', 3, 2), ('([)]', 4, 3), ('f(]', 2, 2),
+])
+def test_mismatched_delimiters(text, pos, bad):
+    assert delimiter_spans(text, pos) == [(bad, 'MISMATCHED_DELIMITER')]
+
+
+@pytest.mark.parametrize('text, pos', [
+    ('(', 1), ('f([', 3), ('f(abc)', 4), ('abc', 2), ('', 0),
+    ("'()'", 2), ('"[]"', 2), ('% ()', 4), ('/* () */', 5),
+    ("f(')", 4), ('f(/* )', 6), ('f( % )\na', 1),
+])
+def test_no_delimiter_overlay(text, pos):
+    assert delimiter_spans(text, pos) == []
+
+
+def test_overlay_moves_without_changing_syntax_spans():
+    highlighter = PrologHighlighter()
+    text = 'X = f([12]).'
+    syntax = [(s.span.start, s.span.end, s.tag) for s in highlighter.gen_colors(text)]
+    for pos in range(len(text) + 1):
+        spans = highlighter.get_colors(text, pos)
+        assert [(s.span.start, s.span.end, s.tag) for s in spans
+                if s.tag not in ('MATCHING_DELIMITER', 'MISMATCHED_DELIMITER')] == syntax

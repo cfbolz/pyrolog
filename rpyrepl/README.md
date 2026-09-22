@@ -113,3 +113,13 @@ internal disabled setting takes precedence over `FORCE_COLOR`, whose presence
 forces colour even for non-terminal output or `TERM=dumb`. There is no
 application-specific colour environment variable. Unsupported/plain-input
 terminals still use the existing fallback rather than enabling the editor.
+
+Pyrolog also highlights the adjacent matching `()`, `[]` or `{}` pair in bold
+green with an underline. A closing delimiter immediately before the cursor takes
+priority;
+otherwise the delimiter under the cursor (then an opener just before it) is
+selected. An adjacent unmatched closing delimiter is bold red with an underline.
+Unfinished opening delimiters stay plain. Quoted text and comments, including unfinished
+ones, are excluded using the syntax spans. Matches do not cross incorrectly
+nested delimiters. This cursor-dependent overlay uses `Highlighter.get_colors`
+and obeys the same colour policy as syntax highlighting.

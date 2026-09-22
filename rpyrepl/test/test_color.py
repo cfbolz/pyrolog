@@ -67,6 +67,13 @@ def test_adjacent_spans_reset_and_resume():
         color.CYAN + 'X' + color.RESET + color.YELLOW + '1' + color.RESET + '.']
 
 
+def test_delimiter_underline_resets_before_following_text():
+    spans = [ColorSpan(Span(0, 1), 'MATCHING_DELIMITER'),
+             ColorSpan(Span(2, 3), 'MISMATCHED_DELIMITER')]
+    assert Layout('(a]', 80, '', '', spans, True).screen == [
+        '\x1b[1;4;32m(' + color.RESET + 'a' + '\x1b[1;4;31m]' + color.RESET]
+
+
 def test_disabled_highlighting_does_not_call_scanner():
     class BrokenHighlighter(Highlighter):
         def gen_colors(self, text):

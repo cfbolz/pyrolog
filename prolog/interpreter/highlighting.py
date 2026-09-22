@@ -2,11 +2,14 @@
 from rpython.rlib import rutf8
 from rpython.rlib.parsing.lexer import LexingDFARunner
 from rpython.rlib.parsing.deterministic import LexerError
-from rpyrepl.highlight import Highlighter, ColorSpan, Span
+from rpyrepl.highlight import Highlighter, ColorSpan, Span, delimiter_colors
 from prolog.interpreter import parsing
 
 
 class PrologHighlighter(Highlighter):
+    def get_colors(self, text, pos):
+        return delimiter_colors(text, pos, self.gen_colors(text))
+
     def gen_colors(self, text):
         # Reuse the generated matcher and DFA, but retain IGNORE tokens so
         # comments can be styled. Never change the parser's ignore dictionary.

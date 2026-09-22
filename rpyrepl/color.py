@@ -5,6 +5,8 @@ BOLD = '\x1b[1m'
 BOLD_BLUE = '\x1b[1;34m'
 BOLD_MAGENTA = '\x1b[1;35m'
 BOLD_RED = '\x1b[1;31m'
+BOLD_GREEN_UNDERLINE = '\x1b[1;4;32m'
+BOLD_RED_UNDERLINE = '\x1b[1;4;31m'
 CYAN = '\x1b[36m'
 GREEN = '\x1b[32m'
 RED = '\x1b[31m'
@@ -25,6 +27,8 @@ THEME = {
     # Prolog-specific roles, using the same palette.
     'VARIABLE': CYAN,
     'SEARCH_FAILURE': BOLD_RED,
+    'MATCHING_DELIMITER': BOLD_GREEN_UNDERLINE,
+    'MISMATCHED_DELIMITER': BOLD_RED_UNDERLINE,
 }
 
 

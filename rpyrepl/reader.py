@@ -121,7 +121,7 @@ class Reader(object):
     def get_layout(self):
         colors = None
         if self.console.can_colorize:
-            colors = self.highlighter.gen_colors(self.buffer)
+            colors = self.highlighter.get_colors(self.buffer, self.pos)
         if self.search is not None:
             prompt = self.search.prompt()
             tag = 'SEARCH_FAILURE' if self.search.failed else 'PROMPT'

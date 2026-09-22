@@ -221,3 +221,24 @@ def test_colored_query_preserves_history_and_results(console_factory, tmpdir):
     child.close()
     assert child.exitstatus == 0
     assert tmpdir.join('history').read_binary() == query + '\n'
+
+
+def test_matching_delimiters_follow_cursor(console_factory):
+    child = console_factory(color=True)
+    prompt = '\x1b[1;35m>?- \x1b[0m'
+    child.expect_exact(prompt)
+    child.send('\x1b[200~X = f([a])\x1b[201~')
+    child.expect_exact('\x1b[1;4;32m(\x1b[0m[a]\x1b[1;4;32m)\x1b[0m')
+    child.send('\x1b[D')
+    child.expect_exact('(\x1b[1;4;32m[\x1b[0ma\x1b[1;4;32m]\x1b[0m)')
+    child.send('\x1b[C.\r')
+    child.expect_exact('X = f([a])\r\n')
+    child.expect_exact(prompt)
+    child.send('\x1b[200~X = f(]\x1b[201~')
+    child.expect_exact('(\x1b[1;4;31m]\x1b[0m')
+    child.send('\x03')
+    child.expect_exact(prompt)
+    child.send('\x04')
+    child.expect(pexpect.EOF)
+    child.close()
+    assert child.exitstatus == 0
