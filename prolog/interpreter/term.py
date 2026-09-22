@@ -47,6 +47,24 @@ class PrologObject(object):
         raise NotImplementedError("abstract base class")
     
     def contains_var(self, var, heap):
+        # Occurs checking can afford a memo on every call. Follow bindings
+        # explicitly so existing cycles do not hide their variable back-edges.
+        seen = {}
+        todo = [self]
+        while todo:
+            obj = todo.pop()
+            if isinstance(obj, Var):
+                if obj is var:
+                    return True
+                if obj in seen:
+                    continue
+                seen[obj] = None
+                binding = obj.getbinding()
+                if binding is not None:
+                    todo.append(binding)
+            elif isinstance(obj, Callable):
+                for i in range(obj.argument_count() - 1, -1, -1):
+                    todo.append(obj.argument_at(i))
         return False
     
     def eval_arithmetic(self, engine):
@@ -125,14 +143,6 @@ class Var(PrologObject):
         if isinstance(self, Var):
             return memo.get(self)
         return self.enumerate_vars(memo)
-
-    def contains_var(self, var, heap):
-        self = self.dereference(heap)
-        if self is var:
-            return True
-        if not isinstance(self, Var):
-            return self.contains_var(var, heap)
-        return False
 
     def __repr__(self):
         return "Var(%s)" % (self.getbinding(), )
@@ -213,6 +223,8 @@ class AttVar(BindingVar):
             return
         if isinstance(other, Var):
             return other._unify_derefed(self, heap, occurs_check)
+        if occurs_check and other.contains_var(self, heap):
+            raise UnificationFailed()
         return self.setvalue(other, heap)
 
     def setvalue(self, value, heap):
@@ -237,6 +249,8 @@ class AttVar(BindingVar):
             if res is not None:
                 return res
             newvar = heap.new_attvar()
+            # Attributes may lead back to this variable.
+            memo.set(self, newvar)
             own_list = self.value_list
             newvar.attmap = self.attmap
             if own_list is None:
@@ -251,7 +265,6 @@ class AttVar(BindingVar):
                         new_values[i] = own_list[i].copy(heap, memo)
                 newvar.value_list = new_values
 
-            memo.set(self, newvar)
             return newvar
         return self.copy(heap, memo)
 
@@ -435,7 +448,17 @@ class Callable(NonVar):
             raise UnificationFailed
     
     def copy(self, heap, memo):
-        return self._copy_term(_term_copy, heap, memo)
+        result = memo.get(self)
+        if result is not None:
+            return result
+        # Memoize compounds too: dereferencing can expose shared subterms
+        # without a bound variable at every edge. Only cycles need placeholders.
+        placeholder = memo.start_compound(self, heap)
+        if placeholder is not None:
+            return placeholder
+        result = self._copy_term(_term_copy, heap, memo)
+        memo.finish_compound(self, result, heap)
+        return result
 
     def copy_standardize_apart(self, heap, env):
         return self._copy_term(_term_copy_standardize_apart, heap, env), False
@@ -460,12 +483,6 @@ class Callable(NonVar):
             return Callable.build(self.name(), args, self.signature(), heap=heap)
         else:
             return self
-    
-    def contains_var(self, var, heap):
-        for arg in self.arguments():
-            if arg.contains_var(var, heap):
-                return True
-        return False
     
     def cmp_standard_order(self, other, heap):
         assert isinstance(other, Callable)

@@ -1,7 +1,46 @@
 from prolog.interpreter.continuation import Engine
-from prolog.interpreter.test.tool import collect_all, assert_false, assert_true
+from prolog.interpreter.test.tool import collect_all, assert_false, assert_true, prolog_raises
+import pytest
 
 e = Engine(load_system=True)
+
+@pytest.mark.parametrize('query', [
+    'reverse([], X), X == []',
+    'reverse([a,b,c], X), X == [c,b,a]',
+    'reverse(X, [a,b,c]), X == [c,b,a]',
+    'reverse([a,b,c], [c,b,a])',
+    'reverse([a|T], [c,b,a]), T == [b,c]',
+    'reverse([a,b,c], [c|T]), T == [b,a]',
+    'reverse([X,Y,X], [a,b,a]), X == a, Y == b',
+    'X = f(X), reverse([X,a], [a,Y]), X == Y',
+])
+def test_reverse(query):
+    assert_true(query + '.', e)
+
+
+@pytest.mark.parametrize('query', [
+    'reverse([a], [])', 'reverse([], [a])',
+    'reverse([a,b], [a,b])', 'reverse([a|bad], _)',
+    'reverse(_, [a|bad])',
+    'X = [a|X], reverse(X, [a,a])',
+    'X = [a|X], reverse([a,a], X)',
+])
+def test_reverse_failure(query):
+    assert_false(query + '.', e)
+
+
+@pytest.mark.parametrize('query', [
+    'reverse([a,b,c], X).', 'reverse(X, [a,b,c]).',
+    'reverse([a|T], [c,b,a]).', 'reverse([a,b,c], [c|T]).',
+])
+def test_reverse_exhausts_solutions(query):
+    assert len(collect_all(e, query)) == 1
+
+
+def test_reverse_generates_lists():
+    # With two open lists, successively longer solutions remain available.
+    assert_true('reverse(X, Y), X = [a,b,c], Y == [c,b,a].', e)
+
 def test_member():
     assert_true("member(1, [1,2,3]).", e)
 
@@ -117,8 +156,81 @@ def test_length():
     assert_true('length([1, a, f(h)], 3).', e)
     assert_true('length([], 0).', e)
     assert_true('length(List, 6), is_list(List), length(List, 6).', e)
-    assert_false('length(X, -1).', e)
-    assert_false('length(a, Y).', e)
+    prolog_raises('domain_error(not_less_than_zero, -1)', 'length(X, -1)', e)
+    prolog_raises('type_error(list, a)', 'length(a, Y)', e)
+
+
+@pytest.mark.parametrize('query', [
+    'length([a|T], 3), T = [_,_]',
+    'length([a|T], N), N = 3, T = [_,_]',
+    'length(L, N), N = 3, L = [_,_,_]',
+    'length([N], N), N == 1',
+    'X = f(X), length([X], N), N == 1',
+    'L = [L], length(L, N), N == 1',
+])
+def test_length_modes(query):
+    assert_true(query + '.', e)
+
+
+@pytest.mark.parametrize('query', [
+    'length(L, 0).', 'length(L, 3).', 'length([a|T], 3).',
+    'length([a,b], N).',
+])
+def test_length_exhausts_finite_solutions(query):
+    assert len(collect_all(e, query)) == 1
+
+
+@pytest.mark.parametrize('query', [
+    'length(L, L)', 'length([a|N], N)',
+    'T = N, length([a,b|T], N)',
+    'length([a,b], 1)', 'length([a], 2)',
+    'length([], 1000000000000000000000000000000)',
+    'length([a], 1000000000000000000000000000000)',
+])
+def test_length_failure(query):
+    assert_false(query + '.', e)
+
+
+@pytest.mark.parametrize('query, expected', [
+    ('length(_, -1)', 'domain_error(not_less_than_zero, -1)'),
+    ('length(_, -10000000000000000000000)',
+     'domain_error(not_less_than_zero, -10000000000000000000000)'),
+    ('length(_, 1.0)', 'type_error(integer, 1.0)'),
+    ('length(_, a)', 'type_error(integer, a)'),
+    ('length(_, 1+1)', 'type_error(integer, 1+1)'),
+    ('length(a, _)', 'type_error(list, a)'),
+    ('length([a|bad], _)', 'type_error(list, [a|bad])'),
+    ('length([a|bad], 0)', 'type_error(list, [a|bad])'),
+    ('length(a, -1)', 'domain_error(not_less_than_zero, -1)'),
+])
+def test_length_errors(query, expected):
+    prolog_raises(expected, query, e)
+
+
+@pytest.mark.parametrize('setup', ['L = [1|L]', 'T = [b,c|T], L = [a|T]'])
+@pytest.mark.parametrize('length', ['N', '0', '5'])
+def test_length_cyclic_spine(setup, length):
+    assert_true('%s, catch((length(L, %s), fail), error(type_error(list, C)), '
+                'C == L).' % (setup, length), e)
+
+
+@pytest.mark.parametrize('setup', [
+    'true', 'L = [a|T]', 'L = a', 'L = [a|bad]',
+    'L = [a|L]', 'T = [b,c|T], L = [a|T]',
+])
+def test_is_list_failure(setup):
+    assert_false('%s, is_list(L).' % setup, e)
+
+
+def test_is_list_does_not_bind_and_ignores_elements():
+    assert_true('not(is_list(L)), var(L), '
+                'not(is_list([a|T])), var(T).', e)
+    assert_true('is_list([]), is_list([X]), var(X), '
+                'X = f(X), is_list([X]), L = [L], is_list(L).', e)
+
+
+def test_is_list_available_without_loading_list_library():
+    assert_true('is_list([]), is_list([a,b]), not(is_list(X)), var(X).')
 
 def test_last():
     assert_true('last([1,2,3], 3).', e)

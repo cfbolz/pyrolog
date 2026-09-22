@@ -58,6 +58,7 @@ class EnumerationMemo(object):
 class CopyMemo(object):
     def __init__(self):
         self.seen = None
+        self.copying = None
 
     def get(self, key):
         if self.seen is None:
@@ -69,3 +70,20 @@ class CopyMemo(object):
             self.seen = {}
         self.seen[key] = val
 
+    def start_compound(self, obj, heap):
+        if self.copying is None:
+            self.copying = {}
+        if obj in self.copying:
+            placeholder = self.copying[obj]
+            if placeholder is None:
+                placeholder = heap.newvar()
+                self.copying[obj] = placeholder
+            return placeholder
+        self.copying[obj] = None
+        return None
+
+    def finish_compound(self, obj, result, heap):
+        placeholder = self.copying.pop(obj)
+        if placeholder is not None:
+            placeholder.setvalue(result, heap)
+        self.set(obj, result)

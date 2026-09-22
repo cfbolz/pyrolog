@@ -1,6 +1,7 @@
 # imports to register builtins
 import prolog.builtin.allsolution
 import prolog.builtin.arithmeticbuiltin
+import prolog.builtin.lists
 import prolog.builtin.atomconstruction
 import prolog.builtin.control
 import prolog.builtin.database
@@ -12,6 +13,7 @@ import prolog.builtin.metacall
 import prolog.builtin.source
 import prolog.builtin.termconstruction
 import prolog.builtin.unify
+import prolog.builtin.unifiable
 import prolog.builtin.numberchars
 import prolog.builtin.modules
 import prolog.builtin.streams

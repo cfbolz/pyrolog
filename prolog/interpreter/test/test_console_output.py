@@ -70,7 +70,7 @@ class TestInteraction:
 
         child.sendline("X = Y.")
         child.expect("yes")
-        self.expect_bindings(child, ["X = _G0", "Y = _G0"])
+        self.expect_bindings(child, ["Y = X"])
 
         child.sendline("X = f(a, Y), Y = 8.")
         child.expect("yes")

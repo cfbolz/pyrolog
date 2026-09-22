@@ -25,6 +25,30 @@ def test_errstr_user():
     error = get_uncaught_error("f(X).", e)
     assert error.get_errstr(e) == "Unhandled exception: foo"
 
+
+@pytest.mark.parametrize('query, expected', [
+    ('L = [1|L], length(L, N).',
+     "Type error: 'list' expected, found ''@'(_G0, [_G0=[1|_G0]])'"),
+    ('X = f(X), throw(X).', "Unhandled exception: '@'(_G0, [_G0=f(_G0)])"),
+    ('X = f(X), throw(error(domain_error(example, X))).',
+     "Domain error: 'example' expected, found ''@'(_G0, [_G0=f(_G0)])'"),
+])
+def test_cyclic_error_display(query, expected):
+    e = get_engine('', load_system=True)
+    err = get_uncaught_error(query, e)
+    assert err.get_errstr(e) == expected
+    assert err.get_errstr(e) == expected
+
+
+def test_deep_finite_error_display_stays_bounded():
+    from prolog.interpreter import term
+    from prolog.interpreter.error import TermedError
+    obj = term.Callable.build('a')
+    for i in range(3000):
+        obj = term.Callable.build('f', [obj])
+    message = TermedError(obj).get_errstr(get_engine(''))
+    assert message == 'Unhandled exception: ' + 'f(' * 20 + '...' + ')' * 20
+
 def test_exception_knows_rule():
     e = get_engine("""
         f(1).

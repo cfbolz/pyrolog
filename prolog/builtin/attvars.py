@@ -61,13 +61,20 @@ def impl_copy_term_3(engine, heap, prolog_term, copy, goals):
     X = heap.newvar()
     impl_term_attvars(engine, heap, prolog_term, X)
     attvars = unwrap_list(X.dereference(heap))
+    # Seed every attributed variable before copying any payload: attributes can
+    # lead to other attributed variables or back to themselves.
     for attvar in attvars:
-        V = heap.newvar()
-        memo.set(attvar, V)
+        memo.set(attvar, heap.newvar())
+    for attvar in attvars:
+        V = memo.get(attvar)
+        assert V is not None
         assert isinstance(attvar, AttVar)
         for module, index in attvar.attmap.indexes.iteritems():
             val = attvar.value_list[index]
-            put_attr = Callable.build("put_attr", [V, Callable.build(module), val])
+            if val is None:
+                continue  # Deleted attribute slots are retained in the map.
+            put_attr = Callable.build("put_attr", [V, Callable.build(module),
+                                                 val.copy(heap, memo)])
             gs.append(put_attr)
     prolog_term.copy(heap, memo).unify(copy, heap)
     goals.unify(wrap_list(gs), heap)
