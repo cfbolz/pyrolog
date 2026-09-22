@@ -209,10 +209,17 @@ def int_pow(base, exponent):
     result = 1
     while exponent:
         if exponent & 1:
-            result = rarithmetic.ovfcheck(result * base)
+            # The JIT requires a local exception edge for checked operations.
+            try:
+                result = rarithmetic.ovfcheck(result * base)
+            except OverflowError:
+                raise
         exponent >>= 1
         if exponent:
-            base = rarithmetic.ovfcheck(base * base)
+            try:
+                base = rarithmetic.ovfcheck(base * base)
+            except OverflowError:
+                raise
     return result
 
 
