@@ -5,6 +5,7 @@ from rpython.rlib import rtermios, rpoll, rposix, rutf8
 from rpython.rtyper.lltypesystem import lltype, rffi
 from rpyrepl import EndOfInput
 from rpyrepl.console import Console, Event
+from rpyrepl.color import can_colorize
 from rpyrepl.terminfo import InvalidTerminal, setupterm, tigetstr
 
 
@@ -17,6 +18,7 @@ class UnixConsole(Console):
     def __init__(self, input_fd=0, output_fd=1):
         self.input_fd = input_fd
         self.output_fd = output_fd
+        self.can_colorize = can_colorize(output_fd)
         self.saved = None
         self.bracketed_paste = False
         self.pending_byte = ''

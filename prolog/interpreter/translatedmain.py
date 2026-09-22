@@ -3,6 +3,7 @@ import errno
 import rpyrepl
 from rpyrepl.history import History
 from prolog.interpreter.replpolicy import PrologInputPolicy
+from prolog.interpreter.highlighting import PrologHighlighter
 from rpython.rlib.listsort import TimSort
 from rpython.rlib.parsing.parsing import ParseError
 from rpython.rlib.parsing.deterministic import LexerError
@@ -155,7 +156,8 @@ def history_filename():
 def repl(engine):
     printmessage("welcome!\n")
     history = History()
-    reader = rpyrepl.make_reader(history=history, policy=PrologInputPolicy())
+    reader = rpyrepl.make_reader(history=history, policy=PrologInputPolicy(),
+                                highlighter=PrologHighlighter())
     history_path = history_filename() if reader is not None else ''
     if history_path:
         try:

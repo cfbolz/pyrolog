@@ -18,6 +18,7 @@ def executable():
 def child(request, executable):
     env = os.environ.copy()
     env['TERM'] = 'xterm'
+    env['NO_COLOR'] = '1'
     child = pexpect.spawn(executable, env=env, timeout=10, dimensions=(24, 20))
     request.addfinalizer(lambda: child.close(force=True))
     child.expect_exact('edit> ')
@@ -93,6 +94,7 @@ def test_utf8_navigation_and_history(child):
 def test_persistent_utf8_history(executable, tmpdir):
     env = os.environ.copy()
     env['TERM'] = 'xterm'
+    env['NO_COLOR'] = '1'
     path = str(tmpdir.join('history'))
     text = u'caf\xe9\u754c\U0001f600'.encode('utf-8')
     for keys in [text + '\r', '\x1b[A\r']:
@@ -224,3 +226,30 @@ def test_pasted_controls_are_literal_and_cancel_restores_mode(child):
     child.expect(pexpect.EOF)
     child.close()
     assert child.exitstatus == 0
+
+
+@pytest.mark.parametrize('no_color, force_color, colored', [
+    (None, None, True), ('', '1', False), (None, '', True),
+])
+def test_color_environment(executable, no_color, force_color, colored):
+    env = os.environ.copy()
+    env['TERM'] = 'xterm'
+    for name, value in [('NO_COLOR', no_color), ('FORCE_COLOR', force_color)]:
+        env.pop(name, None)
+        if value is not None:
+            env[name] = value
+    child = pexpect.spawn(executable, env=env, timeout=10)
+    try:
+        prompt = '\x1b[1;35medit> \x1b[0m' if colored else 'edit> '
+        child.expect_exact(prompt)
+        if not colored:
+            assert '\x1b[1;35m' not in child.before
+        child.send('quit\r')
+        child.expect_exact('\x1b[?2004l')
+        child.expect_exact('ACCEPTED:quit\r\n')
+        assert '\x1b[' not in child.before
+        child.expect(pexpect.EOF)
+        child.close()
+        assert child.exitstatus == 0
+    finally:
+        child.close(force=True)

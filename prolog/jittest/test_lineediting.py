@@ -21,8 +21,13 @@ def console_factory(request, tmpdir, executable):
     env['TERM'] = 'xterm'
     env['PYROLOG_HISTORY'] = str(tmpdir.join('history'))
 
-    def spawn():
-        child = pexpect.spawn(executable, env=env, timeout=10)
+    def spawn(color=False):
+        child_env = env.copy()
+        child_env.pop('FORCE_COLOR', None)
+        child_env.pop('NO_COLOR', None)
+        if not color:
+            child_env['NO_COLOR'] = '1'
+        child = pexpect.spawn(executable, env=child_env, timeout=10)
         request.addfinalizer(lambda: child.close(force=True))
         return child
 
@@ -195,3 +200,24 @@ def test_bracketed_paste_query(console_factory, tmpdir):
     child.close()
     assert child.exitstatus == 0
     assert tmpdir.join('history').read_binary() == 'X = f(\r\na,\r\nb).\r\n\n'
+
+
+def test_colored_query_preserves_history_and_results(console_factory, tmpdir):
+    child = console_factory(color=True)
+    child.expect_exact('\x1b[1;35m>?- \x1b[0m')
+    query = "X = f(12, 'ab'). % comment"
+    child.send('\x1b[200~' + query + '\x1b[201~')
+    child.expect_exact('\x1b[36mX\x1b[0m')
+    child.expect_exact('\x1b[33m12\x1b[0m')
+    child.expect_exact("\x1b[32m'ab'\x1b[0m")
+    child.expect_exact('\x1b[31m% comment\x1b[0m')
+    child.send('\r')
+    child.expect_exact('\x1b[?2004l')
+    child.expect_exact('X = f(12, ab)\r\n')
+    assert '\x1b[' not in child.before
+    child.expect_exact('\x1b[1;35m>?- \x1b[0m')
+    child.send('\x04')
+    child.expect(pexpect.EOF)
+    child.close()
+    assert child.exitstatus == 0
+    assert tmpdir.join('history').read_binary() == query + '\n'

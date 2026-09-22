@@ -1,5 +1,6 @@
 """UTF-8 buffer offsets mapped to terminal rows and columns."""
 from rpython.rlib import rutf8
+from rpyrepl.color import THEME, RESET, styled
 from rpython.rlib.unicodedata import unicodedb_15_0_0 as unicodedb
 
 
@@ -44,22 +45,42 @@ class Row(object):
         self.positions = [start]
         self.columns = [column]
         self.wrapped = False
+        self.style = ''
+
+    def append(self, text, style):
+        if style != self.style:
+            self.reset_style()
+            self.text += style
+            self.style = style
+        self.text += text
+
+    def reset_style(self):
+        if self.style:
+            self.text += RESET
+            self.style = ''
 
 
 class Layout(object):
-    def __init__(self, text, width, prompt, continuation_prompt):
+    def __init__(self, text, width, prompt, continuation_prompt, colors=None,
+                 colorize=False, prompt_tag='PROMPT'):
         self.rows = []
         self.screen = []
         limit = max(1, width - 1)
         prefix, column = clip_prompt(prompt, max(0, limit - 2))
+        if colorize:
+            prefix = styled(prefix, prompt_tag)
         row = Row(prefix, column, 0)
         self.rows.append(row)
         pos = 0
+        color_index = 0
         while pos < len(text):
             code = rutf8.codepoint_at_pos(text, pos)
             end = rutf8.next_codepoint_pos(text, pos)
             if code == 10:
+                row.reset_style()
                 prefix, column = clip_prompt(continuation_prompt, max(0, limit - 2))
+                if colorize:
+                    prefix = styled(prefix, prompt_tag)
                 row = Row(prefix, column, end)
                 self.rows.append(row)
             else:
@@ -70,17 +91,25 @@ class Layout(object):
                     size, rendered = 1, '?'
                 if column + size > limit:
                     row.wrapped = True
+                    row.reset_style()
                     if width > 1:
                         row.text += '\\'
                     row = Row('', 0, pos)
                     self.rows.append(row)
                     column = 0
-                row.text += rendered
+                style = ''
+                if colorize and colors is not None:
+                    while color_index < len(colors) and colors[color_index].span.end <= pos:
+                        color_index += 1
+                    if color_index < len(colors) and colors[color_index].span.start <= pos:
+                        style = THEME[colors[color_index].tag]
+                row.append(rendered, style)
                 column += size
                 row.positions.append(end)
                 row.columns.append(column)
             pos = end
         for row in self.rows:
+            row.reset_style()
             self.screen.append(row.text)
 
     def pos_to_xy(self, pos):

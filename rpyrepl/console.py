@@ -9,6 +9,7 @@ class Event(object):
 
 
 class Console(object):
+    can_colorize = False
     width = 80
     height = 24
 

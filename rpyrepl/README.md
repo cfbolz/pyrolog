@@ -98,3 +98,18 @@ inserts into the displayed match. Invalid UTF-8 rejects the entire paste.
 An input EOF before the closing delimiter discards the unfinished paste and
 restores the terminal. Terminals without bracketed paste support still send
 ordinary key events, so their pasted newlines behave like Enter.
+
+Colour follows the CPython/pyrepl palette. Pyrolog highlights variables in cyan,
+quoted text in green, numbers in yellow and comments in red. Prompts are bold
+magenta; failed history searches use bold red. Input and saved history stay plain
+UTF-8. `Highlighter.gen_colors(text)` supplies ordered `ColorSpan(Span(start,
+end), tag)` objects, using half-open byte offsets and semantic theme tags.
+Layout applies styles while keeping display widths and cursor mapping separate;
+each physical row resets its styles so viewport clipping does not leak colour.
+
+Colour is enabled automatically for terminal output unless `TERM=dumb`.
+Presence of `NO_COLOR` disables it, even with an empty value. Otherwise an
+internal disabled setting takes precedence over `FORCE_COLOR`, whose presence
+forces colour even for non-terminal output or `TERM=dumb`. There is no
+application-specific colour environment variable. Unsupported/plain-input
+terminals still use the existing fallback rather than enabling the editor.

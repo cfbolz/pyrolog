@@ -9,6 +9,7 @@ from rpython.rlib.unicodedata import unicodedb_15_0_0 as unicodedb
 from rpyrepl.commands import COMMANDS
 from rpyrepl.layout import Layout
 from rpyrepl.policy import InputPolicy
+from rpyrepl.highlight import Highlighter
 from rpyrepl import EndOfInput, CancelledInput
 
 
@@ -18,8 +19,9 @@ def is_word(code):
 
 
 class Reader(object):
-    def __init__(self, console, history=None, policy=None):
+    def __init__(self, console, history=None, policy=None, highlighter=None):
         self.console = console
+        self.highlighter = highlighter if highlighter is not None else Highlighter()
         self.policy = policy if policy is not None else InputPolicy()
         self.continuation_prompt = '... '
         self.preferred_column = -1
@@ -117,11 +119,16 @@ class Reader(object):
             self.last_command_was_kill = False
 
     def get_layout(self):
+        colors = None
+        if self.console.can_colorize:
+            colors = self.highlighter.gen_colors(self.buffer)
         if self.search is not None:
             prompt = self.search.prompt()
-            return Layout(self.buffer, self.console.width, prompt, prompt)
+            tag = 'SEARCH_FAILURE' if self.search.failed else 'PROMPT'
+            return Layout(self.buffer, self.console.width, prompt, prompt,
+                          colors, self.console.can_colorize, tag)
         return Layout(self.buffer, self.console.width, self.prompt,
-                      self.continuation_prompt)
+                      self.continuation_prompt, colors, self.console.can_colorize)
 
     def calc_screen(self):
         layout = self.get_layout()
