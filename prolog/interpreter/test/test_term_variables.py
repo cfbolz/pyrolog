@@ -80,6 +80,7 @@ def test_short_output_stops_traversal(monkeypatch, capacity, attributes):
     ('X = f(A, Y, B), Y = g(C, X, A)', '[A,C,B]'),
     ('X = [A,B,A|X]', '[A,B]'),
     ('Y = f(A,B), X = g(Y,C,Y,A)', '[A,B,C]'),
+    ('X = f(Y,A), Y = g(X,B,A)', '[B,A]'),
 ])
 def test_cycles_and_shared_terms(setup, expected):
     assert_true('%s, term_variables(X, L), L == %s.' % (setup, expected))

@@ -48,6 +48,14 @@ def term_variables(engine, heap, prolog_term, variables, consider_attributes=Fal
             varlist.append(value)
         elif isinstance(value, Callable):
             numargs = value.argument_count()
+            if numargs == 0:
+                continue
+            # The root may already be dereferenced, so tracking bound variables
+            # alone can revisit it and change first-occurrence ordering. Also
+            # avoid repeatedly walking compounds shared without variable edges.
+            if value in seen:
+                continue
+            seen[value] = None
             for i in range(numargs - 1, -1, -1):
                 todo.append(value.argument_at(i))
     variables.unify(wrap_list(varlist), heap)
