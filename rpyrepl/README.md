@@ -132,6 +132,9 @@ plain, since current locations describe whole clauses rather than individual
 failing goals. Disabling colour also disables these links. Terminals without
 hyperlink support still display the filename. Ordinary Prolog output is unchanged.
 The `Nein` failure/no-more-solutions message is bold red when colour is enabled.
+Debugger port labels follow SWI's colours: bold green for `Call` and `Exit`,
+bold yellow for `Redo`, bold red for `Fail`, and bold magenta for `Exception`.
+Goals, depths, and debugger command prompts remain plain.
 Diagnostic formatters call `styled(text, tag, output_fd=1)` and
 `filelink(filename, output_fd=1)` directly; these helpers apply the output policy
 and return plain text when styling is disabled.
