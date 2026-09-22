@@ -2,6 +2,7 @@ import os, sys
 import errno
 import rpyrepl
 from rpyrepl.history import History
+from rpyrepl.color import styled
 from prolog.interpreter.replpolicy import PrologInputPolicy
 from prolog.interpreter.highlighting import PrologHighlighter
 from rpython.rlib.listsort import TimSort
@@ -129,9 +130,10 @@ def run(query, var_to_pos, engine):
                 query,
                 ContinueContinuation(engine, var_to_pos, printmessage))
     except error.UnificationFailed:
-        printmessage("Nein\n")
+        printmessage(styled('Nein', 'FAILURE') + '\n')
     except error.UncaughtError, e:
-        printmessage("ERROR:\n%s\n" % e.format_traceback(engine))
+        printmessage("%s\n%s\n" % (styled('ERROR:', 'ERROR_LABEL'),
+                                      e.format_traceback(engine)))
     except error.CatchableError, e:
         printmessage("ERROR: %s\n" % e.get_errstr(engine))
     except error.PrologParseError, exc:

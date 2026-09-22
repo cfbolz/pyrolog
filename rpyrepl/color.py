@@ -9,6 +9,7 @@ BOLD_GREEN_UNDERLINE = '\x1b[1;4;32m'
 BOLD_RED_UNDERLINE = '\x1b[1;4;31m'
 CYAN = '\x1b[36m'
 GREEN = '\x1b[32m'
+MAGENTA = '\x1b[35m'
 RED = '\x1b[31m'
 YELLOW = '\x1b[33m'
 RESET = '\x1b[0m'
@@ -29,6 +30,10 @@ THEME = {
     'SEARCH_FAILURE': BOLD_RED,
     'MATCHING_DELIMITER': BOLD_GREEN_UNDERLINE,
     'MISMATCHED_DELIMITER': BOLD_RED_UNDERLINE,
+    'ERROR_LABEL': BOLD_MAGENTA,
+    'ERROR_MESSAGE': MAGENTA,
+    'FAILURE': BOLD_RED,
+    'SOURCE_LOCATION': MAGENTA,
 }
 
 
@@ -44,7 +49,36 @@ def can_colorize(output_fd, enabled=True):
     return os.isatty(output_fd)
 
 
-def styled(text, tag):
-    if not text:
+def styled(text, tag, output_fd=1):
+    if not text or not can_colorize(output_fd):
         return text
     return THEME[tag] + text + RESET
+
+
+def filelink(filename, output_fd=1):
+    """OSC 8 file link, as in PyPy's traceback formatter.
+
+    Escape URI bytes (including UTF-8) and control characters in the label.
+    Keep pseudo filenames such as <stdin> as plain text.
+    """
+    if (not filename or not can_colorize(output_fd) or
+            (filename.startswith('<') and filename.endswith('>'))):
+        return filename
+    path = os.path.abspath(filename)
+    uri = ['file://']
+    hexchars = '0123456789ABCDEF'
+    for char in path:
+        code = ord(char)
+        if ('a' <= char <= 'z' or 'A' <= char <= 'Z' or
+                '0' <= char <= '9' or char in '/-._~'):
+            uri.append(char)
+        else:
+            uri.append('%' + hexchars[code >> 4] + hexchars[code & 15])
+    label = []
+    for char in filename:
+        code = ord(char)
+        if code < 32 or code == 127:
+            label.append('\\x' + hexchars[code >> 4] + hexchars[code & 15])
+        else:
+            label.append(char)
+    return '\x1b]8;;' + ''.join(uri) + '\x1b\\' + ''.join(label) + '\x1b]8;;\x1b\\'

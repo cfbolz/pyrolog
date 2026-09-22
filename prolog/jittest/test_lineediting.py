@@ -242,3 +242,54 @@ def test_matching_delimiters_follow_cursor(console_factory):
     child.expect(pexpect.EOF)
     child.close()
     assert child.exitstatus == 0
+
+
+@pytest.mark.parametrize('color', [False, True])
+def test_traceback_colors_and_file_links(console_factory, tmpdir, color):
+    path = tmpdir.join('trace file #1.pl')
+    path.write('outer :- inner, true.\ninner :- throw(oops).\n')
+    child = console_factory(color=color)
+    prompt = '\x1b[1;35m>?- \x1b[0m' if color else '>?- '
+    child.expect_exact(prompt)
+    child.send("consult('%s').\r" % str(path))
+    child.expect_exact(prompt)
+    child.send('outer.\r')
+    child.expect_exact('Unhandled exception: oops')
+    output = child.before
+    if color:
+        uri = 'file://' + str(path).replace(' ', '%20').replace('#', '%23')
+        assert '\x1b[1;35mERROR:\x1b[0m' in output
+        assert '\x1b]8;;' + uri + '\x1b\\' + str(path) + '\x1b]8;;\x1b\\' in output
+        assert '\x1b[35muser:outer/0\x1b[0m' in output
+    else:
+        assert 'ERROR:\r\nTraceback' in output
+        assert 'File "%s"' % str(path) in output
+        assert '\x1b]8;' not in output
+        assert '\x1b[35m' not in output
+    child.expect_exact(prompt)
+    child.send('\x04')
+    child.expect(pexpect.EOF)
+    child.close()
+    assert child.exitstatus == 0
+
+
+@pytest.mark.parametrize('color', [False, True])
+def test_no_more_solutions_color(console_factory, color):
+    child = console_factory(color=color)
+    prompt = '\x1b[1;35m>?- \x1b[0m' if color else '>?- '
+    failure = '\x1b[1;31mNein\x1b[0m\r\n' if color else 'Nein\r\n'
+    child.expect_exact(prompt)
+    child.send('fail.\r')
+    child.expect_exact(failure)
+    child.expect_exact(prompt)
+    child.send('(X = a; X = b; fail).\r')
+    child.expect_exact('X = a\r\n')
+    child.send(';\r')
+    child.expect_exact('X = b\r\n')
+    child.send(';\r')
+    child.expect_exact(failure)
+    child.expect_exact(prompt)
+    child.send('\x04')
+    child.expect(pexpect.EOF)
+    child.close()
+    assert child.exitstatus == 0

@@ -95,3 +95,42 @@ def test_failed_search_style_and_plain_buffer():
     assert screen[0].startswith(color.BOLD_RED)
     assert r.buffer == 'draft'
     assert r.search.term == 'missing'
+
+
+@pytest.fixture
+def enabled_colors(monkeypatch):
+    monkeypatch.delenv('NO_COLOR', raising=False)
+    monkeypatch.setenv('FORCE_COLOR', '1')
+
+
+def test_filelink_absolute_uri_and_original_label(monkeypatch, tmpdir, enabled_colors):
+    monkeypatch.chdir(str(tmpdir))
+    filename = u'caf\xe9 #%.pl'.encode('utf-8')
+    uri = 'file://' + str(tmpdir) + '/caf%C3%A9%20%23%25.pl'
+    assert color.filelink(filename) == '\x1b]8;;' + uri + '\x1b\\' + filename + '\x1b]8;;\x1b\\'
+
+
+@pytest.mark.parametrize('name', ['', '<stdin>', '<unknown>'])
+def test_filelink_omits_pseudo_filenames(name, enabled_colors):
+    assert color.filelink(name) == name
+
+
+def test_filelink_control_bytes_cannot_end_the_link(enabled_colors):
+    result = color.filelink('/tmp/a\x1b\x07\n.pl')
+    assert 'file:///tmp/a%1B%07%0A.pl' in result
+    assert '/tmp/a\\x1B\\x07\\x0A.pl' in result
+    assert result.count('\x1b]8;;') == 2
+
+
+def test_styling_helpers_apply_output_policy(monkeypatch):
+    monkeypatch.delenv('NO_COLOR', raising=False)
+    monkeypatch.delenv('FORCE_COLOR', raising=False)
+    monkeypatch.delenv('TERM', raising=False)
+    monkeypatch.setattr(os, 'isatty', lambda fd: fd == 17)
+    assert color.styled('Nein', 'FAILURE', 17) == color.BOLD_RED + 'Nein' + color.RESET
+    assert color.styled('Nein', 'FAILURE', 18) == 'Nein'
+    assert '\x1b]8;' in color.filelink('/tmp/a.pl', 17)
+    assert color.filelink('/tmp/a.pl', 18) == '/tmp/a.pl'
+    monkeypatch.setenv('NO_COLOR', '')
+    assert color.styled('Nein', 'FAILURE', 17) == 'Nein'
+    assert color.filelink('/tmp/a.pl', 17) == '/tmp/a.pl'

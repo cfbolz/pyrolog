@@ -1,6 +1,6 @@
 """UTF-8 buffer offsets mapped to terminal rows and columns."""
 from rpython.rlib import rutf8
-from rpyrepl.color import THEME, RESET, styled
+from rpyrepl.color import THEME, RESET
 from rpython.rlib.unicodedata import unicodedb_15_0_0 as unicodedb
 
 
@@ -67,8 +67,8 @@ class Layout(object):
         self.screen = []
         limit = max(1, width - 1)
         prefix, column = clip_prompt(prompt, max(0, limit - 2))
-        if colorize:
-            prefix = styled(prefix, prompt_tag)
+        if colorize and prefix:
+            prefix = THEME[prompt_tag] + prefix + RESET
         row = Row(prefix, column, 0)
         self.rows.append(row)
         pos = 0
@@ -79,8 +79,8 @@ class Layout(object):
             if code == 10:
                 row.reset_style()
                 prefix, column = clip_prompt(continuation_prompt, max(0, limit - 2))
-                if colorize:
-                    prefix = styled(prefix, prompt_tag)
+                if colorize and prefix:
+                    prefix = THEME[prompt_tag] + prefix + RESET
                 row = Row(prefix, column, end)
                 self.rows.append(row)
             else:

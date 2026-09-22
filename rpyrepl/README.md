@@ -123,3 +123,15 @@ Unfinished opening delimiters stay plain. Quoted text and comments, including un
 ones, are excluded using the syntax spans. Matches do not cross incorrectly
 nested delimiters. This cursor-dependent overlay uses `Highlighter.get_colors`
 and obeys the same colour policy as syntax highlighting.
+
+Pyrolog's runtime tracebacks use the same colour policy: bold magenta for the
+error label/context and magenta for the message and source locations. Real
+filenames become OSC 8 terminal hyperlinks to absolute, URL-escaped `file://`
+paths; pseudo filenames such as `<stdin>` remain unlinked. Source excerpts stay
+plain, since current locations describe whole clauses rather than individual
+failing goals. Disabling colour also disables these links. Terminals without
+hyperlink support still display the filename. Ordinary Prolog output is unchanged.
+The `Nein` failure/no-more-solutions message is bold red when colour is enabled.
+Diagnostic formatters call `styled(text, tag, output_fd=1)` and
+`filelink(filename, output_fd=1)` directly; these helpers apply the output policy
+and return plain text when styling is disabled.

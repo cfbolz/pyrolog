@@ -1,4 +1,5 @@
 from rpython.rlib import rstring
+from rpyrepl.color import styled, filelink
 
 class EndOfInput(Exception):
     """Terminal EOF, including while choosing an answer or debugging."""
@@ -83,9 +84,10 @@ class UncaughtError(TermedError):
         self.rule = rule_likely_source
         self.traceback = _construct_traceback(scont)
 
-    def format_traceback(self, engine):
+    def format_traceback(self, engine, output_fd=1):
         out = ["Traceback (most recent call last):"]
-        self.traceback._format(out)
+        if self.traceback is not None:
+            self.traceback._format(out, output_fd)
         context = ""
         if self.sig_context is not None:
             context = self.sig_context.string()
@@ -93,7 +95,10 @@ class UncaughtError(TermedError):
                 context = ""
             else:
                 context += ": "
-        out.append("%s%s" % (context, self.get_errstr(engine)))
+        message = self.get_errstr(engine)
+        context = styled(context, 'ERROR_LABEL', output_fd)
+        message = styled(message, 'ERROR_MESSAGE', output_fd)
+        out.append("%s%s" % (context, message))
         return "\n".join(out)
 
 
@@ -105,7 +110,7 @@ class TraceFrame(object):
     def __repr__(self):
         return "TraceFrame(%r, %r)" % (self.rule, self.next)
 
-    def _format(self, out):
+    def _format(self, out, output_fd=1):
         rule = self.rule
         if rule.line_range is not None:
             if rule.line_range[0] + 1 ==  rule.line_range[1]:
@@ -114,15 +119,18 @@ class TraceFrame(object):
                 lines = "lines %s-%s " % (rule.line_range[0] + 1, rule.line_range[1])
         else:
             lines = ""
-        out.append("  File \"%s\" %sin %s:%s" % (
-            rule.file_name, lines,
-            rule.module.name, rule.signature.string()))
+        filename = rule.file_name
+        predicate = '%s:%s' % (rule.module.name, rule.signature.string())
+        filename = styled(filelink(filename, output_fd), 'SOURCE_LOCATION', output_fd)
+        lines = styled(lines, 'SOURCE_LOCATION', output_fd)
+        predicate = styled(predicate, 'SOURCE_LOCATION', output_fd)
+        out.append("  File \"%s\" %sin %s" % (filename, lines, predicate))
         source = rule.source
         if source is not None:
             # poor man's indent
             out.append("    " + rstring.replace(source, "\n", "\n    "))
         if self.next is not None:
-            self.next._format(out)
+            self.next._format(out, output_fd)
 
 def _construct_traceback(scont):
     from prolog.interpreter.continuation import ContinuationWithRule
