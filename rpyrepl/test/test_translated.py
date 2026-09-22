@@ -108,3 +108,22 @@ def test_persistent_utf8_history(executable, tmpdir):
             assert child.exitstatus == 0
         finally:
             child.close(force=True)
+
+
+@pytest.mark.parametrize('keys, expected', [
+    ('one_two three\x1b[1;5D\x1bdnew\r', 'one_two new'),
+    ('one two\x1bOd\x1bOc!\r', 'one two!'),
+    ('one two\x1bb\x1bdthree\x1bb\x1bf!\r', 'one three!'),
+    ('one two\x1b\x7fX\x17Y\r', 'one Y'),
+    ('one two\x1bb\x0b\x15\x19\r', 'one two'),
+    (u'caf\xe9 \u754c\u754c'.encode('utf-8') + '\x1b[1;5D\x1bd\x19\r',
+     u'caf\xe9 \u754c\u754c'.encode('utf-8')),
+])
+def test_word_commands(child, keys, expected):
+    child.send(keys)
+    child.expect_exact('ACCEPTED:' + expected + '\r\n')
+    child.expect_exact('edit> ')
+    child.send('\x04')
+    child.expect(pexpect.EOF)
+    child.close()
+    assert child.exitstatus == 0

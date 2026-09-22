@@ -4,6 +4,8 @@ from rpython.rlib import rutf8
 
 
 class Command(object):
+    kills = False
+
     def do(self, reader, event):
         raise NotImplementedError
 
@@ -57,6 +59,45 @@ class end_of_line(Command):
         reader.pos = len(reader.buffer)
 
 
+class backward_word(Command):
+    def do(self, reader, event):
+        reader.pos = reader.bow()
+
+
+class forward_word(Command):
+    def do(self, reader, event):
+        reader.pos = reader.eow()
+
+
+class KillCommand(Command):
+    kills = True
+
+
+class backward_kill_word(KillCommand):
+    def do(self, reader, event):
+        reader.kill_range(reader.bow(), reader.pos)
+
+
+class kill_word(KillCommand):
+    def do(self, reader, event):
+        reader.kill_range(reader.pos, reader.eow())
+
+
+class unix_line_discard(KillCommand):
+    def do(self, reader, event):
+        reader.kill_range(0, reader.pos)
+
+
+class kill_line(KillCommand):
+    def do(self, reader, event):
+        reader.kill_range(reader.pos, len(reader.buffer))
+
+
+class yank(Command):
+    def do(self, reader, event):
+        reader.insert(reader.kill_buffer)
+
+
 class accept(Command):
     def do(self, reader, event):
         reader.finished = True
@@ -84,4 +125,8 @@ COMMANDS = {
     'home': beginning_of_line(), 'end': end_of_line(),
     'accept': accept(), 'cancel': cancel(),
     'up': previous_history(), 'down': next_history(),
+    'backward-word': backward_word(), 'forward-word': forward_word(),
+    'backward-kill-word': backward_kill_word(), 'kill-word': kill_word(),
+    'unix-line-discard': unix_line_discard(), 'kill-line': kill_line(),
+    'yank': yank(),
 }

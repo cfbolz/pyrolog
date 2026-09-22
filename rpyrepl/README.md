@@ -8,6 +8,14 @@ horizontal scrolling, UTF-8 input, and terminfo capabilities on Unix.
 Supported keys: printable text, Backspace, Delete, Left/Right, Home/End,
 Ctrl-A/B/E/F, Up/Down and Ctrl-P/N (history), Enter, Ctrl-D (EOF on an empty
 buffer), and Ctrl-C (cancel input).
+Alt-B/F and Ctrl-Left/Right move by words. Ctrl-arrow sequences from xterm
+compatible terminals and rxvt are supported. Ctrl-W and Alt-Backspace delete
+the preceding word; Alt-D deletes the following word. These use the same word
+boundaries: Unicode letters, numbers, combining marks, and underscore belong
+to words; punctuation separates them. Ctrl-U/K delete to the beginning/end
+of the buffer. Ctrl-Y reinserts deleted text; consecutive deletion commands
+combine their text in order. There is one saved deletion, retained across
+queries, rather than a full kill ring.
 Completion, colourization, multiline editing, and bracketed paste
 are not implemented yet. Resize is reflected on the next input event.
 

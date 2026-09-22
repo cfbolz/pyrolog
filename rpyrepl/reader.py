@@ -31,6 +31,11 @@ def display_width(code):
     return 2 if code < 32 or code == 127 else char_width(code)
 
 
+def is_word(code):
+    # Keep identifiers and decomposed accents together without language syntax.
+    return code == 95 or unicodedb.isalnum(code) or unicodedb.category(code).startswith('M')
+
+
 class Reader(object):
     def __init__(self, console, history=None):
         self.console = console
@@ -44,6 +49,8 @@ class Reader(object):
         self.finished = False
         self.view_start = 0
         self.cxy = (0, 0)
+        self.kill_buffer = ''
+        self.last_command_was_kill = False
 
     def insert(self, text):
         rutf8.check_utf8(text, allow_surrogates=False)
@@ -54,6 +61,47 @@ class Reader(object):
 
     def get_utf8(self):
         return self.buffer
+
+    def word_at(self, pos):
+        return is_word(rutf8.codepoint_at_pos(self.buffer, pos))
+
+    def bow(self):
+        pos = self.pos
+        while pos > 0:
+            previous = rutf8.prev_codepoint_pos(self.buffer, pos)
+            if self.word_at(previous):
+                break
+            pos = previous
+        while pos > 0:
+            previous = rutf8.prev_codepoint_pos(self.buffer, pos)
+            if not self.word_at(previous):
+                break
+            pos = previous
+        return pos
+
+    def eow(self):
+        pos = self.pos
+        while pos < len(self.buffer) and not self.word_at(pos):
+            pos = rutf8.next_codepoint_pos(self.buffer, pos)
+        while pos < len(self.buffer) and self.word_at(pos):
+            pos = rutf8.next_codepoint_pos(self.buffer, pos)
+        return pos
+
+    def kill_range(self, start, end):
+        assert 0 <= start <= end <= len(self.buffer)
+        if start == end:
+            return
+        killed = self.buffer[start:end]
+        if not self.last_command_was_kill:
+            self.kill_buffer = killed
+        elif end <= self.pos:
+            self.kill_buffer = killed + self.kill_buffer
+        else:
+            self.kill_buffer += killed
+        self.buffer = self.buffer[:start] + self.buffer[end:]
+        self.pos = start
+        # A large deletion can invalidate the old viewport's byte offset.
+        self.view_start = 0
 
     def move_history(self, direction):
         history = self.history
@@ -78,6 +126,9 @@ class Reader(object):
         command = COMMANDS.get(event.evt)
         if command is not None:
             command.do(self, event)
+            self.last_command_was_kill = command.kills
+        else:
+            self.last_command_was_kill = False
 
     def calc_screen(self):
         # Reserve the final terminal column to avoid automatic line wrapping.
@@ -131,6 +182,7 @@ class Reader(object):
         self.view_start = 0
         self.prompt = prompt
         self.finished = False
+        self.last_command_was_kill = False
         self.history_index = 0
         if self.history is not None:
             self.history_index = len(self.history.entries)

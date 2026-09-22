@@ -109,3 +109,18 @@ def test_bad_history_path_keeps_editor_usable(console_factory, tmpdir):
     child.expect_exact('>?- ')
     child.send('\x04')
     child.expect(pexpect.EOF)
+
+
+def test_ctrl_arrow_query_editing(console_factory):
+    child = console_factory()
+    child.expect_exact('>?- ')
+    child.send('X = old_value.\x1b[1;5D\x1bdnew_value\r')
+    child.expect_exact('X = new_value\r\n')
+    child.expect_exact('>?- ')
+    child.send('\x1b[A\x01\x1b[1;5C\x0b\x19\r')
+    child.expect_exact('X = new_value\r\n')
+    child.expect_exact('>?- ')
+    child.send('\x04')
+    child.expect(pexpect.EOF)
+    child.close()
+    assert child.exitstatus == 0

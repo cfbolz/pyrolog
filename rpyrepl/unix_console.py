@@ -29,7 +29,15 @@ class UnixConsole(Console):
         self.keycodes = {'\x1b[D': 'left', '\x1b[C': 'right',
                          '\x1b[A': 'up', '\x1b[B': 'down',
                          '\x1b[H': 'home', '\x1b[F': 'end',
-                         '\x1b[3~': 'delete'}
+                         '\x1b[3~': 'delete',
+                         '\x1bb': 'backward-word', '\x1bf': 'forward-word',
+                         '\x1bd': 'kill-word',
+                         '\x1b\x7f': 'backward-kill-word',
+                         '\x1b\x08': 'backward-kill-word',
+                         # Ctrl-arrows: xterm-compatible terminals and rxvt.
+                         '\x1b[1;5D': 'backward-word',
+                         '\x1b[1;5C': 'forward-word',
+                         '\x1bOd': 'backward-word', '\x1bOc': 'forward-word'}
         for capability, command in [('kcub1', 'left'), ('kcuf1', 'right'),
                                     ('kcuu1', 'up'), ('kcud1', 'down'),
                                     ('khome', 'home'), ('kend', 'end'),
@@ -154,6 +162,14 @@ class UnixConsole(Console):
             return Event('up')
         if char == '\x0e':
             return Event('down')
+        if char == '\x17':
+            return Event('backward-kill-word')
+        if char == '\x15':
+            return Event('unix-line-discard')
+        if char == '\x0b':
+            return Event('kill-line')
+        if char == '\x19':
+            return Event('yank')
         if char == '\x1b':
             return self.read_escape()
         first = ord(char[0])
