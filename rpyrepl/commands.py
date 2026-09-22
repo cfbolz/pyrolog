@@ -5,6 +5,7 @@ from rpython.rlib import rutf8
 
 class Command(object):
     kills = False
+    vertical = False
 
     def do(self, reader, event):
         raise NotImplementedError
@@ -51,12 +52,12 @@ class right(Command):
 
 class beginning_of_line(Command):
     def do(self, reader, event):
-        reader.pos = 0
+        reader.pos = reader.bol()
 
 
 class end_of_line(Command):
     def do(self, reader, event):
-        reader.pos = len(reader.buffer)
+        reader.pos = reader.eol()
 
 
 class backward_word(Command):
@@ -85,12 +86,15 @@ class kill_word(KillCommand):
 
 class unix_line_discard(KillCommand):
     def do(self, reader, event):
-        reader.kill_range(0, reader.pos)
+        reader.kill_range(reader.bol(), reader.pos)
 
 
 class kill_line(KillCommand):
     def do(self, reader, event):
-        reader.kill_range(reader.pos, len(reader.buffer))
+        end = reader.eol()
+        if not reader.buffer[reader.pos:end].strip() and end < len(reader.buffer):
+            end += 1
+        reader.kill_range(reader.pos, end)
 
 
 class yank(Command):
@@ -100,7 +104,26 @@ class yank(Command):
 
 class accept(Command):
     def do(self, reader, event):
+        reader.maybe_accept()
+
+
+class force_accept(Command):
+    def do(self, reader, event):
         reader.finished = True
+
+
+class up(Command):
+    vertical = True
+
+    def do(self, reader, event):
+        reader.move_vertical(-1)
+
+
+class down(Command):
+    vertical = True
+
+    def do(self, reader, event):
+        reader.move_vertical(1)
 
 
 class previous_history(Command):
@@ -124,7 +147,9 @@ COMMANDS = {
     'eof': eof(), 'left': left(), 'right': right(),
     'home': beginning_of_line(), 'end': end_of_line(),
     'accept': accept(), 'cancel': cancel(),
-    'up': previous_history(), 'down': next_history(),
+    'up': up(), 'down': down(),
+    'previous-history': previous_history(), 'next-history': next_history(),
+    'force-accept': force_accept(),
     'backward-word': backward_word(), 'forward-word': forward_word(),
     'backward-kill-word': backward_kill_word(), 'kill-word': kill_word(),
     'unix-line-discard': unix_line_discard(), 'kill-line': kill_line(),

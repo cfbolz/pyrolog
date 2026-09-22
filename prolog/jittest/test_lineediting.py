@@ -124,3 +124,35 @@ def test_ctrl_arrow_query_editing(console_factory):
     child.expect(pexpect.EOF)
     child.close()
     assert child.exitstatus == 0
+
+
+def test_multiline_query_and_persistent_recall(console_factory, tmpdir):
+    child = console_factory()
+    child.expect_exact('>?- ')
+    child.send('X = f(\r')
+    child.expect_exact('... ')
+    child.send('a,\rb).\r')
+    child.expect_exact('X = f(a, b)\r\n')
+    child.expect_exact('>?- ')
+    child.send('\x04')
+    child.expect(pexpect.EOF)
+    child.close()
+    assert child.exitstatus == 0
+    assert tmpdir.join('history').read_binary() == 'X = f(\r\na,\r\nb).\n'
+    child = console_factory()
+    child.expect_exact('>?- ')
+    child.send('\x10\r')
+    child.expect_exact('X = f(a, b)\r\n')
+    child.expect_exact('>?- ')
+    # A terminated syntax error must not trap the user in continuation input.
+    child.send('X = ).\r')
+    child.expect_exact('>?- ')
+    child.send('X = 1.5\r')
+    child.expect_exact('... ')
+    child.send('.\r')
+    child.expect_exact('X = 1.500000\r\n')
+    child.expect_exact('>?- ')
+    child.send('\x04')
+    child.expect(pexpect.EOF)
+    child.close()
+    assert child.exitstatus == 0

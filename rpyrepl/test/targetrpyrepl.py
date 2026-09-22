@@ -4,6 +4,7 @@ import errno
 from rpython.rlib import rtermios
 from rpyrepl import make_reader, EndOfInput, CancelledInput
 from rpyrepl.history import History
+from rpyrepl.policy import BalancedParens
 
 
 def entry_point(argv):
@@ -15,7 +16,7 @@ def entry_point(argv):
         except OSError as exc:
             if exc.errno != errno.ENOENT:
                 raise
-    reader = make_reader(history=history)
+    reader = make_reader(history=history, policy=BalancedParens())
     if reader is None:
         os.write(1, 'plain input\n')
         return 0

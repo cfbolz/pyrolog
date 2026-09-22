@@ -10,6 +10,7 @@ class Event(object):
 
 class Console(object):
     width = 80
+    height = 24
 
     def prepare(self):
         raise NotImplementedError

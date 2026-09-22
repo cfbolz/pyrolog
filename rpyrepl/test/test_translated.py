@@ -127,3 +127,42 @@ def test_word_commands(child, keys, expected):
     child.expect(pexpect.EOF)
     child.close()
     assert child.exitstatus == 0
+
+
+def test_multiline_editing_and_history(child):
+    child.send('(abc\r')
+    child.expect_exact('... ')
+    child.send('def)\x1b[A\x05!\x1b[B\r')
+    child.expect_exact('ACCEPTED:(abc!\r\ndef)\r\n')
+    child.expect_exact('edit> ')
+    child.send('\x10\r')
+    child.expect_exact('ACCEPTED:(abc!\r\ndef)\r\n')
+    child.expect_exact('edit> ')
+    child.send('(\x1b\r')
+    child.expect_exact('ACCEPTED:(\r\n')
+    child.expect_exact('edit> ')
+    child.send('\x04')
+    child.expect(pexpect.EOF)
+    child.close()
+    assert child.exitstatus == 0
+
+
+def test_tall_buffer_resize_and_cancel(child):
+    child.setwinsize(3, 12)
+    child.send('(\r')
+    child.expect_exact('... ')
+    for i in range(6):
+        child.send('line%d\r' % i)
+    child.send(')')
+    child.setwinsize(5, 18)
+    child.send('\x1b[A\x1b[B\r')
+    expected = '(\r\n' + ''.join('line%d\r\n' % i for i in range(6)) + ')'
+    child.expect_exact('ACCEPTED:' + expected + '\r\n')
+    child.expect_exact('edit> ')
+    child.send('(\rdiscard\x03')
+    child.expect_exact('CANCELLED')
+    child.expect_exact('edit> ')
+    child.send('\x04')
+    child.expect(pexpect.EOF)
+    child.close()
+    assert child.exitstatus == 0

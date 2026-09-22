@@ -21,7 +21,7 @@ def supply(monkeypatch, console, data):
 @pytest.mark.parametrize('data, kind, text', [
     ('\x1b[D', 'left', u''), ('\x1b[C', 'right', u''),
     ('\x1b[A', 'up', u''), ('\x1b[B', 'down', u''),
-    ('\x10', 'up', u''), ('\x0e', 'down', u''),
+    ('\x10', 'previous-history', u''), ('\x0e', 'next-history', u''),
     ('\x1bb', 'backward-word', u''), ('\x1bf', 'forward-word', u''),
     ('\x1b[1;5D', 'backward-word', u''), ('\x1b[1;5C', 'forward-word', u''),
     ('\x1bOd', 'backward-word', u''), ('\x1bOc', 'forward-word', u''),

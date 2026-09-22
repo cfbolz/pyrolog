@@ -1,34 +1,15 @@
 """Buffer and editing lifecycle, following pyrepl (see LICENSE).
 
-The initial layout uses one screen row with horizontal scrolling. Text is
+Logical lines wrap into screen rows. Text is
 valid UTF-8; buffer positions are byte offsets at code-point boundaries.
 Screen coordinates count terminal columns, independently of byte offsets.
 """
 from rpython.rlib import rutf8
 from rpython.rlib.unicodedata import unicodedb_15_0_0 as unicodedb
 from rpyrepl.commands import COMMANDS
-
-
-def char_width(code):
-    if unicodedb.combining(code):
-        return 0
-    if unicodedb.category(code) == 'Cf' and code != 0xad:
-        return 0
-    if unicodedb.east_asian_width(code) in ('W', 'F'):
-        return 2
-    return 1
-
-
-def display_char(text, pos, end, code):
-    if code < 32:
-        return '^' + chr(code + 64)
-    if code == 127:
-        return '^?'
-    return text[pos:end]
-
-
-def display_width(code):
-    return 2 if code < 32 or code == 127 else char_width(code)
+from rpyrepl.layout import Layout
+from rpyrepl.policy import InputPolicy
+from rpyrepl import EndOfInput, CancelledInput
 
 
 def is_word(code):
@@ -37,8 +18,11 @@ def is_word(code):
 
 
 class Reader(object):
-    def __init__(self, console, history=None):
+    def __init__(self, console, history=None, policy=None):
         self.console = console
+        self.policy = policy if policy is not None else InputPolicy()
+        self.continuation_prompt = '... '
+        self.preferred_column = -1
         self.history = history
         self.history_index = 0
         self.draft = ''
@@ -47,7 +31,6 @@ class Reader(object):
         self.pos = 0
         self.prompt = ''
         self.finished = False
-        self.view_start = 0
         self.cxy = (0, 0)
         self.kill_buffer = ''
         self.last_command_was_kill = False
@@ -100,8 +83,6 @@ class Reader(object):
             self.kill_buffer += killed
         self.buffer = self.buffer[:start] + self.buffer[end:]
         self.pos = start
-        # A large deletion can invalidate the old viewport's byte offset.
-        self.view_start = 0
 
     def move_history(self, direction):
         history = self.history
@@ -120,67 +101,65 @@ class Reader(object):
         else:
             self.buffer = history.entries[index]
             self.pos = len(self.buffer)
-        self.view_start = 0
 
     def do_cmd(self, event):
         command = COMMANDS.get(event.evt)
         if command is not None:
+            if not command.vertical:
+                self.preferred_column = -1
             command.do(self, event)
             self.last_command_was_kill = command.kills
         else:
             self.last_command_was_kill = False
 
+    def get_layout(self):
+        return Layout(self.buffer, self.console.width, self.prompt,
+                      self.continuation_prompt)
+
     def calc_screen(self):
-        # Reserve the final terminal column to avoid automatic line wrapping.
-        limit = max(1, self.console.width - 1)
-        prompt = ''
-        prompt_width = 0
-        pos = 0
-        while pos < len(self.prompt):
-            code = rutf8.codepoint_at_pos(self.prompt, pos)
-            end = rutf8.next_codepoint_pos(self.prompt, pos)
-            width = display_width(code)
-            if prompt_width + width > max(0, limit - 2):
-                break
-            prompt += display_char(self.prompt, pos, end, code)
-            prompt_width += width
-            pos = end
-        available = limit - prompt_width
-        start = min(self.view_start, self.pos)
-        cursor_width = 0
-        pos = start
-        while pos < self.pos:
-            cursor_width += display_width(rutf8.codepoint_at_pos(self.buffer, pos))
-            pos = rutf8.next_codepoint_pos(self.buffer, pos)
-        while cursor_width >= available and start < self.pos:
-            cursor_width -= display_width(rutf8.codepoint_at_pos(self.buffer, start))
-            start = rutf8.next_codepoint_pos(self.buffer, start)
-        self.view_start = start
-        text = []
-        used = 0
-        pos = start
-        while pos < len(self.buffer):
-            code = rutf8.codepoint_at_pos(self.buffer, pos)
-            end = rutf8.next_codepoint_pos(self.buffer, pos)
-            width = display_width(code)
-            if used + width > available:
-                break
-            text.append(display_char(self.buffer, pos, end, code))
-            used += width
-            pos = end
-        self.cxy = (prompt_width + cursor_width, 0)
-        return [prompt + ''.join(text)]
+        layout = self.get_layout()
+        self.cxy = layout.pos_to_xy(self.pos)
+        return layout.screen
+
+    def bol(self):
+        pos = self.buffer.rfind('\n', 0, self.pos) + 1
+        assert pos >= 0
+        return pos
+
+    def eol(self):
+        end = self.buffer.find('\n', self.pos)
+        return len(self.buffer) if end < 0 else end
+
+    def move_vertical(self, direction):
+        layout = self.get_layout()
+        x, y = layout.pos_to_xy(self.pos)
+        new_y = y + direction
+        if new_y < 0 or new_y >= len(layout.rows):
+            self.move_history(direction)
+            self.preferred_column = -1
+            return
+        if self.preferred_column < 0:
+            self.preferred_column = x
+        self.pos = layout.xy_to_pos(self.preferred_column, new_y)
+
+    def maybe_accept(self):
+        if self.buffer.find('\n', self.pos) >= 0 or self.policy.more_lines(self.buffer):
+            self.insert('\n')
+        else:
+            self.finished = True
 
     def refresh(self):
         screen = self.calc_screen()
         self.console.refresh(screen, self.cxy)
 
-    def readline(self, prompt=''):
+    def readline(self, prompt='', continuation_prompt='... '):
         rutf8.check_utf8(prompt, allow_surrogates=False)
         self.buffer = ''
         self.pos = 0
-        self.view_start = 0
         self.prompt = prompt
+        rutf8.check_utf8(continuation_prompt, allow_surrogates=False)
+        self.continuation_prompt = continuation_prompt
+        self.preferred_column = -1
         self.finished = False
         self.last_command_was_kill = False
         self.history_index = 0
@@ -191,10 +170,14 @@ class Reader(object):
         try:
             self.console.prepare()
             self.refresh()
-            while not self.finished:
-                self.do_cmd(self.console.get_event())
-                if not self.finished:
-                    self.refresh()
+            try:
+                while not self.finished:
+                    self.do_cmd(self.console.get_event())
+                    if not self.finished:
+                        self.refresh()
+            except (EndOfInput, CancelledInput):
+                self.console.finish()
+                raise
             self.console.finish()
             return self.get_utf8()
         finally:

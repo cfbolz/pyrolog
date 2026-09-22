@@ -88,12 +88,12 @@ def test_reader_reuse_after_cancellation():
     assert reader.readline() == 'new'
 
 
-def test_horizontal_scroll_and_return_to_start():
+def test_wrapping_and_return_to_start():
     console = FakeConsole(events(u'abcdefgh', 'home', 'accept'), width=8)
     reader = Reader(console)
     reader.readline('> ')
-    assert console.screens[1] == (['> efgh'], (6, 0))
-    assert console.screens[2] == (['> abcde'], (2, 0))
+    assert console.screens[1] == (['> abcde\\', 'fgh'], (3, 1))
+    assert console.screens[2] == (['> abcde\\', 'fgh'], (2, 0))
 
 
 def test_unicode_widths():
@@ -120,7 +120,7 @@ def test_control_characters_are_not_terminal_commands():
 def test_narrow_terminal_and_long_prompt():
     console = FakeConsole(events(u'abcdef', 'accept'), width=2)
     Reader(console).readline('a long prompt> ')
-    assert all(len(screen[0]) <= 1 and cxy[0] < 2
+    assert all(all(len(row) <= 2 for row in screen) and cxy[0] < 2
                for screen, cxy in console.screens)
 
 
@@ -196,12 +196,12 @@ def test_utf8_history_draft_and_cursor():
     assert reader.pos == 4
 
 
-def test_utf8_scrolling_and_prompt():
+def test_utf8_wrapping_and_prompt():
     console = FakeConsole(events(u'\xe9\u754c\u754c', 'home', 'accept'), width=8)
     reader = Reader(console)
     reader.readline(u'\xe9> '.encode('utf-8'))
-    assert console.screens[1] == ([u'\xe9> \u754c'.encode('utf-8')], (5, 0))
-    assert console.screens[2] == ([u'\xe9> \xe9\u754c'.encode('utf-8')], (3, 0))
+    assert console.screens[1] == ([u'\xe9> \xe9\u754c\\'.encode('utf-8'), u'\u754c'.encode('utf-8')], (2, 1))
+    assert console.screens[2] == ([u'\xe9> \xe9\u754c\\'.encode('utf-8'), u'\u754c'.encode('utf-8')], (3, 0))
 
 
 @pytest.mark.parametrize('bad', ['\x80', '\xc0\xaf', '\xed\xa0\x80',

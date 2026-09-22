@@ -1,4 +1,4 @@
-"""Unix terminal backend with scoped terminal modes and a single-row display."""
+"""Unix terminal backend with scoped terminal modes and a vertical viewport."""
 import errno
 import os
 from rpython.rlib import rtermios, rpoll, rposix, rutf8
@@ -26,6 +26,9 @@ class UnixConsole(Console):
         self.cr = tigetstr('cr', True)
         self.el = tigetstr('el', True)
         self.right = tigetstr('cuf1', True)
+        self.up = tigetstr('cuu1', True)
+        self.down = tigetstr('cud1', True)
+        self.clear = tigetstr('clear', True)
         self.keycodes = {'\x1b[D': 'left', '\x1b[C': 'right',
                          '\x1b[A': 'up', '\x1b[B': 'down',
                          '\x1b[H': 'home', '\x1b[F': 'end',
@@ -38,6 +41,8 @@ class UnixConsole(Console):
                          '\x1b[1;5D': 'backward-word',
                          '\x1b[1;5C': 'forward-word',
                          '\x1bOd': 'backward-word', '\x1bOc': 'forward-word'}
+        self.keycodes['\x1b\r'] = 'force-accept'
+        self.keycodes['\x1b\n'] = 'force-accept'
         for capability, command in [('kcub1', 'left'), ('kcuf1', 'right'),
                                     ('kcuu1', 'up'), ('kcud1', 'down'),
                                     ('khome', 'home'), ('kend', 'end'),
@@ -47,12 +52,24 @@ class UnixConsole(Console):
                 self.keycodes[sequence] = command
         self.erase = '\x7f'
         self.width = 80
+        self.height = 24
+        self.reset_display()
+
+    def reset_display(self):
+        self.rendered_rows = 0
+        self.cursor_y = 0
+        self.offset = 0
+        self.last_width = self.width
+        self.last_height = self.height
 
     def getwidth(self):
         with lltype.scoped_alloc(rposix.WINSIZE) as size:
             result = rposix.c_ioctl_voidp(self.output_fd, rtermios.TIOCGWINSZ,
                                          rffi.cast(rffi.VOIDP, size))
             width = rffi.cast(lltype.Signed, size.c_ws_col)
+            height = rffi.cast(lltype.Signed, size.c_ws_row)
+            if result == 0 and height > 0:
+                self.height = height
             if result == 0 and width > 0:
                 return width
         return 80
@@ -71,6 +88,7 @@ class UnixConsole(Console):
         rtermios.tcsetattr(self.input_fd, rtermios.TCSANOW,
                           (iflag, oflag, cflag, lflag, ispeed, ospeed, cc))
         self.width = self.getwidth()
+        self.reset_display()
 
     def restore(self):
         if self.saved is not None:
@@ -90,11 +108,40 @@ class UnixConsole(Console):
                 text = text[count:]
 
     def refresh(self, screen, cxy):
-        self.write(self.cr + screen[0] + self.el +
-                   self.cr + self.right * cxy[0])
+        if self.width != self.last_width or self.height != self.last_height:
+            # Terminal reflow makes the previous physical origin unreliable.
+            self.write(self.clear)
+            self.reset_display()
+        height = max(1, self.height)
+        x, y = cxy
+        assert x >= 0 and 0 <= y < len(screen)
+        offset = self.offset
+        if y < offset:
+            offset = y
+        elif y >= offset + height:
+            offset = y - height + 1
+        offset = min(offset, max(0, len(screen) - height))
+        assert offset >= 0
+        visible = screen[offset:offset + height]
+        rows = max(self.rendered_rows, len(visible))
+        self.write(self.cr + self.up * self.cursor_y)
+        for i in range(rows):
+            if i:
+                self.write('\r\n')
+            self.write(self.el)
+            if i < len(visible):
+                self.write(visible[i])
+            # Cancel delayed automatic wrapping after a full-width row.
+            self.write(self.cr)
+        self.cursor_y = y - offset
+        self.write(self.up * (rows - 1 - self.cursor_y) +
+                   self.right * min(x, max(0, self.width - 1)))
+        self.rendered_rows = len(visible)
+        self.offset = offset
 
     def finish(self):
-        self.write('\n')
+        self.write(self.cr + self.down * max(0, self.rendered_rows - 1 - self.cursor_y)
+                   + '\r\n')
 
     def read_byte(self):
         if self.pending_byte:
@@ -159,9 +206,9 @@ class UnixConsole(Console):
         if char == '\x05':
             return Event('end')
         if char == '\x10':
-            return Event('up')
+            return Event('previous-history')
         if char == '\x0e':
-            return Event('down')
+            return Event('next-history')
         if char == '\x17':
             return Event('backward-kill-word')
         if char == '\x15':

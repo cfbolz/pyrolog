@@ -2,25 +2,43 @@
 
 A small RPython terminal editor, independent of Pyrolog. Its reader, command,
 and console interfaces follow pyrepl. Editing algorithms are adapted from
-pyrepl; see LICENSE. The initial implementation uses a single row with
-horizontal scrolling, UTF-8 input, and terminfo capabilities on Unix.
+pyrepl; see LICENSE. The implementation uses UTF-8 input, multiline editing,
+and terminfo capabilities on Unix. Logical lines wrap into screen rows with
+a visible backslash marking each wrap; the marker is not part of the text.
 
 Supported keys: printable text, Backspace, Delete, Left/Right, Home/End,
-Ctrl-A/B/E/F, Up/Down and Ctrl-P/N (history), Enter, Ctrl-D (EOF on an empty
+Ctrl-A/B/E/F, Up/Down, Ctrl-P/N (history), Enter, Ctrl-D (EOF on an empty
 buffer), and Ctrl-C (cancel input).
 Alt-B/F and Ctrl-Left/Right move by words. Ctrl-arrow sequences from xterm
 compatible terminals and rxvt are supported. Ctrl-W and Alt-Backspace delete
 the preceding word; Alt-D deletes the following word. These use the same word
 boundaries: Unicode letters, numbers, combining marks, and underscore belong
-to words; punctuation separates them. Ctrl-U/K delete to the beginning/end
-of the buffer. Ctrl-Y reinserts deleted text; consecutive deletion commands
+to words; punctuation separates them. Home/End and Ctrl-A/E use logical line
+boundaries. Ctrl-U/K delete to the beginning/end of the logical line; Ctrl-K
+also removes the newline when only whitespace remains. Ctrl-Y reinserts deleted text; consecutive deletion commands
 combine their text in order. There is one saved deletion, retained across
 queries, rather than a full kill ring.
-Completion, colourization, multiline editing, and bracketed paste
-are not implemented yet. Resize is reflected on the next input event.
+Up/Down move between screen rows, preserving the preferred terminal column.
+At the first/last screen row they navigate history. Ctrl-P/N always navigate
+history. Backspace/Delete can join lines by deleting a newline.
+
+Enter inserts a newline when editing an earlier logical line or when the
+application's input policy requests more input. Otherwise it submits the
+buffer. Alt-Enter always submits. There is no automatic indentation.
+Pass an `InputPolicy` subclass as `make_reader(policy=policy)` and override
+`more_lines(utf8_text)`. The standalone target uses balanced parentheses;
+Pyrolog uses a full-stop token outside quoted text and comments, so floats
+and operators such as `=..` do not terminate a query. Terminated syntax errors
+reach the normal parser.
+
+Completion, colourization, and bracketed paste are not implemented yet.
+Resize is reflected on the next input event, clearing and redrawing the
+visible terminal area. Ordinary redraws stay within the editor's area.
+Buffers taller than the terminal use a vertical viewport following the cursor.
 
 `make_reader()` returns a Reader, or None when stdin/stdout are not terminals
-or the terminal lacks the required capabilities. `Reader.readline(prompt)`
+or the terminal lacks the required capabilities. `Reader.readline(prompt,
+continuation_prompt='... ')`
 takes and returns UTF-8 byte strings; EOF and cancellation raise this package's
 `EndOfInput` and `CancelledInput`. Terminal modes are restored before it returns
 or raises. Applications own the plain-input fallback and history policy.
@@ -44,7 +62,7 @@ each other's appended entries. Other sessions' entries become available on
 the next startup. Piped input does not access the history file.
 
 Text is stored as UTF-8 using `rpython.rlib.rutf8`, without RPython's Unicode
-type. Cursor and scroll offsets are byte positions at code-point boundaries;
+type. Cursor positions are byte offsets at code-point boundaries;
 screen coordinates are terminal columns. Prompts, inserted text, and history
 entries are validated, rejecting malformed UTF-8 and surrogates with
 `rutf8.CheckError`. Invalid terminal input is ignored. Movement and deletion
