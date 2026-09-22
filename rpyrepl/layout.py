@@ -5,9 +5,11 @@ from rpython.rlib.unicodedata import unicodedb_15_0_0 as unicodedb
 
 
 def char_width(code):
-    if unicodedb.combining(code):
+    category = unicodedb.category(code)
+    # Canonical combining class is zero for some nonspacing/enclosing marks.
+    if category in ('Mn', 'Me') or unicodedb.combining(code):
         return 0
-    if unicodedb.category(code) == 'Cf' and code != 0xad:
+    if category == 'Cf' and code != 0xad:
         return 0
     if unicodedb.east_asian_width(code) in ('W', 'F'):
         return 2

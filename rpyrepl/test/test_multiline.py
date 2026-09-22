@@ -38,6 +38,16 @@ def test_tiny_widths_progress():
             assert all(len(row) <= 1 for row in layout.screen)
 
 
+@pytest.mark.parametrize('mark', [u'\u034f', u'\u20dd', u'\ufe0f'])
+def test_zero_class_marks_do_not_advance_or_wrap(mark):
+    text = (u'ab' + mark + u'c').encode('utf-8')
+    layout = Layout(text, 4, '', '')
+    assert layout.screen == [text]
+    assert layout.pos_to_xy(2) == (2, 0)
+    assert layout.pos_to_xy(len(text) - 1) == (2, 0)
+    assert layout.pos_to_xy(len(text)) == (3, 0)
+
+
 def test_enter_and_force_accept():
     console = FakeConsole(events(u'(', 'accept', u')', 'accept'))
     reader = Reader(console, policy=BalancedParens())
