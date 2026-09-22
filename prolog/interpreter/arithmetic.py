@@ -4,7 +4,7 @@ from prolog.interpreter.parsing import TermBuilder
 from prolog.interpreter import helper, term, error
 from prolog.interpreter.signature import Signature
 from prolog.interpreter.error import UnificationFailed
-from rpython.rlib.rarithmetic import intmask, ovfcheck_float_to_int
+from rpython.rlib.rarithmetic import ovfcheck_float_to_int
 from rpython.rlib.unroll import unrolling_iterable
 from rpython.rlib import jit, rarithmetic
 from rpython.rlib.rbigint import rbigint
@@ -107,6 +107,50 @@ def make_int(w_value):
         else:
             return term.Number(num)
     return w_value
+
+
+def bigint_to_float(value):
+    try:
+        return value.tofloat()
+    except OverflowError:
+        error.throw_evaluation_error("float_overflow")
+
+
+def float_pow(base, exponent):
+    if base == 0.0 and exponent < 0.0:
+        error.throw_evaluation_error("zero_divisor")
+    try:
+        result = math.pow(base, exponent)
+    except ValueError:
+        raise error.throw_evaluation_error("undefined")
+    except OverflowError:
+        raise error.throw_evaluation_error("float_overflow")
+    if math.isinf(result):
+        error.throw_evaluation_error("float_overflow")
+    if math.isnan(result):
+        error.throw_evaluation_error("undefined")
+    return term.Float(result)
+
+
+def bigint_pow(base, exponent):
+    if exponent.get_sign() < 0:
+        return float_pow(bigint_to_float(base), bigint_to_float(exponent))
+    return make_int(term.BigInt(base.pow(exponent)))
+
+
+@jit.look_inside_iff(lambda base, exponent: jit.isconstant(exponent))
+def int_pow(base, exponent):
+    # As in PyPy's _pow_nomod: only unroll for a constant exponent.
+    assert exponent >= 0
+    result = 1
+    while exponent:
+        if exponent & 1:
+            result = rarithmetic.ovfcheck(result * base)
+        exponent >>= 1
+        if exponent:
+            base = rarithmetic.ovfcheck(base * base)
+    return result
+
 
 class __extend__(term.Numeric):
     def arith_sqrt(self):
@@ -226,17 +270,21 @@ class __extend__(term.Number):
         return other.arith_pow_number(self.num)
 
     def arith_pow_number(self, other_num):
+        if self.num < 0:
+            return float_pow(float(other_num), float(self.num))
         try:
-            res = ovfcheck_float_to_int(math.pow(other_num, self.num))
+            result = int_pow(other_num, self.num)
         except OverflowError:
             return self.arith_pow_bigint(rbigint.fromint(other_num))
-        return term.Number(res)
+        return term.Number(result)
 
     def arith_pow_bigint(self, other_value):
-        return make_int(term.BigInt(other_value.pow(rbigint.fromint(self.num))))
+        if self.num < 0:
+            return float_pow(bigint_to_float(other_value), float(self.num))
+        return make_int(term.BigInt(other_value.int_pow(self.num)))
 
     def arith_pow_float(self, other_float):
-        return term.Float(math.pow(other_float, float(self.num)))
+        return float_pow(other_float, float(self.num))
 
     # ------------------ shift right ------------------ 
     def arith_shr(self, other):
@@ -253,7 +301,13 @@ class __extend__(term.Number):
         return other.arith_shl_number(self.num)
 
     def arith_shl_number(self, other_num):
-        return term.Number(intmask(other_num << self.num))
+        if 0 <= self.num < rarithmetic.LONG_BIT:
+            try:
+                return term.Number(rarithmetic.ovfcheck(other_num << self.num))
+            except OverflowError:
+                pass
+        return make_int(term.BigInt(
+            rbigint.lshift_int_int_bigint_result(other_num, self.num)))
 
     def arith_shl_bigint(self, other_value):
         return make_int(term.BigInt(other_value.lshift(self.num)))
@@ -444,13 +498,13 @@ class __extend__(term.Float):
         return other.arith_pow_float(self.floatval)
 
     def arith_pow_number(self, other_num):
-        return term.Float(math.pow(float(other_num), self.floatval))
+        return float_pow(float(other_num), self.floatval)
 
     def arith_pow_bigint(self, other_value):
-        return term.Float(math.pow(other_value.tofloat(), self.floatval))
+        return float_pow(bigint_to_float(other_value), self.floatval)
 
     def arith_pow_float(self, other_float):
-        return term.Float(math.pow(other_float, self.floatval))
+        return float_pow(other_float, self.floatval)
 
     # ------------------ abs ------------------ 
     def arith_abs(self):
@@ -491,10 +545,15 @@ class __extend__(term.Float):
             factor = -1
 
         fval = fval * factor
+        # Adding 0.5 first can round an already integral float up near 2**52.
+        rounded = math.floor(fval)
+        if fval - rounded >= 0.5:
+            rounded += 1.0
+        rounded *= factor
         try:
-            val = ovfcheck_float_to_int(math.floor(fval + 0.5) * factor)
+            val = ovfcheck_float_to_int(rounded)
         except OverflowError:
-            return term.BigInt(rbigint.fromfloat(math.floor(self.floatval + 0.5) * factor))
+            return term.BigInt(rbigint.fromfloat(rounded))
         return term.Number(val)
 
     def arith_floor(self):
@@ -528,10 +587,7 @@ class __extend__(term.Float):
 
 class __extend__(term.BigInt):
     def arith_float(self):
-        try:
-            return term.Float(self.value.tofloat())
-        except OverflowError:
-            error.throw_evaluation_error("float_overflow")
+        return term.Float(bigint_to_float(self.value))
 
     # ------------------ addition ------------------ 
     def arith_add(self, other):
@@ -613,13 +669,13 @@ class __extend__(term.BigInt):
         return other.arith_pow_bigint(self.value)
 
     def arith_pow_number(self, other_num):
-        return make_int(term.BigInt(rbigint.fromint(other_num).pow(self.value)))
+        return bigint_pow(rbigint.fromint(other_num), self.value)
 
     def arith_pow_bigint(self, other_value):
-        return make_int(term.BigInt(other_value.pow(self.value)))
+        return bigint_pow(other_value, self.value)
 
     def arith_pow_float(self, other_float):
-        return term.Float(math.pow(other_float, self.value.tofloat()))
+        return float_pow(other_float, bigint_to_float(self.value))
 
     # ------------------ shift right ------------------ 
     def arith_shr(self, other):
@@ -764,8 +820,8 @@ class __extend__(term.BigInt):
     def arith_ceiling(self):
         return make_int(self)
 
-    def arith_arith_fractional_part(self):
+    def arith_float_fractional_part(self):
         return term.Number(0)
 
-    def arith_arith_integer_part(self):
+    def arith_float_integer_part(self):
         return make_int(self)

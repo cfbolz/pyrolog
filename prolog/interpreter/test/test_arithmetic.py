@@ -330,9 +330,8 @@ def test_comparison():
     assert_false("1 =\\= 1.0.")
     assert_true("1 =\\= 32.")
 
-@pytest.mark.xfail
 def test_pow_error():
-    prolog_raises("_", "X is (-2) ** 0.5")
+    prolog_raises("evaluation_error(undefined)", "X is (-2) ** 0.5")
 
 def test_sqrt():
     for x in [0, 1, 4, 9, 0.25, 0.16, 100*100]:
@@ -360,3 +359,70 @@ def test_float_conversion_overflow(value):
 def test_float_conversion_errors():
     prolog_raises("instantiation_error", "X is float(Y)")
     prolog_raises("type_error(evaluable, a/0)", "X is float(a)")
+
+
+@pytest.mark.parametrize('base,shift', [
+    (1, 63), (1, 64), (1, 100), (-1, 64), (-3, 100),
+    (sys.maxint, 1), (-sys.maxint - 1, 1), (0, 100), (7, 0),
+])
+def test_left_shift_exact(base, shift):
+    assert_true("X is (%s) << %s, X = %s." %
+                (base, shift, base << shift))
+
+
+@pytest.mark.parametrize('base,exponent', [
+    (3, 34), (3, 35), (-3, 35), (sys.maxint, 1),
+    (-sys.maxint - 1, 1), (2, 100), (0, 0), (5, 0),
+])
+def test_integer_power_exact(base, exponent):
+    result = assert_true("X is (%s) ** %s." % (base, exponent))['X']
+    if isinstance(result, BigInt):
+        actual = long(result.value.str())
+    else:
+        assert isinstance(result, Number)
+        actual = result.num
+    assert actual == base ** exponent
+
+
+@pytest.mark.parametrize('value', [
+    -1.0e20, 1.0e20, -1.0e100, 1.0e100,
+    4503599627370497.0, -4503599627370497.0,
+])
+def test_round_large_float(value):
+    # These floats are already integral; rounding must preserve their value.
+    assert_true("X is round(%.17e), X = %s." % (value, long(value)))
+
+
+@pytest.mark.parametrize('value', [2 ** 100, -(2 ** 100)])
+@pytest.mark.parametrize('operation', ['float_integer_part', 'float_fractional_part'])
+def test_bigint_parts(value, operation):
+    expected = value if operation == 'float_integer_part' else 0
+    assert_true("X is %s(%s), X = %s." % (operation, value, expected))
+
+
+@pytest.mark.parametrize('expression', [
+    'sqrt(-1)', 'sqrt(-1.0)', 'sqrt(-1267650600228229401496703205376)',
+    '(-2.0) ** 0.5',
+])
+def test_power_domain_error_is_catchable(expression):
+    prolog_raises("evaluation_error(undefined)", "X is %s" % expression)
+
+
+@pytest.mark.parametrize('expression', ['10.0 ** 1000', '10 ** 1000.0'])
+def test_power_float_overflow_is_catchable(expression):
+    prolog_raises("evaluation_error(float_overflow)", "X is %s" % expression)
+
+
+@pytest.mark.parametrize('base_big', [False, True])
+@pytest.mark.parametrize('exponent_big', [False, True])
+def test_negative_integer_power(base_big, exponent_big):
+    base = BigInt(rbigint.fromint(2)) if base_big else Number(2)
+    exponent = BigInt(rbigint.fromint(-3)) if exponent_big else Number(-3)
+    result = base.arith_pow(exponent)
+    assert isinstance(result, Float)
+    assert result.floatval == 0.125
+
+
+@pytest.mark.parametrize('expression', ['0 ** -1', '0.0 ** -1', '0 ** -1.0'])
+def test_zero_to_negative_power_is_catchable(expression):
+    prolog_raises("evaluation_error(zero_divisor)", "X is %s" % expression)
