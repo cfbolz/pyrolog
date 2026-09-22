@@ -120,7 +120,7 @@ def readline():
             break
     return "".join(result)
 
-def run(query, var_to_pos, engine):
+def run(query, var_to_pos, engine, query_source=None):
     #from prolog.builtin import formatting
     #f = formatting.TermFormatter(engine, quoted=True, max_depth=20)
     try:
@@ -133,7 +133,7 @@ def run(query, var_to_pos, engine):
         printmessage(styled('Nein', 'FAILURE') + '\n')
     except error.UncaughtError, e:
         printmessage("%s\n%s\n" % (styled('ERROR:', 'ERROR_LABEL'),
-                                      e.format_traceback(engine)))
+                                      e.format_traceback(engine, query_source=query_source)))
     except error.CatchableError, e:
         printmessage("ERROR: %s\n" % e.get_errstr(engine))
     except error.PrologParseError, exc:
@@ -204,7 +204,7 @@ def repl(engine):
             printmessage(exc.message + "\n")
             continue
         for goal in goals:
-            run(goal, var_to_pos, engine)
+            run(goal, var_to_pos, engine, query_source=line)
 
 def execute(e, filename):
     run(term.Callable.build("consult", [term.Callable.build(filename)]), {}, e)

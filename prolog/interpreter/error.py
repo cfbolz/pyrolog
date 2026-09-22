@@ -84,10 +84,16 @@ class UncaughtError(TermedError):
         self.rule = rule_likely_source
         self.traceback = _construct_traceback(scont)
 
-    def format_traceback(self, engine, output_fd=1):
+    def format_traceback(self, engine, output_fd=1, query_source=None):
         out = ["Traceback (most recent call last):"]
+        if query_source is not None:
+            out.append('  File "%s" in %s' % (
+                styled('<stdin>', 'SOURCE_LOCATION', output_fd),
+                styled('toplevel', 'SOURCE_LOCATION', output_fd)))
+            out.append('    ' + rstring.replace(query_source.rstrip('\n'),
+                                                '\n', '\n    '))
         if self.traceback is not None:
-            self.traceback._format(out, output_fd)
+            self.traceback._format(out, output_fd, query_source is not None)
         context = ""
         if self.sig_context is not None:
             context = self.sig_context.string()
@@ -110,8 +116,13 @@ class TraceFrame(object):
     def __repr__(self):
         return "TraceFrame(%r, %r)" % (self.rule, self.next)
 
-    def _format(self, out, output_fd=1):
+    def _format(self, out, output_fd=1, skip_toplevel=False):
         rule = self.rule
+        # The supplied query source replaces source-less module context frames.
+        if skip_toplevel and rule is rule.module._toplevel_rule:
+            if self.next is not None:
+                self.next._format(out, output_fd, skip_toplevel)
+            return
         if rule.line_range is not None:
             if rule.line_range[0] + 1 ==  rule.line_range[1]:
                 lines = "line %s " % (rule.line_range[0] + 1, )
@@ -130,7 +141,7 @@ class TraceFrame(object):
             # poor man's indent
             out.append("    " + rstring.replace(source, "\n", "\n    "))
         if self.next is not None:
-            self.next._format(out, output_fd)
+            self.next._format(out, output_fd, skip_toplevel)
 
 def _construct_traceback(scont):
     from prolog.interpreter.continuation import ContinuationWithRule

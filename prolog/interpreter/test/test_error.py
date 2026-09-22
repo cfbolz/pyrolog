@@ -201,10 +201,12 @@ def test_colored_traceback_keeps_plain_text_and_links_files(monkeypatch):
     filename = '/tmp/source file.pl'
     e.runstring('f :-\n g, true.\ng :- _ is _.\n', file_name=filename)
     exc = get_uncaught_error('f.', e)
-    plain = exc.format_traceback(e)
+    plain = exc.format_traceback(e, query_source='f.')
     monkeypatch.delenv('NO_COLOR')
     monkeypatch.setenv('FORCE_COLOR', '1')
-    colored = exc.format_traceback(e)
+    colored = exc.format_traceback(e, query_source='f.')
+    assert MAGENTA + '<stdin>' + RESET in colored
+    assert '\n    f.\n' in colored
     assert MAGENTA + filelink(filename) + RESET in colored
     assert MAGENTA + 'user:f/0' + RESET in colored
     assert MAGENTA + 'lines 1-2 ' + RESET in colored
@@ -229,3 +231,44 @@ def test_traceback_without_frames():
     e = get_engine('')
     exc = UncaughtError(Callable.build('oops'))
     assert exc.format_traceback(e) == 'Traceback (most recent call last):\nUnhandled exception: oops'
+    assert exc.format_traceback(e, query_source='throw(oops).') == (
+        'Traceback (most recent call last):\n'
+        '  File "<stdin>" in toplevel\n'
+        '    throw(oops).\nUnhandled exception: oops')
+
+
+def test_traceback_query_source_replaces_dummy_frame():
+    e = get_engine('')
+    exc = get_uncaught_error('missing.', e)
+    before = exc.format_traceback(e)
+    result = exc.format_traceback(e, query_source='true,\n  missing.\n')
+    assert result == ('Traceback (most recent call last):\n'
+                      '  File "<stdin>" in toplevel\n'
+                      '    true,\n      missing.\n'
+                      'Undefined procedure: missing/0')
+    # Formatting must not modify the captured frames or shared module rule.
+    assert exc.format_traceback(e) == before
+    assert e.modulewrapper.current_module._toplevel_rule.source is None
+
+
+def test_traceback_query_source_preserves_rule_frames():
+    e = get_engine('f :- throw(oops).')
+    exc = get_uncaught_error('f.', e)
+    plain = exc.format_traceback(e)
+    result = exc.format_traceback(e, query_source='f.')
+    header, rest = plain.split('\n', 1)
+    assert result == header + '\n  File "<stdin>" in toplevel\n    f.\n' + rest
+
+
+def test_repl_passes_full_input_to_traceback(monkeypatch):
+    from prolog.interpreter import translatedmain
+    e = get_engine('')
+    lines = iter(['true. missing.\n', 'halt.\n'])
+    output = []
+    monkeypatch.setattr(translatedmain.rpyrepl, 'make_reader', lambda **kw: None)
+    monkeypatch.setattr(translatedmain, 'readline', lambda: next(lines))
+    monkeypatch.setattr(translatedmain, 'printmessage', output.append)
+    translatedmain.repl(e)
+    result = ''.join(output)
+    assert '  File "<stdin>" in toplevel\n    true. missing.\n' in result
+    assert '<user toplevel>' not in result
