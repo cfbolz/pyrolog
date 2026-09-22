@@ -1,4 +1,11 @@
 import os, sys
+import errno
+import rpyrepl
+from rpyrepl.history import History
+from rpyrepl.color import styled
+from prolog.interpreter.replpolicy import PrologInputPolicy
+from prolog.interpreter.highlighting import PrologHighlighter
+from prolog.interpreter.completion import PrologCompleter
 from rpython.rlib.listsort import TimSort
 from rpython.rlib.parsing.parsing import ParseError
 from rpython.rlib.parsing.deterministic import LexerError
@@ -114,7 +121,7 @@ def readline():
             break
     return "".join(result)
 
-def run(query, var_to_pos, engine):
+def run(query, var_to_pos, engine, query_source=None):
     #from prolog.builtin import formatting
     #f = formatting.TermFormatter(engine, quoted=True, max_depth=20)
     try:
@@ -124,9 +131,10 @@ def run(query, var_to_pos, engine):
                 query,
                 ContinueContinuation(engine, var_to_pos, printmessage))
     except error.UnificationFailed:
-        printmessage("Nein\n")
+        printmessage(styled('Nein', 'FAILURE') + '\n')
     except error.UncaughtError, e:
-        printmessage("ERROR:\n%s\n" % e.format_traceback(engine))
+        printmessage("%s\n%s\n" % (styled('ERROR:', 'ERROR_LABEL'),
+                                      e.format_traceback(engine, query_source=query_source)))
     except error.CatchableError, e:
         printmessage("ERROR: %s\n" % e.get_errstr(engine))
     except error.PrologParseError, exc:
@@ -138,8 +146,30 @@ def run(query, var_to_pos, engine):
     except DebugAbort:
         printmessage("Execution aborted\n")
 
+def history_filename():
+    path = os.environ.get('PYROLOG_HISTORY')
+    if path is not None:
+        return path
+    home = os.environ.get('HOME')
+    if home:
+        return os.path.join(home, '.pyrolog_history')
+    return ''
+
+
 def repl(engine):
     printmessage("welcome!\n")
+    history = History()
+    reader = rpyrepl.make_reader(history=history, policy=PrologInputPolicy(),
+                                highlighter=PrologHighlighter(),
+                                completer=PrologCompleter(engine))
+    history_path = history_filename() if reader is not None else ''
+    if history_path:
+        try:
+            history.load(history_path)
+        except OSError as exc:
+            if exc.errno != errno.ENOENT:
+                printmessage('Warning: could not read query history\n')
+                history_path = ''
     while 1:
         module = engine.modulewrapper.current_module.name
         if module == "user":
@@ -148,8 +178,26 @@ def repl(engine):
             module += ":  "
         if engine.debugger.enabled:
             module = "[trace] " + module
-        printmessage(module + ">?- ")
-        line = readline()
+        prompt = module + ">?- "
+        if reader is None:
+            printmessage(prompt)
+            line = readline()
+        else:
+            try:
+                line = reader.readline(prompt)
+                if line.strip() and (not history.entries or
+                                     history.entries[-1] != line):
+                    history.append(line)
+                    if history_path:
+                        try:
+                            history.save(history_path)
+                        except OSError:
+                            printmessage('Warning: could not save query history\n')
+            except rpyrepl.EndOfInput:
+                raise EndOfInput
+            except rpyrepl.CancelledInput:
+                printmessage("\n")
+                continue
         if line.strip() == "halt.":
             break
         try:
@@ -158,7 +206,7 @@ def repl(engine):
             printmessage(exc.message + "\n")
             continue
         for goal in goals:
-            run(goal, var_to_pos, engine)
+            run(goal, var_to_pos, engine, query_source=line)
 
 def execute(e, filename):
     run(term.Callable.build("consult", [term.Callable.build(filename)]), {}, e)

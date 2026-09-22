@@ -1,5 +1,15 @@
 """Console presentation and commands for the predicate debugger."""
 from prolog.interpreter.trace import TraceObserver, format_goal
+from rpyrepl.color import styled
+
+
+PORT_STYLES = {
+    'Call': 'TRACE_CALL',
+    'Exit': 'TRACE_EXIT',
+    'Redo': 'TRACE_REDO',
+    'Fail': 'TRACE_FAIL',
+    'Exception': 'TRACE_EXCEPTION',
+}
 
 
 class DebugAbort(Exception):
@@ -34,7 +44,8 @@ class ConsoleTraceObserver(TraceObserver):
 
     def event(self, engine, port, frame):
         io = self.io
-        io.write("%s: (%d) %s" % (port, frame.depth, format_goal(engine, frame, port)))
+        label = styled(port + ':', PORT_STYLES[port])
+        io.write("%s (%d) %s" % (label, frame.depth, format_goal(engine, frame, port)))
         if port not in engine.debugger.leashed:
             io.write("\n")
             return

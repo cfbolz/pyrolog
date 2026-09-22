@@ -12,6 +12,7 @@ __pycache__/
 
 # Local translation and CI outputs
 /pyrolog-c
+/rpyrepl-c
 /translation.log
 /*-tests.xml
 /.ci-rpython/

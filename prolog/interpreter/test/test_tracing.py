@@ -8,6 +8,11 @@ from prolog.interpreter.trace import TraceObserver, format_goal
 from prolog.interpreter.test.tool import collect_all
 
 
+@pytest.fixture(autouse=True)
+def plain_debugger(monkeypatch):
+    monkeypatch.setenv('NO_COLOR', '1')
+
+
 class RecordingObserver(TraceObserver):
     def __init__(self):
         self.events = []
@@ -149,6 +154,33 @@ def console_engine(source, commands):
     e.debugger.observer.io = io
     e.debugger.enable()
     return e, io
+
+
+@pytest.mark.parametrize('port, ansi', [
+    ('Call', '\x1b[1;32m'), ('Exit', '\x1b[1;32m'),
+    ('Redo', '\x1b[1;33m'), ('Fail', '\x1b[1;31m'),
+    ('Exception', '\x1b[1;35m'),
+])
+@pytest.mark.parametrize('color', [False, True])
+@pytest.mark.parametrize('leashed', [False, True])
+def test_console_port_colors(monkeypatch, port, ansi, color, leashed):
+    from prolog.interpreter.trace import DebugFrame
+    from prolog.interpreter.term import Callable
+    monkeypatch.setenv('FORCE_COLOR', '1')
+    if color:
+        monkeypatch.delenv('NO_COLOR')
+    e, io = console_engine('p.', ['\n'] if leashed else [])
+    if not leashed:
+        e.debugger.leashed.clear()
+    frame = DebugFrame(Callable.build('p'), None, e.debugger.generation)
+    frame.call_text = 'p'
+    e.debugger.event(e, port, frame)
+    label = port + ':'
+    if color:
+        label = ansi + label + '\x1b[0m'
+    suffix = ' ? \n' if leashed else '\n'
+    assert ''.join(io.output) == label + ' (1) p' + suffix
+    assert not io.commands
 
 
 def test_console_skip_and_goal_display():

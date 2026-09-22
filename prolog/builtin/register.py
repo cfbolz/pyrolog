@@ -11,6 +11,9 @@ import inspect
 
 Signature.register_extr_attr("builtin")
 
+# Populated by expose_builtin at import time, for interactive completion.
+builtin_names = []
+
 jit_modules = ["control"]
 
 class Builtin(object):
@@ -124,4 +127,5 @@ def make_wrapper(func, name, unwrap_spec=[], handles_continuation=False,
         signature = Signature.getsignature(name, numargs)
         b = Builtin(miniglobals[funcname], funcname, numargs, signature)
         signature.set_extra("builtin", b)
+        builtin_names.append(name)
     return func
