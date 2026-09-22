@@ -119,6 +119,89 @@ def impl_not_identical(engine, heap, obj1, obj2):
         raise error.UnificationFailed()
 
 
+def variant_attributes(left, right, todo):
+    # Compare live attributes by module name, independent of insertion order
+    # and deleted slots in Pyrolog's attribute maps.
+    left_has_attrs = isinstance(left, term.AttVar) and not left.is_empty()
+    right_has_attrs = isinstance(right, term.AttVar) and not right.is_empty()
+    if left_has_attrs != right_has_attrs:
+        return False
+    if not left_has_attrs:
+        return True
+    assert isinstance(left, term.AttVar)
+    assert isinstance(right, term.AttVar)
+    left_count = 0
+    for name, index in left.attmap.indexes.iteritems():
+        value = left.value_list[index]
+        if value is None:
+            continue
+        other, _ = right.get_attribute(name)
+        if other is None:
+            return False
+        left_count += 1
+        todo.append((value, other))
+    right_count = 0
+    for value in right.value_list:
+        if value is not None:
+            right_count += 1
+    return left_count == right_count
+
+
+def variant(left, right):
+    # Keep the two variable roles separate even when the inputs share variables.
+    left_to_right = {}
+    right_to_left = {}
+    seen = {}
+    todo = [(left, right)]
+    while todo:
+        left, right = todo.pop()
+        left = left.dereference(None)
+        right = right.dereference(None)
+        if isinstance(left, term.Var):
+            if not isinstance(right, term.Var):
+                return False
+            mapped = left_to_right.get(left)
+            if mapped is not None:
+                if mapped is not right:
+                    return False
+                continue
+            if right in right_to_left:
+                return False
+            # Record before following attributes, which may refer back here.
+            left_to_right[left] = right
+            right_to_left[right] = left
+            if not variant_attributes(left, right, todo):
+                return False
+        elif isinstance(right, term.Var):
+            return False
+        elif isinstance(left, term.Callable):
+            if (not isinstance(right, term.Callable) or
+                    not left.signature().eq(right.signature())):
+                return False
+            arity = left.argument_count()
+            if arity == 0:
+                continue
+            pair = (left, right)
+            if pair in seen:
+                continue
+            seen[pair] = None
+            # Even identical compounds must be traversed to establish mappings
+            # for their variables; a pointer-equality shortcut would miss them.
+            for i in range(arity - 1, -1, -1):
+                todo.append((left.argument_at(i), right.argument_at(i)))
+        elif isinstance(right, term.Callable):
+            return False
+        elif term.cmp_standard_order(left, right, None) != 0:
+            return False
+    return True
+
+
+@expose_builtin("=@=", unwrap_spec=["obj", "obj"])
+def impl_variant(engine, heap, left, right):
+    if not variant(left, right):
+        raise error.UnificationFailed()
+
+
 def check_order_operand(engine, heap, obj):
     from prolog.builtin.type import impl_acyclic_term
     try:
