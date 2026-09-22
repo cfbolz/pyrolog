@@ -83,6 +83,9 @@ errors produce a warning while in-memory editing and history remain usable.
 There is no exit-time rewrite or truncation, so concurrent sessions preserve
 each other's appended entries. Other sessions' entries become available on
 the next startup. Piped input does not access the history file.
+Appends are serialized with an advisory file lock. If an entry fails partway
+through writing, its partial append is rolled back while the lock is held;
+the complete entry remains in memory for the next save attempt.
 
 Text is stored as UTF-8 using `rpython.rlib.rutf8`, without RPython's Unicode
 type. Cursor positions are byte offsets at code-point boundaries;

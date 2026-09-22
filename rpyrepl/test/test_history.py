@@ -127,6 +127,7 @@ def test_retry_after_partial_write(tmpdir, monkeypatch, prefix, zero_write):
     monkeypatch.setattr(os, 'write', partial_then_fail)
     with pytest.raises(OSError):
         history.save(str(path))
+    assert path.read_binary() == prefix
     with pytest.raises(OSError):
         history.save(str(path))
     history.append('next')
@@ -138,3 +139,121 @@ def test_retry_after_partial_write(tmpdir, monkeypatch, prefix, zero_write):
     loaded.load(str(path))
     assert loaded.entries == expected
     assert history.saved_count == len(expected)
+
+
+def test_partial_failure_then_other_session_append(tmpdir, monkeypatch):
+    path = tmpdir.join('history')
+    path.write('')
+    first, second = History(), History()
+    first.load(str(path))
+    second.load(str(path))
+    first.append('member(X, [a,b]).')
+    second.append('write(ok).')
+    write = os.write
+    calls = []
+
+    def partial_then_fail(fd, data):
+        calls.append(data)
+        if len(calls) == 1:
+            return write(fd, data[:6])
+        raise OSError(errno.ENOSPC, 'disk full')
+
+    monkeypatch.setattr(os, 'write', partial_then_fail)
+    with pytest.raises(OSError):
+        first.save(str(path))
+    assert path.read() == ''
+    monkeypatch.setattr(os, 'write', write)
+    second.save(str(path))
+    first.save(str(path))
+    loaded = History()
+    loaded.load(str(path))
+    assert loaded.entries == ['write(ok).', 'member(X, [a,b]).']
+
+
+def test_concurrent_short_writes_are_serialized(tmpdir, monkeypatch):
+    path = str(tmpdir.join('history'))
+    write = os.write
+    monkeypatch.setattr(os, 'write', lambda fd, data: write(fd, data[:1]))
+    children = []
+    expected = []
+    for session in range(2):
+        entries = ['session%d\nentry%d' % (session, i) for i in range(20)]
+        expected.extend(entries)
+        pid = os.fork()
+        if pid == 0:
+            try:
+                history = History()
+                for entry in entries:
+                    history.append(entry)
+                    history.save(path)
+            except BaseException:
+                os._exit(1)
+            os._exit(0)
+        children.append(pid)
+    statuses = [os.waitpid(pid, 0)[1] for pid in children]
+    assert statuses == [0, 0]
+    loaded = History()
+    loaded.load(path)
+    assert sorted(loaded.entries) == sorted(expected)
+
+
+def test_write_holds_exclusive_lock(tmpdir, monkeypatch):
+    import fcntl
+    path = str(tmpdir.join('history'))
+    write = os.write
+
+    def checked_write(fd, data):
+        pid = os.fork()
+        if pid == 0:
+            other = os.open(path, os.O_RDWR)
+            try:
+                fcntl.lockf(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except IOError as exc:
+                os._exit(0 if exc.errno in (errno.EACCES, errno.EAGAIN) else 2)
+            os._exit(1)
+        assert os.waitpid(pid, 0)[1] == 0
+        return write(fd, data)
+
+    monkeypatch.setattr(os, 'write', checked_write)
+    history = History()
+    history.append('locked')
+    history.save(path)
+
+
+def test_separator_uses_current_file_tail(tmpdir):
+    path = tmpdir.join('history')
+    path.write('old')
+    first, second = History(), History()
+    first.load(str(path))
+    second.load(str(path))
+    first.append('one')
+    first.save(str(path))
+    second.append('two')
+    second.save(str(path))
+    assert path.read() == 'old\none\ntwo\n'
+
+
+def test_rollback_preserves_already_saved_entries(tmpdir, monkeypatch):
+    path = tmpdir.join('history')
+    history = History()
+    history.append('first')
+    history.append('second')
+    write = os.write
+    calls = []
+
+    def fail_second_entry(fd, data):
+        calls.append(data)
+        if len(calls) == 1:
+            return write(fd, data)
+        if len(calls) == 2:
+            return write(fd, data[:2])
+        raise OSError(errno.ENOSPC, 'disk full')
+
+    monkeypatch.setattr(os, 'write', fail_second_entry)
+    with pytest.raises(OSError):
+        history.save(str(path))
+    assert path.read() == 'first\n'
+    assert history.saved_count == 1
+    monkeypatch.setattr(os, 'write', write)
+    history.save(str(path))
+    assert path.read() == 'first\nsecond\n'
