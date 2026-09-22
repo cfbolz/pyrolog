@@ -31,7 +31,7 @@ Pyrolog uses a full-stop token outside quoted text and comments, so floats
 and operators such as `=..` do not terminate a query. Terminated syntax errors
 reach the normal parser.
 
-Completion, colourization, and bracketed paste are not implemented yet.
+Completion is not implemented yet.
 Resize is reflected on the next input event, clearing and redrawing the
 visible terminal area. Ordinary redraws stay within the editor's area.
 Buffers taller than the terminal use a vertical viewport following the cursor.
