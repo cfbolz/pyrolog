@@ -59,6 +59,16 @@ class accept(Command):
         reader.finished = True
 
 
+class previous_history(Command):
+    def do(self, reader, event):
+        reader.move_history(-1)
+
+
+class next_history(Command):
+    def do(self, reader, event):
+        reader.move_history(1)
+
+
 class cancel(Command):
     def do(self, reader, event):
         raise CancelledInput
@@ -70,4 +80,5 @@ COMMANDS = {
     'eof': eof(), 'left': left(), 'right': right(),
     'home': beginning_of_line(), 'end': end_of_line(),
     'accept': accept(), 'cancel': cancel(),
+    'up': previous_history(), 'down': next_history(),
 }

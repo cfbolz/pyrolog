@@ -27,9 +27,11 @@ class UnixConsole(Console):
         self.el = tigetstr('el', True)
         self.right = tigetstr('cuf1', True)
         self.keycodes = {'\x1b[D': 'left', '\x1b[C': 'right',
+                         '\x1b[A': 'up', '\x1b[B': 'down',
                          '\x1b[H': 'home', '\x1b[F': 'end',
                          '\x1b[3~': 'delete'}
         for capability, command in [('kcub1', 'left'), ('kcuf1', 'right'),
+                                    ('kcuu1', 'up'), ('kcud1', 'down'),
                                     ('khome', 'home'), ('kend', 'end'),
                                     ('kdch1', 'delete')]:
             sequence = tigetstr(capability)
@@ -148,6 +150,10 @@ class UnixConsole(Console):
             return Event('home')
         if char == '\x05':
             return Event('end')
+        if char == '\x10':
+            return Event('up')
+        if char == '\x0e':
+            return Event('down')
         if char == '\x1b':
             return self.read_escape()
         first = ord(char[0])

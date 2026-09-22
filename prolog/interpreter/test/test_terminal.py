@@ -4,7 +4,7 @@ from prolog.interpreter.continuation import Engine
 
 
 def terminal_input(monkeypatch, text):
-    monkeypatch.setattr(translatedmain.rpyrepl, 'make_reader', lambda: None)
+    monkeypatch.setattr(translatedmain.rpyrepl, 'make_reader', lambda history=None: None)
     chars = iter(text)
     read = translatedmain.os.read
 
@@ -90,8 +90,31 @@ def test_query_editor_cancellation_and_eof(monkeypatch):
             raise translatedmain.rpyrepl.EndOfInput
 
     reader = Reader()
-    monkeypatch.setattr(translatedmain.rpyrepl, 'make_reader', lambda: reader)
+    monkeypatch.setattr(translatedmain.rpyrepl, 'make_reader', lambda history=None: reader)
     translatedmain.run_console(Engine())
     assert reader.calls == 3
     assert 'X = a' in ''.join(output)
     assert 'ERROR' not in ''.join(output)
+
+
+def test_query_history_policy(monkeypatch):
+    terminal_input(monkeypatch, '')
+    histories = []
+
+    class Reader(object):
+        lines = iter([u'  ', u'X = a.', u'X = a.', u'X = b.', u'X = a.'])
+
+        def readline(self, prompt):
+            try:
+                return next(self.lines)
+            except StopIteration:
+                raise translatedmain.rpyrepl.EndOfInput
+
+    def make_reader(history=None):
+        histories.append(history)
+        return Reader()
+
+    monkeypatch.setattr(translatedmain.rpyrepl, 'make_reader', make_reader)
+    translatedmain.run_console(Engine())
+    assert histories[0].limit == 1000
+    assert histories[0].entries == [u'X = a.', u'X = b.', u'X = a.']

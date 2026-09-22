@@ -2,10 +2,12 @@
 import os
 from rpython.rlib import rtermios
 from rpyrepl import make_reader, EndOfInput, CancelledInput
+from rpyrepl.history import History
 
 
 def entry_point(argv):
-    reader = make_reader()
+    history = History(10)
+    reader = make_reader(history=history)
     if reader is None:
         os.write(1, 'plain input\n')
         return 0
@@ -22,6 +24,7 @@ def entry_point(argv):
             os.write(1, '\nCANCELLED\n')
             continue
         assert rtermios.tcgetattr(0) == original
+        history.append(text)
         os.write(1, 'ACCEPTED:' + text.encode('utf-8') + '\n')
         if text == u'quit':
             return 0

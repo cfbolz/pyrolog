@@ -56,3 +56,19 @@ def test_pipe_fallback(executable):
     assert process.returncode == 0
     assert out == 'plain input\n'
     assert err == ''
+
+
+def test_history_and_draft(child):
+    child.send('first\r')
+    child.expect_exact('ACCEPTED:first\r\n')
+    child.expect_exact('edit> ')
+    child.send('draft\x1b[D\x1b[A\x1b[B!\r')
+    child.expect_exact('ACCEPTED:draf!t\r\n')
+    child.expect_exact('edit> ')
+    child.send('\x10\x10\r')
+    child.expect_exact('ACCEPTED:first\r\n')
+    child.expect_exact('edit> ')
+    child.send('\x04')
+    child.expect(pexpect.EOF)
+    child.close()
+    assert child.exitstatus == 0

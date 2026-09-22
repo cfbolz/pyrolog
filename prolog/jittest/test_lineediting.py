@@ -21,6 +21,17 @@ def test_edit_query_and_keep_choice_input_separate():
         child.send('X = ab.\x1b[D\x7f\r')
         child.expect_exact('X = a\r\n')
         child.expect_exact('>?- ')
+        # Recall an accepted query, edit it, then navigate across both entries.
+        child.send('\x1b[A\x1b[D\x7fb\r')
+        child.expect_exact('X = b\r\n')
+        child.expect_exact('>?- ')
+        child.send('\x10\x10\x0e\r')
+        child.expect_exact('X = b\r\n')
+        child.expect_exact('>?- ')
+        # Consecutive duplicate queries do not occupy another history entry.
+        child.send('\x1b[A\x1b[A\r')
+        child.expect_exact('X = a\r\n')
+        child.expect_exact('>?- ')
         child.send('(X = a; X = b).\r')
         child.expect_exact('X = a\r\n')
         child.send(';\n')

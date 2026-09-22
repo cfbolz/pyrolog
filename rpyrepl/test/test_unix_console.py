@@ -20,6 +20,8 @@ def supply(monkeypatch, console, data):
 
 @pytest.mark.parametrize('data, kind, text', [
     ('\x1b[D', 'left', u''), ('\x1b[C', 'right', u''),
+    ('\x1b[A', 'up', u''), ('\x1b[B', 'down', u''),
+    ('\x10', 'up', u''), ('\x0e', 'down', u''),
     ('\x1b[3~', 'delete', u''), ('\x1b[1;5A', 'unknown', u''),
     ('\x03', 'cancel', u''), ('\x04', 'eof', u''),
     ('\x7f', 'backspace', u''), ('\r', 'accept', u''),

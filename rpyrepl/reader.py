@@ -32,8 +32,12 @@ def display_width(char):
 
 
 class Reader(object):
-    def __init__(self, console):
+    def __init__(self, console, history=None):
         self.console = console
+        self.history = history
+        self.history_index = 0
+        self.draft = u''
+        self.draft_pos = 0
         self.buffer = []
         self.pos = 0
         self.prompt = u''
@@ -51,6 +55,25 @@ class Reader(object):
 
     def get_unicode(self):
         return u''.join(self.buffer)
+
+    def move_history(self, direction):
+        history = self.history
+        if history is None:
+            return
+        index = self.history_index + direction
+        if index < 0 or index > len(history.entries):
+            return
+        if self.history_index == len(history.entries):
+            self.draft = self.get_unicode()
+            self.draft_pos = self.pos
+        self.history_index = index
+        if index == len(history.entries):
+            self.buffer = list(self.draft)
+            self.pos = self.draft_pos
+        else:
+            self.buffer = list(history.entries[index])
+            self.pos = len(self.buffer)
+        self.view_start = 0
 
     def do_cmd(self, event):
         command = COMMANDS.get(event.evt)
@@ -98,6 +121,11 @@ class Reader(object):
         self.view_start = 0
         self.prompt = prompt
         self.finished = False
+        self.history_index = 0
+        if self.history is not None:
+            self.history_index = len(self.history.entries)
+        self.draft = u''
+        self.draft_pos = 0
         try:
             self.console.prepare()
             self.refresh()

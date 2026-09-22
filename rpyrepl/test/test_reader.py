@@ -2,6 +2,7 @@ import pytest
 from rpyrepl import EndOfInput, CancelledInput
 from rpyrepl.console import Console, Event
 from rpyrepl.reader import Reader
+from rpyrepl.history import History
 
 
 class FakeConsole(Console):
@@ -112,3 +113,47 @@ def test_narrow_terminal_and_long_prompt():
     Reader(console).readline(u'a long prompt> ')
     assert all(len(screen[0]) <= 1 and cxy[0] < 2
                for screen, cxy in console.screens)
+
+
+def test_bounded_history():
+    history = History(2)
+    for text in [u'first', u'second', u'third']:
+        history.append(text)
+    assert history.entries == [u'second', u'third']
+
+
+@pytest.mark.parametrize('keys, expected', [
+    (events('up', 'accept'), u'two'),
+    (events('up', 'up', 'up', 'accept'), u'one'),
+    (events('up', 'up', 'down', 'accept'), u'two'),
+    (events('down', u'draft', 'up', 'down', 'down', 'accept'), u'draft'),
+    (events(u'draft', 'left', 'up', 'down', u'!', 'accept'), u'draf!t'),
+    (events('up', 'backspace', u'!', 'accept'), u'tw!'),
+    (events('up', 'backspace', 'up', 'down', 'accept'), u'two'),
+])
+def test_history_navigation(keys, expected):
+    history = History()
+    history.append(u'one')
+    history.append(u'two')
+    reader = Reader(FakeConsole(keys), history)
+    assert reader.readline() == expected
+    assert history.entries == [u'one', u'two']
+
+
+@pytest.mark.parametrize('history', [None, History()])
+def test_empty_history(history):
+    reader = Reader(FakeConsole(events(u'draft', 'up', 'down', 'accept')), history)
+    assert reader.readline() == u'draft'
+
+
+def test_history_resets_between_reads():
+    history = History()
+    history.append(u'old')
+    console = FakeConsole(events(u'draft', 'up', 'cancel',
+                                 'up', 'down', 'accept', 'up', 'accept'))
+    reader = Reader(console, history)
+    with pytest.raises(CancelledInput):
+        reader.readline()
+    assert reader.readline() == u''
+    history.append(u'new')
+    assert reader.readline() == u'new'
