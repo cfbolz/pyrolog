@@ -30,7 +30,7 @@ screen coordinates are terminal columns. Prompts, inserted text, and history
 entries are validated, rejecting malformed UTF-8 and surrogates with
 `rutf8.CheckError`. Invalid terminal input is ignored. Movement and deletion
 operate on code points, not grapheme clusters; display widths still use the
-Unicode 5.2 database and do not fully handle modern emoji sequences.
+Unicode 15.0 database and do not fully handle emoji grapheme sequences.
 
 Run from the repository root, with PYTHONPATH pointing to an RPython checkout:
 

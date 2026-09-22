@@ -5,7 +5,7 @@ valid UTF-8; buffer positions are byte offsets at code-point boundaries.
 Screen coordinates count terminal columns, independently of byte offsets.
 """
 from rpython.rlib import rutf8
-from rpython.rlib.unicodedata import unicodedb_5_2_0 as unicodedb
+from rpython.rlib.unicodedata import unicodedb_15_0_0 as unicodedb
 from rpyrepl.commands import COMMANDS
 
 

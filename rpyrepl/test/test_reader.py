@@ -103,6 +103,14 @@ def test_unicode_widths():
     assert console.screens[2][1] == (5, 0)
 
 
+def test_unicode_15_emoji_width():
+    # SHAKING FACE was added in Unicode 15.0 and occupies two columns.
+    console = FakeConsole(events(u'\U0001fae8', 'left', 'accept'))
+    Reader(console).readline('> ')
+    assert console.screens[1][1] == (4, 0)
+    assert console.screens[2][1] == (2, 0)
+
+
 def test_control_characters_are_not_terminal_commands():
     console = FakeConsole(events(u'\x1b', 'accept'))
     Reader(console).readline()
