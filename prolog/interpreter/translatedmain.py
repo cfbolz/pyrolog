@@ -154,6 +154,9 @@ def repl(engine):
             break
         try:
             goals, var_to_pos = engine.parse(line, file_name="<stdin>")
+        except error.CatchableError, exc:
+            printmessage("ERROR: %s\n" % exc.get_errstr(engine))
+            continue
         except error.PrologParseError, exc:
             printmessage(exc.message + "\n")
             continue

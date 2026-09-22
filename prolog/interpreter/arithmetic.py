@@ -187,6 +187,13 @@ def check_finite_float(value):
         error.throw_evaluation_error("undefined")
 
 
+def make_float(value):
+    # Check at each arithmetic operation, including intermediate results.
+    # Float itself also represents terms constructed outside arithmetic.
+    check_finite_float(value)
+    return term.Float(value)
+
+
 def float_pow(base, exponent):
     if base == 0.0 and exponent < 0.0:
         error.throw_evaluation_error("zero_divisor")
@@ -196,8 +203,7 @@ def float_pow(base, exponent):
         raise error.throw_evaluation_error("undefined")
     except OverflowError:
         raise error.throw_evaluation_error("float_overflow")
-    check_finite_float(result)
-    return term.Float(result)
+    return make_float(result)
 
 
 def bigint_pow(base, exponent):
@@ -262,7 +268,7 @@ class __extend__(term.Numeric):
 
 class __extend__(term.Number):
     def arith_float(self):
-        return term.Float(float(self.num))
+        return make_float(float(self.num))
 
     # ------------------ addition ------------------ 
     def arith_add(self, other):
@@ -278,7 +284,7 @@ class __extend__(term.Number):
     def arith_add_bigint(self, other_value):
         return make_int(term.BigInt(other_value.add(rbigint.fromint(self.num))))
     def arith_add_float(self, other_float):
-        return term.Float(other_float + float(self.num))
+        return make_float(other_float + float(self.num))
 
     def arith_unaryadd(self):
         return self
@@ -298,7 +304,7 @@ class __extend__(term.Number):
         return make_int(term.BigInt(other_value.sub(rbigint.fromint(self.num))))
 
     def arith_sub_float(self, other_float):
-        return term.Float(other_float - float(self.num))
+        return make_float(other_float - float(self.num))
 
     def arith_unarysub(self):
         try:
@@ -323,7 +329,7 @@ class __extend__(term.Number):
         return make_int(term.BigInt(other_value.mul(rbigint.fromint(self.num))))
 
     def arith_mul_float(self, other_float):
-        return term.Float(other_float * float(self.num))
+        return make_float(other_float * float(self.num))
 
     # ------------------ division ------------------ 
     def arith_div(self, other):
@@ -346,7 +352,7 @@ class __extend__(term.Number):
     def arith_div_float(self, other_float):
         if self.num == 0:
             error.throw_evaluation_error("zero_divisor")
-        return term.Float(other_float / float(self.num))
+        return make_float(other_float / float(self.num))
 
     def arith_floordiv(self, other):
         return other.arith_floordiv_number(self.num)
@@ -459,7 +465,7 @@ class __extend__(term.Number):
         return make_int(term.BigInt(self_value))
 
     def arith_max_float(self, other_float):
-        return term.Float(max(other_float, float(self.num)))
+        return make_float(max(other_float, float(self.num)))
 
     # ------------------ min ------------------
     def arith_min(self, other):
@@ -475,7 +481,7 @@ class __extend__(term.Number):
         return make_int(term.BigInt(other_value))
 
     def arith_min_float(self, other_float):
-        return term.Float(min(other_float, float(self.num)))
+        return make_float(min(other_float, float(self.num)))
 
     # ------------------ miscellanous ------------------
     def arith_round(self):
@@ -525,13 +531,13 @@ class __extend__(term.Float):
         return other.arith_add_float(self.floatval)
 
     def arith_add_number(self, other_num):
-        return term.Float(float(other_num) + self.floatval)
+        return make_float(float(other_num) + self.floatval)
 
     def arith_add_bigint(self, other_value):
-        return term.Float(bigint_to_float(other_value) + self.floatval)
+        return make_float(bigint_to_float(other_value) + self.floatval)
 
     def arith_add_float(self, other_float):
-        return term.Float(other_float + self.floatval)
+        return make_float(other_float + self.floatval)
 
     def arith_unaryadd(self):
         return self
@@ -541,29 +547,29 @@ class __extend__(term.Float):
         return other.arith_sub_float(self.floatval)
 
     def arith_sub_number(self, other_num):
-        return term.Float(float(other_num) - self.floatval)
+        return make_float(float(other_num) - self.floatval)
 
     def arith_sub_bigint(self, other_value):
-        return term.Float(bigint_to_float(other_value) - self.floatval)
+        return make_float(bigint_to_float(other_value) - self.floatval)
 
     def arith_sub_float(self, other_float):
-        return term.Float(other_float - self.floatval)
+        return make_float(other_float - self.floatval)
 
     def arith_unarysub(self):
-        return term.Float(-self.floatval)
+        return make_float(-self.floatval)
 
     # ------------------ multiplication ------------------ 
     def arith_mul(self, other):
         return other.arith_mul_float(self.floatval)
 
     def arith_mul_number(self, other_num):
-        return term.Float(float(other_num) * self.floatval)
+        return make_float(float(other_num) * self.floatval)
 
     def arith_mul_bigint(self, other_value):
-        return term.Float(bigint_to_float(other_value) * self.floatval)
+        return make_float(bigint_to_float(other_value) * self.floatval)
 
     def arith_mul_float(self, other_float):
-        return term.Float(other_float * self.floatval)
+        return make_float(other_float * self.floatval)
 
     # ------------------ division ------------------ 
     def arith_div(self, other):
@@ -572,17 +578,17 @@ class __extend__(term.Float):
     def arith_div_number(self, other_num):
         if self.floatval == 0.0:
             error.throw_evaluation_error("zero_divisor")
-        return term.Float(float(other_num) / self.floatval)
+        return make_float(float(other_num) / self.floatval)
 
     def arith_div_bigint(self, other_value):
         if self.floatval == 0.0:
             error.throw_evaluation_error("zero_divisor")
-        return term.Float(bigint_to_float(other_value) / self.floatval)
+        return make_float(bigint_to_float(other_value) / self.floatval)
 
     def arith_div_float(self, other_float):
         if self.floatval == 0.0:
             error.throw_evaluation_error("zero_divisor")
-        return term.Float(other_float / self.floatval)
+        return make_float(other_float / self.floatval)
 
     def arith_floordiv(self, other_float):
         error.throw_type_error("integer", self)
@@ -608,33 +614,33 @@ class __extend__(term.Float):
 
     # ------------------ abs ------------------ 
     def arith_abs(self):
-        return term.Float(abs(self.floatval))
+        return make_float(abs(self.floatval))
 
     # ------------------ max ------------------ 
     def arith_max(self, other):
         return other.arith_max_float(self.floatval)
 
     def arith_max_number(self, other_num):
-        return term.Float(max(float(other_num), self.floatval))
+        return make_float(max(float(other_num), self.floatval))
 
     def arith_max_bigint(self, other_value):
-        return term.Float(max(bigint_to_float(other_value), self.floatval))
+        return make_float(max(bigint_to_float(other_value), self.floatval))
 
     def arith_max_float(self, other_float):
-        return term.Float(max(other_float, self.floatval))
+        return make_float(max(other_float, self.floatval))
     
     # ------------------ min ------------------ 
     def arith_min(self, other):
         return other.arith_min_float(self.floatval)
 
     def arith_min_number(self, other_num):
-        return term.Float(min(float(other_num), self.floatval))
+        return make_float(min(float(other_num), self.floatval))
 
     def arith_min_bigint(self, other_value):
-        return term.Float(min(bigint_to_float(other_value), self.floatval))
+        return make_float(min(bigint_to_float(other_value), self.floatval))
 
     def arith_min_float(self, other_float):
-        return term.Float(min(other_float, self.floatval))
+        return make_float(min(other_float, self.floatval))
 
     # ------------------ miscellanous ------------------
     def arith_round(self):
@@ -679,7 +685,7 @@ class __extend__(term.Float):
             val = ovfcheck_float_to_int(self.floatval)
         except OverflowError:
             val = rbigint.fromfloat(self.floatval).tofloat()
-        return term.Float(float(self.floatval - val))
+        return make_float(float(self.floatval - val))
 
     def arith_float_integer_part(self):
         check_finite_float(self.floatval)
@@ -692,7 +698,7 @@ class __extend__(term.Float):
 
 class __extend__(term.BigInt):
     def arith_float(self):
-        return term.Float(bigint_to_float(self.value))
+        return make_float(bigint_to_float(self.value))
 
     # ------------------ addition ------------------ 
     def arith_add(self, other):
@@ -705,7 +711,7 @@ class __extend__(term.BigInt):
         return make_int(term.BigInt(other_value.add(self.value)))
 
     def arith_add_float(self, other_float):
-        return term.Float(other_float + bigint_to_float(self.value))
+        return make_float(other_float + bigint_to_float(self.value))
 
     def arith_unaryadd(self):
         return self
@@ -721,7 +727,7 @@ class __extend__(term.BigInt):
         return make_int(term.BigInt(other_value.sub(self.value)))
 
     def arith_sub_float(self, other_float):
-        return term.Float(other_float - bigint_to_float(self.value))
+        return make_float(other_float - bigint_to_float(self.value))
 
     def arith_unarysub(self):
         return term.BigInt(self.value.neg())
@@ -737,7 +743,7 @@ class __extend__(term.BigInt):
         return make_int(term.BigInt(other_value.mul(self.value)))
 
     def arith_mul_float(self, other_float):
-        return term.Float(other_float * bigint_to_float(self.value))
+        return make_float(other_float * bigint_to_float(self.value))
 
     # ------------------ division ------------------ 
     def arith_div(self, other):
@@ -753,7 +759,7 @@ class __extend__(term.BigInt):
             error.throw_evaluation_error("zero_divisor")
 
     def arith_div_float(self, other_float):
-        return term.Float(other_float / bigint_to_float(self.value))
+        return make_float(other_float / bigint_to_float(self.value))
 
     def arith_floordiv(self, other):
         return other.arith_floordiv_bigint(self.value)
@@ -854,7 +860,7 @@ class __extend__(term.BigInt):
         return make_int(term.BigInt(other_value))
 
     def arith_max_float(self, other_float):
-        return term.Float(max(other_float, bigint_to_float(self.value)))
+        return make_float(max(other_float, bigint_to_float(self.value)))
 
     # ------------------ min ------------------
     def arith_min(self, other):
@@ -872,7 +878,7 @@ class __extend__(term.BigInt):
         return make_int(term.BigInt(self.value))
 
     def arith_min_float(self, other_float):
-        return term.Float(min(other_float, bigint_to_float(self.value)))
+        return make_float(min(other_float, bigint_to_float(self.value)))
 
     # ------------------ miscellanous ------------------
     def arith_round(self):

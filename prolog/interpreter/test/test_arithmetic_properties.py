@@ -1,6 +1,7 @@
 """Check numeric boundaries against independent Python arithmetic."""
 import operator
 import sys
+import math
 
 from hypothesis import given, strategies as st, settings, example
 from rpython.rlib.rbigint import rbigint
@@ -26,6 +27,39 @@ def unwrap_integer(value):
 
 integers = st.integers(-(2 ** 1024), 2 ** 1024)
 numbers = st.one_of(integers, st.floats())
+
+
+@settings(max_examples=200, deadline=None)
+@given(st.floats(allow_nan=False, allow_infinity=False),
+       st.floats(allow_nan=False, allow_infinity=False))
+@example(1.0e308, 2.0)
+@example(sys.float_info.max, sys.float_info.max)
+@example(1.0, 1.0e-320)
+@example(-0.0, 2.0)
+@example(1.0e-320, 2.0)
+def test_float_operations(left, right):
+    lhs, rhs = term.Float(left), term.Float(right)
+    for name in ['add', 'sub', 'mul', 'div']:
+        expected_error = None
+        if name == 'div' and right == 0.0:
+            expected_error = 'zero_divisor'
+        else:
+            operation = operator.truediv if name == 'div' else getattr(operator, name)
+            expected = operation(left, right)
+            if math.isinf(expected):
+                expected_error = 'float_overflow'
+        try:
+            actual = getattr(lhs, 'arith_' + name)(rhs)
+        except error.CatchableError as exc:
+            assert expected_error is not None
+            err = exc.term.argument_at(0)
+            assert err.name() == 'evaluation_error'
+            assert err.argument_at(0).name() == expected_error
+        else:
+            assert expected_error is None
+            assert actual.floatval == expected
+            if expected == 0.0:
+                assert math.copysign(1.0, actual.floatval) == math.copysign(1.0, expected)
 
 
 @settings(max_examples=200, deadline=None)

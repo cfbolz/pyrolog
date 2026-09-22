@@ -13,6 +13,25 @@ from prolog.interpreter.test.tool import assert_true, prolog_raises
 BIG = 2 ** 100
 
 
+@pytest.mark.parametrize('expression', [
+    '1.0e308 + 1.0e308', '-1.0e308 + (-1.0e308)',
+    '1.0e308 - (-1.0e308)', '-1.0e308 - 1.0e308',
+    '1.0e308 * 2.0', '-1.0e308 * 2.0',
+    '1.0e308 * 2', '2 * 1.0e308',
+    '1.0e308 * %s' % BIG, '%s * 1.0e308' % BIG,
+    '1.0e308 + %s' % (10 ** 308), '%s + 1.0e308' % (10 ** 308),
+    '-1.0e308 - %s' % (10 ** 308), '%s - (-1.0e308)' % (10 ** 308),
+    '1.0e308 / 0.5', '-1.0e308 / 0.5',
+    '1 / 1.0e-320', '%s / 1.0e-320' % BIG,
+    # An overflowing intermediate must not disappear in the outer operation.
+    '0.0 * (1.0e308 * 2.0)', 'min(0.0, 1.0e308 * 2.0)',
+])
+def test_float_result_overflow_is_catchable(expression):
+    assert_true(
+        'catch((X is %s, fail), error(evaluation_error(float_overflow)), '
+        'true), Y is 2 + 3, Y = 5.' % expression)
+
+
 @pytest.mark.parametrize('operator', ['<<', '>>'])
 @pytest.mark.parametrize('value', [1, BIG])
 @pytest.mark.parametrize('count', [-1, -BIG])
