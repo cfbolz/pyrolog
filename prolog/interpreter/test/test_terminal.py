@@ -4,6 +4,7 @@ from prolog.interpreter.continuation import Engine
 
 
 def terminal_input(monkeypatch, text):
+    monkeypatch.setenv('PYROLOG_HISTORY', '')
     monkeypatch.setattr(translatedmain.rpyrepl, 'make_reader', lambda history=None: None)
     chars = iter(text)
     read = translatedmain.os.read
@@ -116,5 +117,25 @@ def test_query_history_policy(monkeypatch):
 
     monkeypatch.setattr(translatedmain.rpyrepl, 'make_reader', make_reader)
     translatedmain.run_console(Engine())
-    assert histories[0].limit == 1000
     assert histories[0].entries == ['X = a.', 'X = b.', 'X = a.']
+
+
+def test_history_filename(monkeypatch):
+    monkeypatch.delenv('PYROLOG_HISTORY', raising=False)
+    monkeypatch.setenv('HOME', '/tmp/pyrolog-history-home')
+    assert translatedmain.history_filename() == '/tmp/pyrolog-history-home/.pyrolog_history'
+    monkeypatch.setenv('PYROLOG_HISTORY', '/tmp/custom-history')
+    assert translatedmain.history_filename() == '/tmp/custom-history'
+    monkeypatch.setenv('PYROLOG_HISTORY', '')
+    assert translatedmain.history_filename() == ''
+    monkeypatch.delenv('PYROLOG_HISTORY')
+    monkeypatch.delenv('HOME')
+    assert translatedmain.history_filename() == ''
+
+
+def test_plain_input_does_not_touch_history(monkeypatch, tmpdir):
+    terminal_input(monkeypatch, 'X = a.\nhalt.\n')
+    path = tmpdir.join('history')
+    monkeypatch.setenv('PYROLOG_HISTORY', str(path))
+    translatedmain.run_console(Engine())
+    assert not path.check()

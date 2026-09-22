@@ -1,12 +1,20 @@
 """Translate independently: rpython --output=rpyrepl-c <this file>."""
 import os
+import errno
 from rpython.rlib import rtermios
 from rpyrepl import make_reader, EndOfInput, CancelledInput
 from rpyrepl.history import History
 
 
 def entry_point(argv):
-    history = History(10)
+    history = History()
+    history_path = argv[1] if len(argv) > 1 else ''
+    if history_path:
+        try:
+            history.load(history_path)
+        except OSError as exc:
+            if exc.errno != errno.ENOENT:
+                raise
     reader = make_reader(history=history)
     if reader is None:
         os.write(1, 'plain input\n')
@@ -25,6 +33,8 @@ def entry_point(argv):
             continue
         assert rtermios.tcgetattr(0) == original
         history.append(text)
+        if history_path:
+            history.save(history_path)
         os.write(1, 'ACCEPTED:' + text + '\n')
         if text == 'quit':
             return 0

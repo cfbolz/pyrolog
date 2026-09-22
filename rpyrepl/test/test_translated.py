@@ -88,3 +88,23 @@ def test_utf8_navigation_and_history(child):
     child.expect(pexpect.EOF)
     child.close()
     assert child.exitstatus == 0
+
+
+def test_persistent_utf8_history(executable, tmpdir):
+    env = os.environ.copy()
+    env['TERM'] = 'xterm'
+    path = str(tmpdir.join('history'))
+    text = u'caf\xe9\u754c\U0001f600'.encode('utf-8')
+    for keys in [text + '\r', '\x1b[A\r']:
+        child = pexpect.spawn(executable, [path], env=env, timeout=10)
+        try:
+            child.expect_exact('edit> ')
+            child.send(keys)
+            child.expect_exact('ACCEPTED:' + text + '\r\n')
+            child.expect_exact('edit> ')
+            child.send('\x04')
+            child.expect(pexpect.EOF)
+            child.close()
+            assert child.exitstatus == 0
+        finally:
+            child.close(force=True)

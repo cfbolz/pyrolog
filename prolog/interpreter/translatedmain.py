@@ -1,4 +1,5 @@
 import os, sys
+import errno
 import rpyrepl
 from rpyrepl.history import History
 from rpython.rlib.listsort import TimSort
@@ -140,10 +141,28 @@ def run(query, var_to_pos, engine):
     except DebugAbort:
         printmessage("Execution aborted\n")
 
+def history_filename():
+    path = os.environ.get('PYROLOG_HISTORY')
+    if path is not None:
+        return path
+    home = os.environ.get('HOME')
+    if home:
+        return os.path.join(home, '.pyrolog_history')
+    return ''
+
+
 def repl(engine):
     printmessage("welcome!\n")
-    history = History(1000)
+    history = History()
     reader = rpyrepl.make_reader(history=history)
+    history_path = history_filename() if reader is not None else ''
+    if history_path:
+        try:
+            history.load(history_path)
+        except OSError as exc:
+            if exc.errno != errno.ENOENT:
+                printmessage('Warning: could not read query history\n')
+                history_path = ''
     while 1:
         module = engine.modulewrapper.current_module.name
         if module == "user":
@@ -162,6 +181,11 @@ def repl(engine):
                 if line.strip() and (not history.entries or
                                      history.entries[-1] != line):
                     history.append(line)
+                    if history_path:
+                        try:
+                            history.save(history_path)
+                        except OSError:
+                            printmessage('Warning: could not save query history\n')
             except rpyrepl.EndOfInput:
                 raise EndOfInput
             except rpyrepl.CancelledInput:

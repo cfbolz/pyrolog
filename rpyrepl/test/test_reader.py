@@ -124,11 +124,12 @@ def test_narrow_terminal_and_long_prompt():
                for screen, cxy in console.screens)
 
 
-def test_bounded_history():
-    history = History(2)
-    for text in ['first', 'second', 'third']:
+def test_unlimited_history():
+    history = History()
+    entries = [str(i) for i in range(2000)]
+    for text in entries:
         history.append(text)
-    assert history.entries == ['second', 'third']
+    assert history.entries == entries
 
 
 @pytest.mark.parametrize('keys, expected', [
