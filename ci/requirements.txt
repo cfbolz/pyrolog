@@ -4,3 +4,5 @@ py==1.11.0
 pexpect==4.9.0
 # PyPy bundles CFFI, which depends on pycparser.
 pycparser==2.21
+# Last Python 2-compatible series, also used by the RPython checkout.
+hypothesis==4.39.3

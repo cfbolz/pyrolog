@@ -116,6 +116,70 @@ def bigint_to_float(value):
         error.throw_evaluation_error("float_overflow")
 
 
+UNORDERED = 2
+
+
+def integer_value(value):
+    if isinstance(value, term.Number):
+        return rbigint.fromint(value.num)
+    assert isinstance(value, term.BigInt)
+    return value.value
+
+
+def compare_integer_float(integer, value):
+    # Unlike standard term ordering, arithmetic comparisons equate 1 and 1.0.
+    # NaNs are handled by compare_numbers before reaching this helper.
+    if math.isinf(value):
+        return -1 if value > 0.0 else 1
+    if isinstance(integer, term.Number):
+        # As in PyPy, small machine integers can be converted without rounding.
+        if rarithmetic.LONG_BIT <= 32 or -1 <= integer.num >> 48 < 1:
+            return term.rcmp(float(integer.num), value)
+    truncated = rbigint.fromfloat(value)
+    result = term.bigint_cmp(integer_value(integer), truncated)
+    if result:
+        return result
+    if value != math.floor(value):
+        return -1 if value > 0.0 else 1
+    return 0
+
+
+def compare_numbers(left, right):
+    if isinstance(left, term.Float):
+        if math.isnan(left.floatval):
+            return UNORDERED
+        if isinstance(right, term.Float):
+            if math.isnan(right.floatval):
+                return UNORDERED
+            return term.rcmp(left.floatval, right.floatval)
+        return -compare_integer_float(right, left.floatval)
+    if isinstance(right, term.Float):
+        if math.isnan(right.floatval):
+            return UNORDERED
+        return compare_integer_float(left, right.floatval)
+    if isinstance(left, term.Number) and isinstance(right, term.Number):
+        return term.rcmp(left.num, right.num)
+    return term.bigint_cmp(integer_value(left), integer_value(right))
+
+
+def shift_count(value, left_shift):
+    if isinstance(value, term.Number):
+        if value.num < 0:
+            error.throw_domain_error("not_less_than_zero", value)
+        return value.num
+    if isinstance(value, term.BigInt):
+        if value.value.get_sign() < 0:
+            error.throw_domain_error("not_less_than_zero", value)
+        try:
+            return value.value.toint()
+        except OverflowError:
+            if left_shift:
+                error.throw_representation_error("shift_count")
+            # Every representable integer has fewer bits than this count.
+            return rarithmetic.maxint
+    error.throw_type_error("integer", value)
+
+
 def float_pow(base, exponent):
     if base == 0.0 and exponent < 0.0:
         error.throw_evaluation_error("zero_divisor")
@@ -155,6 +219,32 @@ def int_pow(base, exponent):
 class __extend__(term.Numeric):
     def arith_sqrt(self):
         return self.arith_pow(term.Float(0.5))
+
+    def arith_shl(self, other):
+        if not isinstance(self, term.Number) and not isinstance(self, term.BigInt):
+            error.throw_type_error("integer", self)
+        count = shift_count(other, True)
+        if isinstance(self, term.Number):
+            if count < rarithmetic.LONG_BIT:
+                try:
+                    return term.Number(rarithmetic.ovfcheck(self.num << count))
+                except OverflowError:
+                    pass
+            return make_int(term.BigInt(
+                rbigint.lshift_int_int_bigint_result(self.num, count)))
+        assert isinstance(self, term.BigInt)
+        return make_int(term.BigInt(self.value.lshift(count)))
+
+    def arith_shr(self, other):
+        if not isinstance(self, term.Number) and not isinstance(self, term.BigInt):
+            error.throw_type_error("integer", self)
+        count = shift_count(other, False)
+        if isinstance(self, term.Number):
+            if count >= rarithmetic.LONG_BIT:
+                return term.Number(-1 if self.num < 0 else 0)
+            return term.Number(self.num >> count)
+        assert isinstance(self, term.BigInt)
+        return make_int(term.BigInt(self.value.rshift(count)))
 
 class __extend__(term.Number):
     def arith_float(self):
@@ -286,32 +376,6 @@ class __extend__(term.Number):
     def arith_pow_float(self, other_float):
         return float_pow(other_float, float(self.num))
 
-    # ------------------ shift right ------------------ 
-    def arith_shr(self, other):
-        return other.arith_shr_number(self.num)
-
-    def arith_shr_number(self, other_num):
-        return term.Number(other_num >> self.num)
-
-    def arith_shr_bigint(self, other_value):
-        return make_int(term.BigInt(other_value.rshift(self.num)))
-
-    # ------------------ shift left ------------------ 
-    def arith_shl(self, other):
-        return other.arith_shl_number(self.num)
-
-    def arith_shl_number(self, other_num):
-        if 0 <= self.num < rarithmetic.LONG_BIT:
-            try:
-                return term.Number(rarithmetic.ovfcheck(other_num << self.num))
-            except OverflowError:
-                pass
-        return make_int(term.BigInt(
-            rbigint.lshift_int_int_bigint_result(other_num, self.num)))
-
-    def arith_shl_bigint(self, other_value):
-        return make_int(term.BigInt(other_value.lshift(self.num)))
-
     # ------------------ or ------------------ 
     def arith_or(self, other):
         return other.arith_or_number(self.num)
@@ -428,7 +492,7 @@ class __extend__(term.Float):
         return term.Float(float(other_num) + self.floatval)
 
     def arith_add_bigint(self, other_value):
-        return term.Float(other_value.tofloat() + self.floatval)
+        return term.Float(bigint_to_float(other_value) + self.floatval)
 
     def arith_add_float(self, other_float):
         return term.Float(other_float + self.floatval)
@@ -444,7 +508,7 @@ class __extend__(term.Float):
         return term.Float(float(other_num) - self.floatval)
 
     def arith_sub_bigint(self, other_value):
-        return term.Float(other_value.tofloat() - self.floatval)
+        return term.Float(bigint_to_float(other_value) - self.floatval)
 
     def arith_sub_float(self, other_float):
         return term.Float(other_float - self.floatval)
@@ -460,7 +524,7 @@ class __extend__(term.Float):
         return term.Float(float(other_num) * self.floatval)
 
     def arith_mul_bigint(self, other_value):
-        return term.Float(other_value.tofloat() * self.floatval)
+        return term.Float(bigint_to_float(other_value) * self.floatval)
 
     def arith_mul_float(self, other_float):
         return term.Float(other_float * self.floatval)
@@ -477,7 +541,7 @@ class __extend__(term.Float):
     def arith_div_bigint(self, other_value):
         if self.floatval == 0.0:
             error.throw_evaluation_error("zero_divisor")
-        return term.Float(other_value.tofloat() / self.floatval)
+        return term.Float(bigint_to_float(other_value) / self.floatval)
 
     def arith_div_float(self, other_float):
         if self.floatval == 0.0:
@@ -518,7 +582,7 @@ class __extend__(term.Float):
         return term.Float(max(float(other_num), self.floatval))
 
     def arith_max_bigint(self, other_value):
-        return term.Float(max(other_value.tofloat(), self.floatval))
+        return term.Float(max(bigint_to_float(other_value), self.floatval))
 
     def arith_max_float(self, other_float):
         return term.Float(max(other_float, self.floatval))
@@ -531,7 +595,7 @@ class __extend__(term.Float):
         return term.Float(min(float(other_num), self.floatval))
 
     def arith_min_bigint(self, other_value):
-        return term.Float(min(other_value.tofloat(), self.floatval))
+        return term.Float(min(bigint_to_float(other_value), self.floatval))
 
     def arith_min_float(self, other_float):
         return term.Float(min(other_float, self.floatval))
@@ -600,7 +664,7 @@ class __extend__(term.BigInt):
         return make_int(term.BigInt(other_value.add(self.value)))
 
     def arith_add_float(self, other_float):
-        return term.Float(other_float + self.value.tofloat())
+        return term.Float(other_float + bigint_to_float(self.value))
 
     def arith_unaryadd(self):
         return self
@@ -616,7 +680,7 @@ class __extend__(term.BigInt):
         return make_int(term.BigInt(other_value.sub(self.value)))
 
     def arith_sub_float(self, other_float):
-        return term.Float(other_float - self.value.tofloat())
+        return term.Float(other_float - bigint_to_float(self.value))
 
     def arith_unarysub(self):
         return term.BigInt(self.value.neg())
@@ -632,7 +696,7 @@ class __extend__(term.BigInt):
         return make_int(term.BigInt(other_value.mul(self.value)))
 
     def arith_mul_float(self, other_float):
-        return term.Float(other_float * self.value.tofloat())
+        return term.Float(other_float * bigint_to_float(self.value))
 
     # ------------------ division ------------------ 
     def arith_div(self, other):
@@ -648,7 +712,7 @@ class __extend__(term.BigInt):
             error.throw_evaluation_error("zero_divisor")
 
     def arith_div_float(self, other_float):
-        return term.Float(other_float / self.value.tofloat())
+        return term.Float(other_float / bigint_to_float(self.value))
 
     def arith_floordiv(self, other):
         return other.arith_floordiv_bigint(self.value)
@@ -676,47 +740,6 @@ class __extend__(term.BigInt):
 
     def arith_pow_float(self, other_float):
         return float_pow(other_float, bigint_to_float(self.value))
-
-    # ------------------ shift right ------------------ 
-    def arith_shr(self, other):
-        return other.arith_shr_bigint(self.value)
-
-    def arith_shr_number(self, other_num):
-        try:
-            num = self.value.toint()
-        except OverflowError:
-            # XXX raise a Prolog-level error!
-            raise ValueError('Right operand too big')
-        return term.Number(other_num >> num)
-
-    def arith_shr_bigint(self, other_value):
-        try:
-            num = self.value.toint()
-        except OverflowError:
-            # XXX raise a Prolog-level error!
-            raise ValueError('Right operand too big')
-        return make_int(term.BigInt(other_value.rshift(num)))
-
-    # ------------------ shift left ------------------ 
-    def arith_shl(self, other):
-        return other.arith_shl_bigint(self.value)
-
-    def arith_shl_number(self, other_num):
-        try:
-            num = self.value.toint()
-        except OverflowError:
-            # XXX raise a Prolog-level error!
-            raise ValueError('Right operand too big')
-        else:
-            return make_int(term.BigInt(rbigint.fromint(other_num).lshift(num)))
-
-    def arith_shl_bigint(self, other_value):
-        try:
-            num = self.value.toint()
-        except OverflowError:
-            # XXX raise a Prolog-level error!
-            raise ValueError('Right operand too big')
-        return make_int(term.BigInt(other_value.lshift(num)))
 
     # ------------------ or ------------------ 
     def arith_or(self, other):
@@ -790,7 +813,7 @@ class __extend__(term.BigInt):
         return make_int(term.BigInt(other_value))
 
     def arith_max_float(self, other_float):
-        return term.Float(max(other_float, self.value.tofloat()))
+        return term.Float(max(other_float, bigint_to_float(self.value)))
 
     # ------------------ min ------------------
     def arith_min(self, other):
@@ -808,7 +831,7 @@ class __extend__(term.BigInt):
         return make_int(term.BigInt(self.value))
 
     def arith_min_float(self, other_float):
-        return term.Float(min(other_float, self.value.tofloat()))
+        return term.Float(min(other_float, bigint_to_float(self.value)))
 
     # ------------------ miscellanous ------------------
     def arith_round(self):

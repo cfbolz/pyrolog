@@ -1,5 +1,5 @@
 import py
-from prolog.interpreter import helper, term, error, continuation
+from prolog.interpreter import helper, term, error, continuation, arithmetic
 from prolog.builtin.register import expose_builtin
 # ___________________________________________________________________
 # arithmetic
@@ -70,23 +70,11 @@ for ext, prolog, python in [("eq", "=:=", "=="),
     exec py.code.Source("""
 @expose_builtin(prolog, unwrap_spec=["arithmetic", "arithmetic"])
 def impl_arith_%s(engine, heap, num1, num2):
-    eq = False
-    if isinstance(num1, term.Number):
-        if isinstance(num2, term.Number):
-            if not (num1.num %s num2.num):
-                raise error.UnificationFailed()
-            else:
-                return
-        n1 = num1.num
+    comparison = arithmetic.compare_numbers(num1, num2)
+    if comparison == arithmetic.UNORDERED:
+        matches = %r
     else:
-        assert isinstance(num1, term.Float)
-        n1 = num1.floatval
-    if isinstance(num2, term.Number):
-        n2 = num2.num
-    else:
-        assert isinstance(num2, term.Float)
-        n2 = num2.floatval
-    eq = n1 %s n2
-    if not eq:
-        raise error.UnificationFailed()""" % (ext, python, python)).compile()
+        matches = comparison %s 0
+    if not matches:
+        raise error.UnificationFailed()""" % (ext, ext == "ne", python)).compile()
  
