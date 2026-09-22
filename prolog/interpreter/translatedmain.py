@@ -158,11 +158,10 @@ def repl(engine):
             line = readline()
         else:
             try:
-                text = reader.readline(prompt.decode('utf-8'))
-                line = text.encode('utf-8')
+                line = reader.readline(prompt)
                 if line.strip() and (not history.entries or
-                                     history.entries[-1] != text):
-                    history.append(text)
+                                     history.entries[-1] != line):
+                    history.append(line)
             except rpyrepl.EndOfInput:
                 raise EndOfInput
             except rpyrepl.CancelledInput:

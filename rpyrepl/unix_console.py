@@ -1,7 +1,7 @@
 """Unix terminal backend with scoped terminal modes and a single-row display."""
 import errno
 import os
-from rpython.rlib import rtermios, rpoll, rposix
+from rpython.rlib import rtermios, rpoll, rposix, rutf8
 from rpython.rtyper.lltypesystem import lltype, rffi
 from rpyrepl import EndOfInput
 from rpyrepl.console import Console, Event
@@ -82,7 +82,7 @@ class UnixConsole(Console):
                 text = text[count:]
 
     def refresh(self, screen, cxy):
-        self.write(self.cr + screen[0].encode('utf-8') + self.el +
+        self.write(self.cr + screen[0] + self.el +
                    self.cr + self.right * cxy[0])
 
     def finish(self):
@@ -175,7 +175,7 @@ class UnixConsole(Console):
                 return Event('unknown')
             char += following
         try:
-            text = char.decode('utf-8')
-        except UnicodeDecodeError:
+            rutf8.check_utf8(char, allow_surrogates=False)
+        except rutf8.CheckError:
             return Event('unknown')
-        return Event('text', text)
+        return Event('text', char)

@@ -26,11 +26,14 @@ def supply(monkeypatch, console, data):
     ('\x03', 'cancel', u''), ('\x04', 'eof', u''),
     ('\x7f', 'backspace', u''), ('\r', 'accept', u''),
     ('\xc3\xa9', 'text', u'\xe9'), ('\xe7\x95\x8c', 'text', u'\u754c'),
+    ('\xf0\x9f\x98\x80', 'text', u'\U0001f600'),
+    ('\xed\xa0\x80', 'unknown', u''),
+    ('\xf4\x90\x80\x80', 'unknown', u''),
 ])
 def test_events(monkeypatch, console, data, kind, text):
     supply(monkeypatch, console, data)
     event = console.get_event()
-    assert (event.evt, event.data) == (kind, text)
+    assert (event.evt, event.data) == (kind, text.encode('utf-8'))
     with pytest.raises(EndOfInput):
         console.get_event()
 

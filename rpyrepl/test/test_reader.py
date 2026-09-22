@@ -3,6 +3,7 @@ from rpyrepl import EndOfInput, CancelledInput
 from rpyrepl.console import Console, Event
 from rpyrepl.reader import Reader
 from rpyrepl.history import History
+from rpython.rlib import rutf8
 
 
 class FakeConsole(Console):
@@ -31,7 +32,7 @@ class FakeConsole(Console):
 
 
 def events(*items):
-    return [Event('text', item) if isinstance(item, unicode) else Event(item)
+    return [Event('text', item.encode('utf-8')) if isinstance(item, unicode) else Event(item)
             for item in items]
 
 
@@ -45,7 +46,7 @@ def events(*items):
 def test_editing(keys, expected):
     console = FakeConsole(keys)
     reader = Reader(console)
-    assert reader.readline(u'> ') == expected
+    assert reader.readline('> ') == expected.encode('utf-8')
     assert console.prepared and console.finished and console.restored
     assert 0 <= reader.pos <= len(reader.buffer)
 
@@ -84,42 +85,42 @@ def test_reader_reuse_after_cancellation():
     reader = Reader(console)
     with pytest.raises(CancelledInput):
         reader.readline()
-    assert reader.readline() == u'new'
+    assert reader.readline() == 'new'
 
 
 def test_horizontal_scroll_and_return_to_start():
     console = FakeConsole(events(u'abcdefgh', 'home', 'accept'), width=8)
     reader = Reader(console)
-    reader.readline(u'> ')
-    assert console.screens[1] == ([u'> efgh'], (6, 0))
-    assert console.screens[2] == ([u'> abcde'], (2, 0))
+    reader.readline('> ')
+    assert console.screens[1] == (['> efgh'], (6, 0))
+    assert console.screens[2] == (['> abcde'], (2, 0))
 
 
 def test_unicode_widths():
     console = FakeConsole(events(u'\u754ce\u0301', 'left', 'accept'))
-    Reader(console).readline(u'> ')
-    assert console.screens[1] == ([u'> \u754ce\u0301'], (5, 0))
+    Reader(console).readline('> ')
+    assert console.screens[1] == ([u'> \u754ce\u0301'.encode('utf-8')], (5, 0))
     assert console.screens[2][1] == (5, 0)
 
 
 def test_control_characters_are_not_terminal_commands():
     console = FakeConsole(events(u'\x1b', 'accept'))
     Reader(console).readline()
-    assert console.screens[1] == ([u'^['], (2, 0))
+    assert console.screens[1] == (['^['], (2, 0))
 
 
 def test_narrow_terminal_and_long_prompt():
     console = FakeConsole(events(u'abcdef', 'accept'), width=2)
-    Reader(console).readline(u'a long prompt> ')
+    Reader(console).readline('a long prompt> ')
     assert all(len(screen[0]) <= 1 and cxy[0] < 2
                for screen, cxy in console.screens)
 
 
 def test_bounded_history():
     history = History(2)
-    for text in [u'first', u'second', u'third']:
+    for text in ['first', 'second', 'third']:
         history.append(text)
-    assert history.entries == [u'second', u'third']
+    assert history.entries == ['second', 'third']
 
 
 @pytest.mark.parametrize('keys, expected', [
@@ -133,27 +134,77 @@ def test_bounded_history():
 ])
 def test_history_navigation(keys, expected):
     history = History()
-    history.append(u'one')
-    history.append(u'two')
+    history.append('one')
+    history.append('two')
     reader = Reader(FakeConsole(keys), history)
-    assert reader.readline() == expected
-    assert history.entries == [u'one', u'two']
+    assert reader.readline() == expected.encode('utf-8')
+    assert history.entries == ['one', 'two']
 
 
 @pytest.mark.parametrize('history', [None, History()])
 def test_empty_history(history):
     reader = Reader(FakeConsole(events(u'draft', 'up', 'down', 'accept')), history)
-    assert reader.readline() == u'draft'
+    assert reader.readline() == 'draft'
 
 
 def test_history_resets_between_reads():
     history = History()
-    history.append(u'old')
+    history.append('old')
     console = FakeConsole(events(u'draft', 'up', 'cancel',
                                  'up', 'down', 'accept', 'up', 'accept'))
     reader = Reader(console, history)
     with pytest.raises(CancelledInput):
         reader.readline()
-    assert reader.readline() == u''
-    history.append(u'new')
-    assert reader.readline() == u'new'
+    assert reader.readline() == ''
+    history.append('new')
+    assert reader.readline() == 'new'
+
+
+@pytest.mark.parametrize('commands, expected', [
+    (['left', 'backspace'], u'\xe9\U0001f600'),
+    (['home', 'right', 'delete'], u'\xe9\U0001f600'),
+    (['left', 'delete'], u'\xe9\u754c'),
+    (['backspace'], u'\xe9\u754c'),
+    (['home', 'delete'], u'\u754c\U0001f600'),
+])
+def test_utf8_edit_boundaries(commands, expected):
+    keys = events(u'\xe9\u754c\U0001f600', *commands) + events('accept')
+    console = FakeConsole(keys)
+    reader = Reader(console)
+    assert reader.readline() == expected.encode('utf-8')
+    rutf8.check_utf8(reader.buffer[:reader.pos], False)
+    rutf8.check_utf8(reader.buffer[reader.pos:], False)
+    for screen, cxy in console.screens:
+        rutf8.check_utf8(screen[0], False)
+
+
+def test_utf8_history_draft_and_cursor():
+    history = History()
+    history.append(u'\u754c\U0001f600'.encode('utf-8'))
+    console = FakeConsole(events(u'a\xe9z', 'left', 'up', 'down', u'!', 'accept'))
+    reader = Reader(console, history)
+    assert reader.readline() == u'a\xe9!z'.encode('utf-8')
+    assert reader.pos == 4
+
+
+def test_utf8_scrolling_and_prompt():
+    console = FakeConsole(events(u'\xe9\u754c\u754c', 'home', 'accept'), width=8)
+    reader = Reader(console)
+    reader.readline(u'\xe9> '.encode('utf-8'))
+    assert console.screens[1] == ([u'\xe9> \u754c'.encode('utf-8')], (5, 0))
+    assert console.screens[2] == ([u'\xe9> \xe9\u754c'.encode('utf-8')], (3, 0))
+
+
+@pytest.mark.parametrize('bad', ['\x80', '\xc0\xaf', '\xed\xa0\x80',
+                                '\xf4\x90\x80\x80', '\xe7\x95'])
+def test_invalid_utf8_at_api_boundaries(bad):
+    console = FakeConsole([Event('text', bad)])
+    with pytest.raises(rutf8.CheckError):
+        Reader(console).readline()
+    assert console.restored
+    with pytest.raises(rutf8.CheckError):
+        Reader(FakeConsole([])).readline(bad)
+    history = History()
+    with pytest.raises(rutf8.CheckError):
+        history.append(bad)
+    assert history.entries == []

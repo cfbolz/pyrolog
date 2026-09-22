@@ -2,7 +2,8 @@
 
 
 class Event(object):
-    def __init__(self, evt, data=u''):
+    # Text events contain UTF-8 byte strings.
+    def __init__(self, evt, data=''):
         self.evt = evt
         self.data = data
 

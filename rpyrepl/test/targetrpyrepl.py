@@ -14,7 +14,7 @@ def entry_point(argv):
     original = rtermios.tcgetattr(0)
     while True:
         try:
-            text = reader.readline(u'edit> ')
+            text = reader.readline('edit> ')
         except EndOfInput:
             assert rtermios.tcgetattr(0) == original
             os.write(1, '\nEOF\n')
@@ -25,8 +25,8 @@ def entry_point(argv):
             continue
         assert rtermios.tcgetattr(0) == original
         history.append(text)
-        os.write(1, 'ACCEPTED:' + text.encode('utf-8') + '\n')
-        if text == u'quit':
+        os.write(1, 'ACCEPTED:' + text + '\n')
+        if text == 'quit':
             return 0
 
 

@@ -81,12 +81,12 @@ def test_query_editor_cancellation_and_eof(monkeypatch):
             self.calls = 0
 
         def readline(self, prompt):
-            assert prompt == u'>?- '
+            assert prompt == '>?- '
             self.calls += 1
             if self.calls == 1:
                 raise translatedmain.rpyrepl.CancelledInput
             if self.calls == 2:
-                return u'X = a.'
+                return 'X = a.'
             raise translatedmain.rpyrepl.EndOfInput
 
     reader = Reader()
@@ -102,7 +102,7 @@ def test_query_history_policy(monkeypatch):
     histories = []
 
     class Reader(object):
-        lines = iter([u'  ', u'X = a.', u'X = a.', u'X = b.', u'X = a.'])
+        lines = iter(['  ', 'X = a.', 'X = a.', 'X = b.', 'X = a.'])
 
         def readline(self, prompt):
             try:
@@ -117,4 +117,4 @@ def test_query_history_policy(monkeypatch):
     monkeypatch.setattr(translatedmain.rpyrepl, 'make_reader', make_reader)
     translatedmain.run_console(Engine())
     assert histories[0].limit == 1000
-    assert histories[0].entries == [u'X = a.', u'X = b.', u'X = a.']
+    assert histories[0].entries == ['X = a.', 'X = b.', 'X = a.']

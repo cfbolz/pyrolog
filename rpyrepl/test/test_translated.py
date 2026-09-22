@@ -72,3 +72,19 @@ def test_history_and_draft(child):
     child.expect(pexpect.EOF)
     child.close()
     assert child.exitstatus == 0
+
+
+def test_utf8_navigation_and_history(child):
+    child.send(u'\xe9\u754c\U0001f600'.encode('utf-8') + '\x1b[D\x7f\r')
+    child.expect_exact('ACCEPTED:' + u'\xe9\U0001f600'.encode('utf-8') + '\r\n')
+    child.expect_exact('edit> ')
+    child.send('\x1b[A\x01\x1b[C\x1b[3~!\r')
+    child.expect_exact('ACCEPTED:' + u'\xe9!'.encode('utf-8') + '\r\n')
+    child.expect_exact('edit> ')
+    child.send(u'a\xe9z'.encode('utf-8') + '\x1b[D\x1b[A\x1b[B!\r')
+    child.expect_exact('ACCEPTED:' + u'a\xe9!z'.encode('utf-8') + '\r\n')
+    child.expect_exact('edit> ')
+    child.send('\x04')
+    child.expect(pexpect.EOF)
+    child.close()
+    assert child.exitstatus == 0

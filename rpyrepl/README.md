@@ -13,16 +13,24 @@ are not implemented yet. Resize is reflected on the next input event.
 
 `make_reader()` returns a Reader, or None when stdin/stdout are not terminals
 or the terminal lacks the required capabilities. `Reader.readline(prompt)`
-takes and returns Unicode; EOF and cancellation raise this package's
+takes and returns UTF-8 byte strings; EOF and cancellation raise this package's
 `EndOfInput` and `CancelledInput`. Terminal modes are restored before it returns
 or raises. Applications own the plain-input fallback and history policy.
 
 Pass a `rpyrepl.history.History(limit)` as `make_reader(history=history)` to
-enable in-memory history, and call `history.append(text)` to record Unicode
+enable in-memory history, and call `history.append(text)` to record UTF-8
 input. Navigation restores the unfinished draft and cursor when moving beyond
 the newest entry. Edits to recalled entries are discarded when navigating away;
 stored entries are unchanged. Pyrolog records nonblank accepted queries, omits
 consecutive duplicates, and retains at most 1,000 entries per session.
+
+Text is stored as UTF-8 using `rpython.rlib.rutf8`, without RPython's Unicode
+type. Cursor and scroll offsets are byte positions at code-point boundaries;
+screen coordinates are terminal columns. Prompts, inserted text, and history
+entries are validated, rejecting malformed UTF-8 and surrogates with
+`rutf8.CheckError`. Invalid terminal input is ignored. Movement and deletion
+operate on code points, not grapheme clusters; display widths still use the
+Unicode 5.2 database and do not fully handle modern emoji sequences.
 
 Run from the repository root, with PYTHONPATH pointing to an RPython checkout:
 

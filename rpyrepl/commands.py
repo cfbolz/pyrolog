@@ -1,5 +1,6 @@
 """Basic editing commands. See LICENSE for the pyrepl attribution."""
 from rpyrepl import EndOfInput, CancelledInput
+from rpython.rlib import rutf8
 
 
 class Command(object):
@@ -15,14 +16,16 @@ class self_insert(Command):
 class backspace(Command):
     def do(self, reader, event):
         if reader.pos > 0:
-            reader.pos -= 1
-            del reader.buffer[reader.pos]
+            start = rutf8.prev_codepoint_pos(reader.buffer, reader.pos)
+            reader.buffer = reader.buffer[:start] + reader.buffer[reader.pos:]
+            reader.pos = start
 
 
 class delete(Command):
     def do(self, reader, event):
         if reader.pos < len(reader.buffer):
-            del reader.buffer[reader.pos]
+            end = rutf8.next_codepoint_pos(reader.buffer, reader.pos)
+            reader.buffer = reader.buffer[:reader.pos] + reader.buffer[end:]
 
 
 class eof(delete):
@@ -35,13 +38,13 @@ class eof(delete):
 class left(Command):
     def do(self, reader, event):
         if reader.pos > 0:
-            reader.pos -= 1
+            reader.pos = rutf8.prev_codepoint_pos(reader.buffer, reader.pos)
 
 
 class right(Command):
     def do(self, reader, event):
         if reader.pos < len(reader.buffer):
-            reader.pos += 1
+            reader.pos = rutf8.next_codepoint_pos(reader.buffer, reader.pos)
 
 
 class beginning_of_line(Command):
