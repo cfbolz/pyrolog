@@ -46,6 +46,15 @@ def term_variables(engine, heap, prolog_term, variables, consider_attributes=Fal
                 else:
                     raise UnificationFailed()
             varlist.append(value)
+            if consider_attributes:
+                # Attributes can reference more attributed variables, including
+                # this variable again. The shared seen map closes these cycles.
+                assert isinstance(value, AttVar)
+                values = value.value_list
+                if values is not None:
+                    for i in range(len(values) - 1, -1, -1):
+                        if values[i] is not None:
+                            todo.append(values[i])
         elif isinstance(value, Callable):
             numargs = value.argument_count()
             if numargs == 0:
