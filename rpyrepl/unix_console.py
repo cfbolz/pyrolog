@@ -234,6 +234,8 @@ class UnixConsole(Console):
         self.width = self.getwidth()
         if char in ('\r', '\n'):
             return Event('accept')
+        if char == '\t':
+            return Event('complete')
         if char == self.erase or char in ('\x08', '\x7f'):
             return Event('backspace')
         if char == '\x04':

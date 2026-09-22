@@ -5,6 +5,7 @@ from rpyrepl.history import History
 from rpyrepl.color import styled
 from prolog.interpreter.replpolicy import PrologInputPolicy
 from prolog.interpreter.highlighting import PrologHighlighter
+from prolog.interpreter.completion import PrologCompleter
 from rpython.rlib.listsort import TimSort
 from rpython.rlib.parsing.parsing import ParseError
 from rpython.rlib.parsing.deterministic import LexerError
@@ -159,7 +160,8 @@ def repl(engine):
     printmessage("welcome!\n")
     history = History()
     reader = rpyrepl.make_reader(history=history, policy=PrologInputPolicy(),
-                                highlighter=PrologHighlighter())
+                                highlighter=PrologHighlighter(),
+                                completer=PrologCompleter(engine))
     history_path = history_filename() if reader is not None else ''
     if history_path:
         try:

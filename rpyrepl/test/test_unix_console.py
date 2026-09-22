@@ -24,6 +24,7 @@ def supply(monkeypatch, console, data):
     ('\x10', 'previous-history', u''), ('\x0e', 'next-history', u''),
     ('\x12', 'reverse-search', u''), ('\x13', 'forward-search', u''),
     ('\x07', 'abort-search', u''),
+    ('\t', 'complete', u''),
     ('\x1bb', 'backward-word', u''), ('\x1bf', 'forward-word', u''),
     ('\x1b[1;5D', 'backward-word', u''), ('\x1b[1;5C', 'forward-word', u''),
     ('\x1bOd', 'backward-word', u''), ('\x1bOc', 'forward-word', u''),

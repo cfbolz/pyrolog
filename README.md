@@ -2,6 +2,9 @@
 
 A Prolog interpreter in RPython.
 
+The interactive REPL supports editing, persistent history, highlighting, and
+predicate/module completion. See [rpyrepl](rpyrepl/README.md) for keys and settings.
+
 Requires PyPy 2.7 (`pypy`), pytest 4.6.11, pexpect, GCC 12, ncurses development headers, and a PyPy source
 checkout providing RPython (tested at `69e12f2c5c2cfe69529d5d7fcdcec048e1bd3ae4`).
 Run from this repository's root:

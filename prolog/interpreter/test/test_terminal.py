@@ -5,7 +5,7 @@ from prolog.interpreter.continuation import Engine
 
 def terminal_input(monkeypatch, text):
     monkeypatch.setenv('PYROLOG_HISTORY', '')
-    monkeypatch.setattr(translatedmain.rpyrepl, 'make_reader', lambda history=None, policy=None, highlighter=None: None)
+    monkeypatch.setattr(translatedmain.rpyrepl, 'make_reader', lambda history=None, policy=None, highlighter=None, completer=None: None)
     chars = iter(text)
     read = translatedmain.os.read
 
@@ -91,7 +91,7 @@ def test_query_editor_cancellation_and_eof(monkeypatch):
             raise translatedmain.rpyrepl.EndOfInput
 
     reader = Reader()
-    monkeypatch.setattr(translatedmain.rpyrepl, 'make_reader', lambda history=None, policy=None, highlighter=None: reader)
+    monkeypatch.setattr(translatedmain.rpyrepl, 'make_reader', lambda history=None, policy=None, highlighter=None, completer=None: reader)
     translatedmain.run_console(Engine())
     assert reader.calls == 3
     assert 'X = a' in ''.join(output)
@@ -111,7 +111,7 @@ def test_query_history_policy(monkeypatch):
             except StopIteration:
                 raise translatedmain.rpyrepl.EndOfInput
 
-    def make_reader(history=None, policy=None, highlighter=None):
+    def make_reader(history=None, policy=None, highlighter=None, completer=None):
         histories.append(history)
         return Reader()
 

@@ -39,6 +39,23 @@ def test_edit_cancel_and_eof(child):
     assert child.exitstatus == 0
 
 
+def test_completion_menu_and_accept(child):
+    child.send('al\t')
+    child.expect_exact('[ not unique ]')
+    child.send('\t')
+    child.expect_exact('| alpha')
+    child.expect_exact('edit> alp')
+    child.send('i\t')
+    child.expect_exact('edit> alpine')
+    child.send('\r')
+    child.expect_exact('ACCEPTED:alpine\r\n')
+    child.expect_exact('edit> ')
+    child.send('quit\r')
+    child.expect(pexpect.EOF)
+    child.close()
+    assert child.exitstatus == 0
+
+
 def test_utf8_and_long_input(child):
     text = u'abcdefghijklmnop\xe9\u754c'.encode('utf-8')
     child.send(text + '\x7f!\r')

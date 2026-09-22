@@ -7,7 +7,7 @@ and terminfo capabilities on Unix. Logical lines wrap into screen rows with
 a visible backslash marking each wrap; the marker is not part of the text.
 
 Supported keys: printable text, Backspace, Delete, Left/Right, Home/End,
-Ctrl-A/B/E/F, Up/Down, Ctrl-P/N (history), Enter, Ctrl-D (EOF on an empty
+Ctrl-A/B/E/F, Up/Down, Ctrl-P/N (history), Tab (completion), Enter, Ctrl-D (EOF on an empty
 buffer), and Ctrl-C (cancel input).
 Alt-B/F and Ctrl-Left/Right move by words. Ctrl-arrow sequences from xterm
 compatible terminals and rxvt are supported. Ctrl-W and Alt-Backspace delete
@@ -31,7 +31,29 @@ Pyrolog uses a full-stop token outside quoted text and comments, so floats
 and operators such as `=..` do not terminate a query. Terminated syntax errors
 reach the normal parser.
 
-Completion is not implemented yet.
+Tab completes a unique candidate or inserts the common prefix. Ambiguous
+completion shows a status below the cursor row; a second Tab shows candidates
+above it, and further Tabs page through them. Typing filters the menu; other
+editing commands dismiss it. Menu rows have a `| ` prefix and are cyan when
+colour is enabled. They never participate in vertical cursor movement.
+
+Pass a `rpyrepl.completion.Completer` as `make_reader(completer=...)`.
+Its `complete(utf8_text, byte_pos)` returns `Completion(start, candidates)`:
+the byte offset where the stem begins and candidate strings beginning with
+that stem. Only the missing suffix is inserted; text after the cursor is kept.
+Candidates are deduplicated and sorted. The standalone target has example
+words; Pyrolog completes unquoted identifier-style predicate names from the
+current module, imports, system predicates and builtins, deduplicated across
+arities. Known modules are offered with a trailing colon; plain module qualifiers
+such as `list:rev` complete only names in that module's namespace (including
+its imports), without adding builtins or system-module fallbacks. `list:` with
+no following prefix offers all those predicates. Empty unqualified stems,
+variables, quoted names, comments and filenames are not completed, and
+completion does not add parentheses or arguments.
+
+For example, `list:reve<Tab>` becomes `list:reverse`. `list:<Tab><Tab>`
+lists that module's predicates; `list:t<Tab>` does not suggest the builtin `true`.
+
 Resize is reflected on the next input event, clearing and redrawing the
 visible terminal area. Ordinary redraws stay within the editor's area.
 Buffers taller than the terminal use a vertical viewport following the cursor.

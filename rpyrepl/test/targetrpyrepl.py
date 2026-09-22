@@ -5,6 +5,15 @@ from rpython.rlib import rtermios
 from rpyrepl import make_reader, EndOfInput, CancelledInput
 from rpyrepl.history import History
 from rpyrepl.policy import BalancedParens
+from rpyrepl.completion import Completer, Completion
+
+
+class ExampleCompleter(Completer):
+    def complete(self, text, pos):
+        start = pos
+        while start > 0 and 'a' <= text[start - 1] <= 'z':
+            start -= 1
+        return Completion(start, ['alpha', 'alphabet', 'alpine', 'beta'])
 
 
 def entry_point(argv):
@@ -16,7 +25,8 @@ def entry_point(argv):
         except OSError as exc:
             if exc.errno != errno.ENOENT:
                 raise
-    reader = make_reader(history=history, policy=BalancedParens())
+    reader = make_reader(history=history, policy=BalancedParens(),
+                         completer=ExampleCompleter())
     if reader is None:
         os.write(1, 'plain input\n')
         return 0

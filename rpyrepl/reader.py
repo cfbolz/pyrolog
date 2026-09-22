@@ -10,6 +10,7 @@ from rpyrepl.commands import COMMANDS
 from rpyrepl.layout import Layout
 from rpyrepl.policy import InputPolicy
 from rpyrepl.highlight import Highlighter
+from rpyrepl.completion import Completer, CompletionState
 from rpyrepl import EndOfInput, CancelledInput
 
 
@@ -19,8 +20,11 @@ def is_word(code):
 
 
 class Reader(object):
-    def __init__(self, console, history=None, policy=None, highlighter=None):
+    def __init__(self, console, history=None, policy=None, highlighter=None, completer=None):
         self.console = console
+        self.completer = completer if completer is not None else Completer()
+        self.completion = CompletionState()
+        self.completion_displayed = False
         self.highlighter = highlighter if highlighter is not None else Highlighter()
         self.policy = policy if policy is not None else InputPolicy()
         self.continuation_prompt = '... '
@@ -109,6 +113,9 @@ class Reader(object):
         if self.search is not None:
             if self.search.handle(self, event):
                 return
+        filter_menu = event.evt == 'text' and self.completion.visible
+        if event.evt != 'complete' and not filter_menu:
+            self.completion.reset()
         command = COMMANDS.get(event.evt)
         if command is not None:
             if not command.vertical:
@@ -117,6 +124,8 @@ class Reader(object):
             self.last_command_was_kill = command.kills
         else:
             self.last_command_was_kill = False
+        if filter_menu:
+            self.completion.filter(self)
 
     def get_layout(self):
         colors = None
@@ -132,8 +141,11 @@ class Reader(object):
 
     def calc_screen(self):
         layout = self.get_layout()
-        self.cxy = layout.pos_to_xy(self.pos)
-        return layout.screen
+        self.completion_displayed = self.completion.visible or bool(self.completion.message)
+        screen, self.cxy = self.completion.decorate(
+            layout.screen, layout.pos_to_xy(self.pos), self.console.width,
+            self.console.height, self.console.can_colorize)
+        return screen
 
     def bol(self):
         pos = self.buffer.rfind('\n', 0, self.pos) + 1
@@ -176,6 +188,7 @@ class Reader(object):
         self.preferred_column = -1
         self.finished = False
         self.search = None
+        self.completion.reset()
         self.last_command_was_kill = False
         self.history_index = 0
         if self.history is not None:
@@ -191,8 +204,14 @@ class Reader(object):
                     if not self.finished:
                         self.refresh()
             except (EndOfInput, CancelledInput):
+                self.completion.reset()
+                if self.completion_displayed:
+                    self.refresh()
                 self.console.finish()
                 raise
+            self.completion.reset()
+            if self.completion_displayed:
+                self.refresh()
             self.console.finish()
             return self.get_utf8()
         finally:

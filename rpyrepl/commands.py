@@ -152,6 +152,11 @@ class forward_search(Command):
         reader.search = SearchState(reader, 1)
 
 
+class complete(Command):
+    def do(self, reader, event):
+        reader.completion.complete(reader)
+
+
 # These immutable command instances keep runtime dispatch statically typed.
 COMMANDS = {
     'text': self_insert(), 'paste': self_insert(),
@@ -167,4 +172,5 @@ COMMANDS = {
     'unix-line-discard': unix_line_discard(), 'kill-line': kill_line(),
     'yank': yank(),
     'reverse-search': reverse_search(), 'forward-search': forward_search(),
+    'complete': complete(),
 }
