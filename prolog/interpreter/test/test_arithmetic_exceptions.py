@@ -74,6 +74,31 @@ def test_shift_requires_integer_operands(operator, left, right):
                   'X is %s %s %s' % (left, operator, right))
 
 
+@pytest.mark.parametrize('operator', ['mod', '/\\', '\\/', 'xor'])
+@pytest.mark.parametrize('left,right,culprit', [
+    ('1.25', '2', '1.25'),
+    ('2', '1.25', '1.25'),
+    ('1.25', str(BIG), '1.25'),
+    (str(BIG), '1.25', '1.25'),
+    ('1.25', '2.5', '1.25'),
+    ('1.25', '0', '1.25'),
+    ('2', '(1 / 2.0)', '0.5'),
+])
+def test_integer_only_binary_float_error(operator, left, right, culprit):
+    assert_true(
+        'catch((X is %s %s %s, fail), '
+        'error(type_error(integer, %s)), true), Y is 2 + 3, Y = 5.' %
+        (left, operator, right, culprit))
+
+
+@pytest.mark.parametrize('expression,culprit', [
+    ('1.25', '1.25'), ('-1.25', '-1.25'), ('(1 / 2.0)', '0.5'),
+])
+def test_integer_complement_float_error(expression, culprit):
+    prolog_raises('type_error(integer, %s)' % culprit,
+                  'X is \\ (%s)' % expression)
+
+
 def test_gigantic_left_shift_allocation_error_is_catchable():
     if not sys.platform.startswith('linux'):
         pytest.skip('uses /proc to set an allocation limit above current usage')

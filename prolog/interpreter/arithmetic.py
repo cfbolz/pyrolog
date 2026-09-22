@@ -494,6 +494,28 @@ class __extend__(term.Float):
     def arith_float(self):
         return self
 
+    # Reject floats whether they are the left operand or receive a dispatched
+    # integer operand. Keep separate signatures for RPython's argument types.
+    def arith_or(self, other):
+        error.throw_type_error("integer", self)
+
+    def arith_or_number(self, other_num):
+        error.throw_type_error("integer", self)
+
+    def arith_or_bigint(self, other_value):
+        error.throw_type_error("integer", self)
+
+    def arith_or_float(self, other_float):
+        error.throw_type_error("integer", self)
+
+    arith_and = arith_xor = arith_mod = arith_or
+    arith_and_number = arith_xor_number = arith_mod_number = arith_or_number
+    arith_and_bigint = arith_xor_bigint = arith_mod_bigint = arith_or_bigint
+    arith_and_float = arith_xor_float = arith_mod_float = arith_or_float
+
+    def arith_not(self):
+        error.throw_type_error("integer", self)
+
     # ------------------ addition ------------------ 
     def arith_add(self, other):
         return other.arith_add_float(self.floatval)

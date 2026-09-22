@@ -60,6 +60,12 @@ def test_exact_integer_operations(left, right, left_big, right_big):
     for name in ['add', 'sub', 'mul']:
         actual = getattr(lhs, 'arith_' + name)(rhs)
         assert unwrap_integer(actual) == getattr(operator, name)(left, right)
+    assert unwrap_integer(lhs.arith_and(rhs)) == left & right
+    assert unwrap_integer(lhs.arith_or(rhs)) == left | right
+    assert unwrap_integer(lhs.arith_xor(rhs)) == left ^ right
+    assert unwrap_integer(lhs.arith_not()) == ~left
+    if right:
+        assert unwrap_integer(lhs.arith_mod(rhs)) == left % right
 
 
 @settings(max_examples=100, deadline=None)
