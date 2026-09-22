@@ -28,6 +28,12 @@ CASES += [
     'compare(<,f(a),f(b))',
 ]
 
+# Copying removes bound-variable edges while retaining compound sharing.
+_shared_goals = ['X0=f(A)']
+_shared_goals += ['X%d=f(X%d,X%d)' % (i, i-1, i-1) for i in range(1, 25)]
+_shared_goals += ['copy_term(X24,C)', 'compare(>,C,a)', 'var(A)']
+CASES.append(', '.join(_shared_goals))
+
 
 @pytest.mark.parametrize('query', CASES)
 def test_cyclic_standard_order(query):

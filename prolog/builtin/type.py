@@ -148,24 +148,30 @@ acyclic_state = AcyclicState()
 def acyclic_visit(obj, memoized):
     if not memoized:
         acyclic_state.consume()
+    binding = None
     if isinstance(obj, term.Var):
         binding = obj.getbinding()
         if binding is None:
             return
-        if memoized:
-            seen = acyclic_state.seen
-            if obj in seen:
-                if not seen[obj]:
-                    raise error.UnificationFailed()
-                return
-            # False means active on this path; True means fully checked.
-            seen[obj] = False
+    elif not isinstance(obj, term.Callable) or obj.argument_count() == 0:
+        return
+    if memoized:
+        # Copies can share compounds directly, without bound-variable edges.
+        # False means active on this path; True means fully checked.
+        seen = acyclic_state.seen
+        if obj in seen:
+            if not seen[obj]:
+                raise error.UnificationFailed()
+            return
+        seen[obj] = False
+    if binding is not None:
         acyclic_visit(binding, memoized)
-        if memoized:
-            acyclic_state.seen[obj] = True
-    elif isinstance(obj, term.Callable):
+    else:
+        assert isinstance(obj, term.Callable)
         for i in range(obj.argument_count()):
             acyclic_visit(obj.argument_at(i), memoized)
+    if memoized:
+        acyclic_state.seen[obj] = True
 
 
 @expose_builtin("acyclic_term", unwrap_spec=["raw"])
