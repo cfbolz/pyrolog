@@ -119,6 +119,23 @@ def impl_not_identical(engine, heap, obj1, obj2):
         raise error.UnificationFailed()
 
 
+def check_order_operand(engine, heap, obj):
+    from prolog.builtin.type import impl_acyclic_term
+    try:
+        impl_acyclic_term(engine, heap, obj)
+    except error.UnificationFailed:
+        error.throw_domain_error("cyclic_term", obj)
+
+
+def checked_standard_order(engine, heap, obj1, obj2):
+    # Standard order is not well-defined on rational trees. Check both whole
+    # operands, even when their outer functors would already decide the order.
+    # acyclic_term's budgeted fast path avoids a memo for small finite terms.
+    check_order_operand(engine, heap, obj1)
+    check_order_operand(engine, heap, obj2)
+    return term.cmp_standard_order(obj1, obj2, heap)
+
+
 for ext, prolog, python in [("lt", "@<", "== -1"),
                             ("le", "@=<", "!= 1"),
                             ("gt", "@>", "== 1"),
@@ -126,14 +143,13 @@ for ext, prolog, python in [("lt", "@<", "== -1"),
     exec py.code.Source("""
 @expose_builtin(prolog, unwrap_spec=["obj", "obj"])
 def impl_standard_comparison_%s(engine, heap, obj1, obj2):
-    c = term.cmp_standard_order(obj1, obj2, heap)
+    c = checked_standard_order(engine, heap, obj1, obj2)
     if not c %s:
         raise error.UnificationFailed()""" % (ext, python)).compile()
  
 @expose_builtin("compare", unwrap_spec=["raw", "obj", "obj"])
 def impl_compare(engine, heap, result, obj1, obj2):
-    """docstring for impl_compare"""
-    c = term.cmp_standard_order(obj1, obj2, heap)
+    c = checked_standard_order(engine, heap, obj1, obj2)
     if c == 0:
         res = term.Callable.build("=")
     elif c == -1:
