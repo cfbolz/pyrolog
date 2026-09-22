@@ -180,6 +180,13 @@ def shift_count(value, left_shift):
     error.throw_type_error("integer", value)
 
 
+def check_finite_float(value):
+    if math.isinf(value):
+        error.throw_evaluation_error("float_overflow")
+    if math.isnan(value):
+        error.throw_evaluation_error("undefined")
+
+
 def float_pow(base, exponent):
     if base == 0.0 and exponent < 0.0:
         error.throw_evaluation_error("zero_divisor")
@@ -189,10 +196,7 @@ def float_pow(base, exponent):
         raise error.throw_evaluation_error("undefined")
     except OverflowError:
         raise error.throw_evaluation_error("float_overflow")
-    if math.isinf(result):
-        error.throw_evaluation_error("float_overflow")
-    if math.isnan(result):
-        error.throw_evaluation_error("undefined")
+    check_finite_float(result)
     return term.Float(result)
 
 
@@ -635,6 +639,7 @@ class __extend__(term.Float):
     # ------------------ miscellanous ------------------
     def arith_round(self):
         fval = self.floatval
+        check_finite_float(fval)
         if fval >= 0:
             factor = 1
         else:
@@ -653,6 +658,7 @@ class __extend__(term.Float):
         return term.Number(val)
 
     def arith_floor(self):
+        check_finite_float(self.floatval)
         try:
             val = ovfcheck_float_to_int(math.floor(self.floatval))
         except OverflowError:
@@ -660,6 +666,7 @@ class __extend__(term.Float):
         return term.Number(val)
 
     def arith_ceiling(self):
+        check_finite_float(self.floatval)
         try:
             val = ovfcheck_float_to_int(math.ceil(self.floatval))
         except OverflowError:
@@ -667,6 +674,7 @@ class __extend__(term.Float):
         return term.Number(val)
 
     def arith_float_fractional_part(self):
+        check_finite_float(self.floatval)
         try:
             val = ovfcheck_float_to_int(self.floatval)
         except OverflowError:
@@ -674,6 +682,7 @@ class __extend__(term.Float):
         return term.Float(float(self.floatval - val))
 
     def arith_float_integer_part(self):
+        check_finite_float(self.floatval)
         try:
             val = ovfcheck_float_to_int(self.floatval)
         except OverflowError:

@@ -99,6 +99,28 @@ def test_integer_complement_float_error(expression, culprit):
                   'X is \\ (%s)' % expression)
 
 
+@pytest.mark.parametrize('operation', [
+    'round', 'floor', 'ceiling',
+    'float_integer_part', 'float_fractional_part',
+])
+@pytest.mark.parametrize('value,expected_error', [
+    ('inf', 'float_overflow'), ('-inf', 'float_overflow'), ('nan', 'undefined'),
+])
+def test_nonfinite_float_conversion_error_is_catchable(operation, value,
+                                                      expected_error):
+    from prolog.interpreter import term
+    from prolog.interpreter.continuation import Engine, Heap
+
+    engine = Engine()
+    queries, variables = engine.parse(
+        'catch((Y is %s(X), fail), error(evaluation_error(%s)), true), '
+        'Z is 2 + 3, Z = 5.' % (operation, expected_error))
+    # Inject the value so rejecting overflow in an earlier arithmetic operation
+    # cannot hide a missing check in the conversion itself.
+    variables['X'].unify(term.Float(float(value)), Heap())
+    engine.run_query_in_current(queries[0])
+
+
 def test_gigantic_left_shift_allocation_error_is_catchable():
     if not sys.platform.startswith('linux'):
         pytest.skip('uses /proc to set an allocation limit above current usage')
