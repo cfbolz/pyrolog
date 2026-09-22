@@ -65,6 +65,8 @@ def test_terminal_attributes_restored(monkeypatch, console):
     original = (0, 0, 0, rtermios.ECHO | rtermios.ICANON | rtermios.ISIG,
                 0, 0, cc)
     changes = []
+    writes = []
+    monkeypatch.setattr(console, 'write', writes.append)
     monkeypatch.setattr(rtermios, 'tcgetattr', lambda fd: original)
     monkeypatch.setattr(rtermios, 'tcsetattr', lambda fd, when, attrs: changes.append(attrs))
     monkeypatch.setattr(console, 'getwidth', lambda: 80)
@@ -75,6 +77,30 @@ def test_terminal_attributes_restored(monkeypatch, console):
     console.restore()
     console.restore()
     assert changes == [changes[0], original]
+    assert writes == ['\x1b[?2004h', '\x1b[?2004l']
+
+
+def test_restore_attributes_even_if_paste_mode_write_fails(monkeypatch, console):
+    from rpyrepl.reader import Reader
+    cc = ['\x00'] * rtermios.NCCS
+    original = (rtermios.ICRNL, 0, 0, rtermios.ECHO, 0, 0, cc)
+    changes = []
+    writes = []
+    monkeypatch.setattr(rtermios, 'tcgetattr', lambda fd: original)
+    monkeypatch.setattr(rtermios, 'tcsetattr', lambda fd, when, attrs: changes.append(attrs))
+    monkeypatch.setattr(console, 'getwidth', lambda: 80)
+
+    def failed_write(text):
+        writes.append(text)
+        raise OSError('write failed')
+
+    monkeypatch.setattr(console, 'write', failed_write)
+    with pytest.raises(OSError):
+        Reader(console).readline()
+    assert changes[-1] == original
+    assert not changes[0][0] & rtermios.ICRNL
+    assert writes == ['\x1b[?2004h', '\x1b[?2004l']
+    assert console.saved is None
 
 
 def test_nonterminal_fallback(monkeypatch):

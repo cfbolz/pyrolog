@@ -18,6 +18,7 @@ class UnixConsole(Console):
         self.input_fd = input_fd
         self.output_fd = output_fd
         self.saved = None
+        self.bracketed_paste = False
         self.pending_byte = ''
         name = os.environ.get('TERM')
         if not name or name == 'dumb':
@@ -43,6 +44,7 @@ class UnixConsole(Console):
                          '\x1bOd': 'backward-word', '\x1bOc': 'forward-word'}
         self.keycodes['\x1b\r'] = 'force-accept'
         self.keycodes['\x1b\n'] = 'force-accept'
+        self.keycodes['\x1b[200~'] = 'paste'
         for capability, command in [('kcub1', 'left'), ('kcuf1', 'right'),
                                     ('kcuu1', 'up'), ('kcud1', 'down'),
                                     ('khome', 'home'), ('kend', 'end'),
@@ -84,16 +86,25 @@ class UnixConsole(Console):
         cc[rtermios.VTIME] = '\x00'
         # Ctrl-C is an editor command here. Restore ISIG before executing code.
         lflag &= ~(rtermios.ICANON | rtermios.ECHO | rtermios.IEXTEN | rtermios.ISIG)
-        iflag &= ~(rtermios.IXON | rtermios.ISTRIP | rtermios.INPCK)
+        iflag &= ~(rtermios.IXON | rtermios.ISTRIP | rtermios.INPCK |
+                   rtermios.ICRNL | rtermios.INLCR | rtermios.IGNCR)
         rtermios.tcsetattr(self.input_fd, rtermios.TCSANOW,
                           (iflag, oflag, cflag, lflag, ispeed, ospeed, cc))
         self.width = self.getwidth()
         self.reset_display()
+        # Set this before writing so restore also handles a partial write.
+        self.bracketed_paste = True
+        self.write('\x1b[?2004h')
 
     def restore(self):
-        if self.saved is not None:
-            rtermios.tcsetattr(self.input_fd, rtermios.TCSANOW, self.saved.attrs)
-            self.saved = None
+        try:
+            if self.bracketed_paste:
+                self.bracketed_paste = False
+                self.write('\x1b[?2004l')
+        finally:
+            if self.saved is not None:
+                rtermios.tcsetattr(self.input_fd, rtermios.TCSANOW, self.saved.attrs)
+                self.saved = None
 
     def write(self, text):
         while text:
@@ -173,6 +184,8 @@ class UnixConsole(Console):
             sequence += self.read_byte()
             command = self.keycodes.get(sequence)
             if command is not None:
+                if command == 'paste':
+                    return self.read_paste()
                 return Event(command)
             prefix = False
             for key in self.keycodes:
@@ -185,6 +198,34 @@ class UnixConsole(Console):
                     continue
                 return Event('unknown')
         return Event('unknown')
+
+    def read_paste(self):
+        # No escape timeout within a paste: even its closing delimiter may
+        # arrive across reads. Keep only a bounded delimiter prefix pending.
+        end = '\x1b[201~'
+        pending = ''
+        parts = []
+        after_cr = False
+        while True:
+            pending += self.read_byte()
+            if pending == end:
+                break
+            while not end.startswith(pending):
+                char = pending[0]
+                pending = pending[1:]
+                # Normalize terminal CR, LF and clipboard CRLF to one newline.
+                if char == '\r':
+                    parts.append('\n')
+                elif char != '\n' or not after_cr:
+                    parts.append(char)
+                after_cr = char == '\r'
+        text = ''.join(parts)
+        try:
+            rutf8.check_utf8(text, allow_surrogates=False)
+        except rutf8.CheckError:
+            # Reject the whole paste without interpreting any of it as keys.
+            return Event('unknown')
+        return Event('paste', text)
 
     def get_event(self):
         char = self.read_byte()

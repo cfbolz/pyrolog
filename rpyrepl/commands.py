@@ -154,7 +154,8 @@ class forward_search(Command):
 
 # These immutable command instances keep runtime dispatch statically typed.
 COMMANDS = {
-    'text': self_insert(), 'backspace': backspace(), 'delete': delete(),
+    'text': self_insert(), 'paste': self_insert(),
+    'backspace': backspace(), 'delete': delete(),
     'eof': eof(), 'left': left(), 'right': right(),
     'home': beginning_of_line(), 'end': end_of_line(),
     'accept': accept(), 'cancel': cancel(),

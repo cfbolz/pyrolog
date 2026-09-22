@@ -89,3 +89,12 @@ match and marks the search prompt. Enter or Escape leaves the match ready to
 edit; another Enter accepts it using the normal multiline rules. Other editing
 keys leave search and perform their usual action. Ctrl-G or Ctrl-C cancels the
 search and restores the original input and cursor. Stored history is unchanged.
+
+Bracketed paste is enabled while editing and disabled before returning control
+to the caller. A paste is inserted at the cursor in one operation, including
+literal control characters; pasted newlines never submit input. CR, LF and CRLF
+are normalized to newlines. Pasting during history search leaves search and
+inserts into the displayed match. Invalid UTF-8 rejects the entire paste.
+An input EOF before the closing delimiter discards the unfinished paste and
+restores the terminal. Terminals without bracketed paste support still send
+ordinary key events, so their pasted newlines behave like Enter.

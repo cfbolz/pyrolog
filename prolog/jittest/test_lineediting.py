@@ -174,3 +174,24 @@ def test_search_persistent_queries(console_factory, tmpdir):
     child.expect(pexpect.EOF)
     child.close()
     assert child.exitstatus == 0
+
+
+def test_bracketed_paste_query(console_factory, tmpdir):
+    child = console_factory()
+    child.expect_exact('\x1b[?2004h')
+    child.expect_exact('>?- ')
+    child.send('\x1b[200~X = f(\r\na,\r\nb).\r\n\x1b[201~')
+    child.expect_exact('... ')
+    # The pasted trailing newline must not execute the complete query.
+    assert child.expect_exact(['X = f(a, b)\r\n', pexpect.TIMEOUT], timeout=0.1) == 1
+    child.send('\r')
+    child.expect_exact('\x1b[?2004l')
+    child.expect_exact('X = f(a, b)\r\n')
+    child.expect_exact('\x1b[?2004h')
+    child.expect_exact('>?- ')
+    child.send('\x04')
+    child.expect_exact('\x1b[?2004l')
+    child.expect(pexpect.EOF)
+    child.close()
+    assert child.exitstatus == 0
+    assert tmpdir.join('history').read_binary() == 'X = f(\r\na,\r\nb).\r\n\n'

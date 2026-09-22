@@ -188,3 +188,39 @@ def test_incremental_history_search(child):
     child.expect(pexpect.EOF)
     child.close()
     assert child.exitstatus == 0
+
+
+def test_bracketed_multiline_paste(child):
+    # Incomplete delimiters and a delayed paste body must not become key events.
+    child.send('\x1b[200~' + u'(caf\xe9\r\n'.encode('utf-8'))
+    assert child.expect_exact(['ACCEPTED:', pexpect.TIMEOUT], timeout=0.1) == 1
+    child.send('two)\r\n\x1b[20')
+    assert child.expect_exact(['ACCEPTED:', pexpect.TIMEOUT], timeout=0.1) == 1
+    child.send('1~')
+    child.expect_exact('... ')
+    assert child.expect_exact(['ACCEPTED:', pexpect.TIMEOUT], timeout=0.1) == 1
+    child.send('\r')
+    child.expect_exact('\x1b[?2004l')
+    child.expect_exact('ACCEPTED:' + u'(caf\xe9\r\ntwo)\r\n\r\n'.encode('utf-8'))
+    child.expect_exact('\x1b[?2004h')
+    child.expect_exact('edit> ')
+    child.send('\x04')
+    child.expect_exact('\x1b[?2004l')
+    child.expect(pexpect.EOF)
+    child.close()
+    assert child.exitstatus == 0
+
+
+def test_pasted_controls_are_literal_and_cancel_restores_mode(child):
+    child.send('\x1b[200~a\x03\x04\x1b[D\x1b[201~')
+    child.expect_exact('a^C^D^[[D')
+    child.send('\x03')
+    child.expect_exact('\x1b[?2004l')
+    child.expect_exact('CANCELLED')
+    child.expect_exact('\x1b[?2004h')
+    child.expect_exact('edit> ')
+    child.send('quit\r')
+    child.expect_exact('\x1b[?2004l')
+    child.expect(pexpect.EOF)
+    child.close()
+    assert child.exitstatus == 0
