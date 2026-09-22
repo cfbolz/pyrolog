@@ -101,3 +101,40 @@ def test_interrupted_and_short_writes(tmpdir, monkeypatch):
     monkeypatch.setattr(os, 'write', short_write)
     history.save(str(tmpdir.join('history')))
     assert tmpdir.join('history').read() == 'some text\n'
+
+
+@pytest.mark.parametrize('prefix', ['', 'old'])
+@pytest.mark.parametrize('zero_write', [False, True])
+def test_retry_after_partial_write(tmpdir, monkeypatch, prefix, zero_write):
+    path = tmpdir.join('history')
+    path.write_binary(prefix)
+    history = History()
+    history.load(str(path))
+    entry = u'member(X,\n[caf\xe9,b]).'.encode('utf-8')
+    history.append(entry)
+    write = os.write
+    calls = []
+
+    def partial_then_fail(fd, data):
+        calls.append(data)
+        if len(calls) == 1:
+            # Include a split UTF-8 code point in the written prefix.
+            return write(fd, data[:data.index('\xc3') + 1])
+        if zero_write:
+            return 0
+        raise OSError(errno.ENOSPC, 'disk full')
+
+    monkeypatch.setattr(os, 'write', partial_then_fail)
+    with pytest.raises(OSError):
+        history.save(str(path))
+    with pytest.raises(OSError):
+        history.save(str(path))
+    history.append('next')
+    monkeypatch.setattr(os, 'write', write)
+    history.save(str(path))
+    history.save(str(path))
+    expected = ([prefix] if prefix else []) + [entry, 'next']
+    loaded = History()
+    loaded.load(str(path))
+    assert loaded.entries == expected
+    assert history.saved_count == len(expected)

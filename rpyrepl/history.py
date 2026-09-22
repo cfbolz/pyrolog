@@ -11,6 +11,7 @@ class History(object):
         self.entries = []
         self.saved_count = 0
         self.needs_separator = False
+        self.pending_write = ''
 
     def append(self, text):
         rutf8.check_utf8(text, allow_surrogates=False)
@@ -68,19 +69,23 @@ class History(object):
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0600)
         try:
             while self.saved_count < len(self.entries):
-                data = replace(self.entries[self.saved_count], '\n', '\r\n') + '\n'
-                if self.needs_separator:
-                    data = '\n' + data
-                while data:
+                if not self.pending_write:
+                    data = replace(self.entries[self.saved_count], '\n', '\r\n') + '\n'
+                    if self.needs_separator:
+                        data = '\n' + data
+                    self.pending_write = data
+                # Preserve the unwritten suffix across failures: replaying the
+                # whole entry would duplicate its already-written prefix.
+                while self.pending_write:
                     try:
-                        count = os.write(fd, data)
+                        count = os.write(fd, self.pending_write)
                     except OSError as exc:
                         if exc.errno != errno.EINTR:
                             raise
                     else:
                         if count == 0:
                             raise OSError(errno.EIO, 'history write made no progress')
-                        data = data[count:]
+                        self.pending_write = self.pending_write[count:]
                 self.saved_count += 1
                 self.needs_separator = False
         finally:
