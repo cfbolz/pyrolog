@@ -133,11 +133,13 @@ when_decidable_list([A-B|Rest], Goal) :-
     when_decidable_list(Rest, Goal).
 
 unifiable_list(Unifiers, NewUnifiers) :-
-    unifiable_list(Unifiers, [], NewUnifiers).
-unifiable_list([], A, A).
-unifiable_list([X-Y|Rest], Acc, Ret) :-
-    unifiable(X, Y, Acc, Temp),
-    unifiable_list(Rest, Temp, Ret).
+    unifier_sides(Unifiers, Left, Right),
+    unifiable(Left, Right, NewUnifiers).
+
+% Individually unifiable equations may conflict when checked together.
+unifier_sides([], [], []).
+unifier_sides([X-Y|Rest], [X|Left], [Y|Right]) :-
+    unifier_sides(Rest, Left, Right).
 
 when(Cond, Goal) :-
     var(Cond), !,

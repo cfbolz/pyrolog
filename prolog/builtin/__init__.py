@@ -13,6 +13,7 @@ import prolog.builtin.metacall
 import prolog.builtin.source
 import prolog.builtin.termconstruction
 import prolog.builtin.unify
+import prolog.builtin.unifiable
 import prolog.builtin.numberchars
 import prolog.builtin.modules
 import prolog.builtin.streams
