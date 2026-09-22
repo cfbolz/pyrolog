@@ -34,6 +34,7 @@ class Reader(object):
         self.cxy = (0, 0)
         self.kill_buffer = ''
         self.last_command_was_kill = False
+        self.search = None
 
     def insert(self, text):
         rutf8.check_utf8(text, allow_surrogates=False)
@@ -103,6 +104,9 @@ class Reader(object):
             self.pos = len(self.buffer)
 
     def do_cmd(self, event):
+        if self.search is not None:
+            if self.search.handle(self, event):
+                return
         command = COMMANDS.get(event.evt)
         if command is not None:
             if not command.vertical:
@@ -113,6 +117,9 @@ class Reader(object):
             self.last_command_was_kill = False
 
     def get_layout(self):
+        if self.search is not None:
+            prompt = self.search.prompt()
+            return Layout(self.buffer, self.console.width, prompt, prompt)
         return Layout(self.buffer, self.console.width, self.prompt,
                       self.continuation_prompt)
 
@@ -161,6 +168,7 @@ class Reader(object):
         self.continuation_prompt = continuation_prompt
         self.preferred_column = -1
         self.finished = False
+        self.search = None
         self.last_command_was_kill = False
         self.history_index = 0
         if self.history is not None:

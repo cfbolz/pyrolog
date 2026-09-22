@@ -156,3 +156,21 @@ def test_multiline_query_and_persistent_recall(console_factory, tmpdir):
     child.expect(pexpect.EOF)
     child.close()
     assert child.exitstatus == 0
+
+
+def test_search_persistent_queries(console_factory, tmpdir):
+    tmpdir.join('history').write('X = alpha.\nX = beta.\nX = alphabet.\n')
+    child = console_factory()
+    child.expect_exact('>?- ')
+    child.send('\x12alpha\x12\r')
+    child.expect_exact('>?- X = alpha.')
+    child.send('\r')
+    child.expect_exact('X = alpha\r\n')
+    child.expect_exact('>?- ')
+    child.send('X = draft.\x12beta\x03\r')
+    child.expect_exact('X = draft\r\n')
+    child.expect_exact('>?- ')
+    child.send('\x04')
+    child.expect(pexpect.EOF)
+    child.close()
+    assert child.exitstatus == 0

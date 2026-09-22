@@ -79,3 +79,13 @@ RPYREPL_EXECUTABLE="$PWD/rpyrepl-c" pypy -m pytest -q rpyrepl/test/test_translat
 
 The standalone target checks that the original terminal attributes are restored
 on acceptance, cancellation, and EOF. It has no imports from Pyrolog.
+
+Ctrl-R and Ctrl-S start incremental reverse and forward history search.
+Type a case-sensitive substring; repeat Ctrl-R/Ctrl-S to move between matches,
+including occurrences within the same entry. Search includes the current draft
+and does not wrap at the ends of history. Backspace removes a code point and
+restores the match from before it was typed. A failed search retains the last
+match and marks the search prompt. Enter or Escape leaves the match ready to
+edit; another Enter accepts it using the normal multiline rules. Other editing
+keys leave search and perform their usual action. Ctrl-G or Ctrl-C cancels the
+search and restores the original input and cursor. Stored history is unchanged.

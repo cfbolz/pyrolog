@@ -169,7 +169,7 @@ class UnixConsole(Console):
                     continue
                 raise OSError(exc.errno, 'terminal poll failed')
             if not ready:
-                return Event('unknown')
+                return Event('escape') if sequence == '\x1b' else Event('unknown')
             sequence += self.read_byte()
             command = self.keycodes.get(sequence)
             if command is not None:
@@ -217,6 +217,12 @@ class UnixConsole(Console):
             return Event('kill-line')
         if char == '\x19':
             return Event('yank')
+        if char == '\x12':
+            return Event('reverse-search')
+        if char == '\x13':
+            return Event('forward-search')
+        if char == '\x07':
+            return Event('abort-search')
         if char == '\x1b':
             return self.read_escape()
         first = ord(char[0])

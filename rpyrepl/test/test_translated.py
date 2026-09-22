@@ -166,3 +166,25 @@ def test_tall_buffer_resize_and_cancel(child):
     child.expect(pexpect.EOF)
     child.close()
     assert child.exitstatus == 0
+
+
+def test_incremental_history_search(child):
+    for entry in ['alpha', 'beta', u'caf\xe9'.encode('utf-8')]:
+        child.send(entry + '\r')
+        child.expect_exact('ACCEPTED:' + entry + '\r\n')
+        child.expect_exact('edit> ')
+    child.send('\x12alpha\r')
+    child.expect_exact('edit> alpha')
+    child.send('\x05!\r')
+    child.expect_exact('ACCEPTED:alpha!\r\n')
+    child.expect_exact('edit> ')
+    child.send('draft\x02\x12' + u'\xe9'.encode('utf-8') + '\x07!\r')
+    child.expect_exact('ACCEPTED:draf!t\r\n')
+    child.expect_exact('edit> ')
+    child.send('\x12' + u'\xe9'.encode('utf-8') + '\r\r')
+    child.expect_exact('ACCEPTED:' + u'caf\xe9'.encode('utf-8') + '\r\n')
+    child.expect_exact('edit> ')
+    child.send('\x04')
+    child.expect(pexpect.EOF)
+    child.close()
+    assert child.exitstatus == 0

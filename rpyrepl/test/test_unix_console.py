@@ -22,6 +22,8 @@ def supply(monkeypatch, console, data):
     ('\x1b[D', 'left', u''), ('\x1b[C', 'right', u''),
     ('\x1b[A', 'up', u''), ('\x1b[B', 'down', u''),
     ('\x10', 'previous-history', u''), ('\x0e', 'next-history', u''),
+    ('\x12', 'reverse-search', u''), ('\x13', 'forward-search', u''),
+    ('\x07', 'abort-search', u''),
     ('\x1bb', 'backward-word', u''), ('\x1bf', 'forward-word', u''),
     ('\x1b[1;5D', 'backward-word', u''), ('\x1b[1;5C', 'forward-word', u''),
     ('\x1bOd', 'backward-word', u''), ('\x1bOc', 'forward-word', u''),
@@ -54,7 +56,7 @@ def test_bad_utf8_does_not_swallow_cancel(monkeypatch, console):
 def test_incomplete_escape_times_out(monkeypatch, console):
     supply(monkeypatch, console, '\x1b')
     monkeypatch.setattr(rpoll, 'poll', lambda fds, timeout: [])
-    assert console.get_event().evt == 'unknown'
+    assert console.get_event().evt == 'escape'
 
 
 def test_terminal_attributes_restored(monkeypatch, console):

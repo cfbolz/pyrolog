@@ -1,6 +1,7 @@
 """Basic editing commands. See LICENSE for the pyrepl attribution."""
 from rpyrepl import EndOfInput, CancelledInput
 from rpython.rlib import rutf8
+from rpyrepl.search import SearchState
 
 
 class Command(object):
@@ -141,6 +142,16 @@ class cancel(Command):
         raise CancelledInput
 
 
+class reverse_search(Command):
+    def do(self, reader, event):
+        reader.search = SearchState(reader, -1)
+
+
+class forward_search(Command):
+    def do(self, reader, event):
+        reader.search = SearchState(reader, 1)
+
+
 # These immutable command instances keep runtime dispatch statically typed.
 COMMANDS = {
     'text': self_insert(), 'backspace': backspace(), 'delete': delete(),
@@ -154,4 +165,5 @@ COMMANDS = {
     'backward-kill-word': backward_kill_word(), 'kill-word': kill_word(),
     'unix-line-discard': unix_line_discard(), 'kill-line': kill_line(),
     'yank': yank(),
+    'reverse-search': reverse_search(), 'forward-search': forward_search(),
 }
