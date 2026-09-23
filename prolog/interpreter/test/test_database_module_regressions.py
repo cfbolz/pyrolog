@@ -2,7 +2,7 @@ import pytest
 
 from prolog.interpreter import error
 from prolog.interpreter.continuation import Engine
-from prolog.interpreter.test.tool import assert_true, get_engine, prolog_raises
+from prolog.interpreter.test.tool import assert_false, assert_true, get_engine, prolog_raises
 
 
 def test_retract_variable_body():
@@ -70,3 +70,52 @@ def test_use_module_retry_after_missing_file(tmpdir):
                   "use_module('%s')" % path, e)
     path.write(":- module(retry, [loaded/0]).\nloaded.\n")
     assert_true("use_module('%s'), loaded." % path, e)
+
+
+@pytest.mark.parametrize("clause", ["p(a)", "(p(a) :- true)"])
+def test_retract_last_clause_leaves_defined_predicate(clause):
+    e = Engine()
+    assert_true("assertz(%s), retract(%s)." % (clause, clause), e)
+    assert_false("p(_).", e)
+    assert_false("retract(p(_)).", e)
+    # Neither restoring bindings nor adding a clause changes that distinction.
+    assert_true("(assertz(p(b)), retract(p(X)), fail; var(X)).", e)
+    assert_false("p(_).", e)
+    assert_true("assertz(p(c)), p(c).", e)
+
+
+def test_abolish_empty_predicate_makes_it_undefined():
+    e = Engine()
+    assert_true("assertz(p(a)), retract(p(a)).", e)
+    assert_false("p(_).", e)
+    assert_true("abolish(p/1).", e)
+    prolog_raises("existence_error(procedure, p/1)", "p(_)", e)
+    assert_true("assertz(p(b)), p(b).", e)
+
+
+def test_failed_lookup_does_not_define_predicate():
+    e = Engine()
+    for i in range(2):
+        prolog_raises("existence_error(procedure, p/1)", "p(_)", e)
+    assert_false("retract(p(_)).", e)
+    prolog_raises("existence_error(procedure, p/1)", "p(_)", e)
+
+
+def test_empty_local_predicate_shadows_system_predicate():
+    e = Engine()
+    e.switch_module("system")
+    e.runstring("p(system).")
+    e.modulewrapper.system = e.modulewrapper.current_module
+    e.switch_module("user")
+    assert_true("p(system).", e)
+    assert_true("assertz(p(local)), retract(p(local)).", e)
+    assert_false("p(_).", e)
+    assert_true("abolish(p/1), p(system).", e)
+
+
+def test_retract_last_imported_clause_leaves_defined_predicate():
+    e = get_engine(":- use_module(m).",
+                   m=":- module(m, [p/1]). p(a).")
+    assert_true("retract(m:p(a)).", e)
+    assert_false("p(_).", e)
+    assert_false("m:p(_).", e)
