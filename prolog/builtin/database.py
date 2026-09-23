@@ -10,10 +10,10 @@ implsig = Signature.getsignature(":-", 2)
 TRUE_ATOM = term.Callable.build("true")
 
 def unpack_modname_and_predicate(rule):
-    if helper.is_numeric(rule.argument_at(0)):
-        error.throw_domain_error("atom", rule.argument_at(0))
+    mod = rule.argument_at(0).dereference(None)
+    if helper.is_numeric(mod):
+        error.throw_domain_error("atom", mod)
         assert 0, "unreachable"
-    mod = rule.argument_at(0)
     indicator = rule.argument_at(1)
     if not isinstance(mod, term.Atom):
         raise error.UnificationFailed()
