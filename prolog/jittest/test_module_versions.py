@@ -55,9 +55,12 @@ class TestModuleVersions(BaseTestPyrologC):
             loop(N) :- worker:step(N, Next), loop(Next).
         """
         log = self.run_and_check(source, 'once(loop(3000)).')
-        loops = log.filter_loops('loop/1')
-        assert loops
-        for loop in loops:
-            names = [op.name for op in loop.allops()]
-            assert 'guard_not_invalidated' in names
-            assert not any(name.startswith('call') for name in names)
+        loop, = log.filter_loops('loop/1')
+        assert loop.match("""
+            guard_not_invalidated(descr=...)
+            i17 = int_sub_ovf(i14, 1)
+            guard_no_overflow(descr=...)
+            i18 = int_is_zero(i17)
+            guard_false(i18, descr=...)
+            jump(p4, p2, i17, p1, descr=...)
+        """)
