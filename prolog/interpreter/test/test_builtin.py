@@ -77,6 +77,23 @@ def test_consult(tmpdir):
     assert_true("g(a, b).", e)
     prolog_raises("_", "consult('/hopefully/does/not/exist')")
 
+def test_retract_rolls_back_failed_candidate_bindings():
+    e = get_engine('p(a, b). p(c, c).')
+    # The first candidate binds X to a before failing on its second argument.
+    # That binding must be undone before attempting the matching second fact.
+    assert_true('retract(p(X, X)), X == c.', e)
+    assert_true('p(a, b).', e)
+    assert_false('p(c, c).', e)
+
+
+def test_retract_successful_bindings_are_backtrackable():
+    e = get_engine('p(a). p(b).')
+    # Retraction persists, but the successful match's variable bindings do not.
+    assert_true('(once(retract(p(X))), X == a, fail; var(X)).', e)
+    assert_false('p(a).', e)
+    assert_true('p(b).', e)
+
+
 def test_assert_retract():
     e = get_engine("g(b, b).")
     assert_true("g(B, B).", e)

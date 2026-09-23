@@ -57,8 +57,9 @@ def handle_assert(engine, heap, module, rule, end):
     engine.add_rule(rule.dereference(heap), end=end)
     engine.switch_module(current_modname)
 
-@expose_builtin("retract", unwrap_spec=["callable"], needs_module=True)
-def impl_retract(engine, heap, module, pattern):
+@expose_builtin("retract", unwrap_spec=["callable"], needs_module=True,
+                handles_continuation=True)
+def impl_retract(engine, heap, module, pattern, scont, fcont):
     modname = None
     if pattern.signature().eq(prefixsig):
         modname, pattern = unpack_modname_and_predicate(pattern)
@@ -81,16 +82,19 @@ def impl_retract(engine, heap, module, pattern):
     if function.rulechain is None:
         raise error.UnificationFailed
     rulechain = function.rulechain
-    oldstate = heap.branch()
+    candidate_heap = heap.branch()
     while rulechain:
         rule = rulechain
         # standardizing apart
         try:
-            deleted_body = rule.clone_and_unify_head(heap, head)
+            deleted_body = rule.clone_and_unify_head(candidate_heap, head)
             if body is not None:
-                body.unify(deleted_body, heap)
+                body.unify(deleted_body, candidate_heap)
         except error.UnificationFailed:
-            oldstate.revert_upto(heap)
+            candidate_heap.revert_upto(heap)
+        except error.CatchableError:
+            candidate_heap.revert_upto(heap)
+            raise
         else:
             if function.rulechain is rulechain:
                 function.rulechain = rulechain.next
@@ -100,4 +104,6 @@ def impl_retract(engine, heap, module, pattern):
         rulechain = rulechain.next
     else:
         raise error.UnificationFailed()
-    # heap.discard(oldstate)
+    # Continue on the matching frame so its bindings and queued hooks remain
+    # part of execution, and outer backtracking can undo the bindings.
+    return scont, fcont, candidate_heap
