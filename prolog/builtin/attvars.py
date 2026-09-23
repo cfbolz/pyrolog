@@ -37,7 +37,7 @@ def impl_get_attr(engine, heap, var, attr, value):
         throw_instantiation_error(var)
     if not isinstance(var, AttVar):
         raise UnificationFailed()
-    attribute_value, _ = var.get_attribute(attr)
+    attribute_value = var.get_attribute_value(attr)
     if attribute_value is not None:
         value.unify(attribute_value, heap)
     else:
@@ -45,7 +45,7 @@ def impl_get_attr(engine, heap, var, attr, value):
  
 @expose_builtin("del_attr", unwrap_spec=["obj", "atom"])
 def impl_del_attr(engine, heap, var, attr):
-    if isinstance(var, AttVar):
+    if isinstance(var, AttVar) and var.get_attribute_value(attr) is not None:
         heap.add_trail_atts(var, attr)
         var.del_attribute(attr)
 

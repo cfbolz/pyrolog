@@ -80,6 +80,50 @@ def test_heap_discard():
     assert v1.binding is None
     assert v2.binding == 3 # not backtracked, because it goes away
 
+@pytest.mark.parametrize('length', [2, 8])
+def test_discard_preserves_path_compression_undo_order(length):
+    root = Heap()
+    variables = [root.newvar() for _ in range(length)]
+    older = root.branch()
+    for i in range(length - 1):
+        variables[i].unify(variables[i + 1], older)
+    # Also exercise multiple undo entries for one variable in the older frame.
+    assert variables[0].dereference(older) is variables[-1]
+
+    current = older.branch()
+    value = Number(7)
+    variables[-1].unify(value, current)
+    for var in variables:
+        assert var.dereference(current) is value
+        assert var.binding is value
+
+    assert older.discard(current) is current
+    assert current.prev is root
+    # A cut changes bookkeeping, not the live bindings.
+    for var in variables:
+        assert var.binding is value
+
+    current.revert_upto(root)
+    # Undo compression before undoing the original aliases: all variables
+    # must become independent again, not remain linked to each other.
+    for var in variables:
+        assert var.binding is None
+
+
+def test_trailing_after_discard_with_one_binding():
+    root = Heap()
+    variables = [root.newvar() for _ in range(4)]
+    older = root.branch()
+    variables[0].unify(Number(0), older)
+    current = older.branch()
+    older.discard(current)
+    for i in range(1, len(variables)):
+        variables[i].unify(Number(i), current)
+    current.revert_upto(root)
+    for var in variables:
+        assert var.binding is None
+
+
 def test_heap_discard_variable_shunting():
     h0 = Heap()
     v0 = h0.newvar()
@@ -168,7 +212,8 @@ def test_heap_dont_trail_new_attvars():
     assert h3 is h2
     
 def test_discard_with_attvars():
-    pytest.skip("not implemented yet")
+    from prolog.builtin.attvars import impl_put_attr
+
     h0 = Heap()
     v0 = h0.new_attvar()
 
@@ -178,22 +223,29 @@ def test_discard_with_attvars():
     h2 = h1.branch()
     v2 = h2.new_attvar()
 
-    h2.add_trail_atts(v0, "m")
-    v0.atts = {"m": 1}
-    h2.add_trail_atts(v1, "n")
-    v1.atts = {"n": 2}
+    impl_put_attr(None, h2, v0, "m", Number(1))
+    impl_put_attr(None, h2, v1, "n", Number(2))
 
     h3 = h2.branch()
-    h3.add_trail_atts(v2, "a")
-    v2.atts = {"a": 3}
+    impl_put_attr(None, h3, v2, "a", Number(3))
+    impl_put_attr(None, h3, v0, "m", Number(4))
 
     h = h2.discard(h3)
     assert h3.prev is h1
     assert h3 is h
-    assert h3.revert_upto(h0)
-    assert v0.atts == {}
-    assert v1.atts == {}
-    assert v2.atts == {"a": 3}
+    # The cut keeps all live values, despite discarding v2's undo record.
+    assert v0.get_attribute_value("m").num == 4
+    assert v1.get_attribute_value("n").num == 2
+    assert v2.get_attribute_value("a").num == 3
+
+    h3.revert_upto(h0)
+    assert v0.is_empty()
+    assert v0.get_attribute_value("m") is None
+    assert v1.is_empty()
+    assert v1.get_attribute_value("n") is None
+    # v2 was created in the discarded frame and dies on outer backtracking;
+    # its attribute therefore does not need to be restored.
+    assert v2.get_attribute_value("a").num == 3
 
 def test_hookchain():
     hc = Heap()
@@ -304,5 +356,3 @@ def test_hookchain_size():
     assert size(h) == 2
     h.hook = None
     assert size(h) == 0
-
-

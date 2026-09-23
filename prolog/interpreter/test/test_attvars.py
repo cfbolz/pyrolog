@@ -44,6 +44,71 @@ def test_backtracking():
     assert_true("put_attr(X, a, 2), ((put_attr(X, a, 1), put_attr(X, a, 3), fail); get_attr(X, a, 2)).")
     assert_true("put_attr(X, a, 2), ((put_attr(X, b, 1), put_attr(X, c, 3), fail); get_attr(X, a, 2)), \+ get_attr(X, b, 1), \+ get_attr(X, c, 3).")
 
+def test_cut_preserves_attribute_trail_for_outer_backtracking():
+    engine = get_engine('p(X) :- (true; true), put_attr(X, m, 2), !.')
+    # Cutting the inner choice point must retain the trail entry needed to
+    # restore the original attribute when the outer disjunction backtracks.
+    assert_true('put_attr(X, m, 1), '
+                '(p(X), get_attr(X, m, 2), fail; get_attr(X, m, V)), '
+                'V = 1.', engine)
+
+
+def test_cut_restores_oldest_attribute_value():
+    engine = get_engine('p(X) :- put_attr(X, m, 2), (true; true), '
+                        'put_attr(X, m, 3), !.')
+    # Both heap frames contain an undo entry for the same attribute. Cutting
+    # must preserve their chronological order for reverse-order restoration.
+    result = assert_true('put_attr(X, m, 1), '
+                         '(p(X), get_attr(X, m, 3), fail; get_attr(X, m, V)).',
+                         engine)
+    assert result['V'].num == 1
+
+
+@pytest.mark.parametrize('backtrack', [False, True])
+def test_delete_unknown_attribute_preserves_existing(backtrack):
+    deletion = 'del_attr(X, missing)'
+    if backtrack:
+        deletion = '(' + deletion + ', fail; true)'
+    assert_true('put_attr(X, m, 1), %s, get_attr(X, m, 1).' % deletion)
+
+
+@pytest.mark.parametrize('module', ['m', 'n'])
+def test_put_attribute_after_del_attrs(module):
+    # Exercise both reusing a slot and adding a previously unknown module.
+    assert_true('put_attr(X, m, 1), del_attrs(X), '
+                'put_attr(X, %s, 2), get_attr(X, %s, 2), attvar(X).' %
+                (module, module))
+
+
+@pytest.mark.parametrize('module', ['m', 'n', 'new'])
+def test_backtrack_put_attribute_after_del_attrs(module):
+    assert_true('put_attr(X, m, 1), put_attr(X, n, 2), del_attrs(X), '
+                '(put_attr(X, %s, 3), get_attr(X, %s, 3), fail; true), '
+                '\\+ attvar(X), \\+ get_attr(X, m, _), '
+                '\\+ get_attr(X, n, _), \\+ get_attr(X, new, _), '
+                'put_attr(X, n, 4), get_attr(X, n, 4).' % (module, module))
+
+
+def test_backtrack_delete_attribute_after_del_attrs():
+    # There is no remaining value to trail; deleting an already cleared slot
+    # must remain harmless when this branch is undone.
+    assert_true('put_attr(X, m, 1), del_attrs(X), '
+                '(del_attr(X, m), fail; true), '
+                '\\+ attvar(X), \\+ get_attr(X, m, _).')
+
+
+def test_hook_backtracking_preserves_deleted_attribute_slots():
+    engine = get_engine('', m='''
+        :- module(m, []).
+        attr_unify_hook(_, _).
+    ''')
+    # The map retains n's slot after deletion. Restoring m after running its
+    # hook must leave n safely readable as absent, even though n has no hook.
+    assert_true('put_attr(X, m, 1), put_attr(X, n, 2), del_attr(X, n), '
+                '(X = a, fail; true), get_attr(X, m, 1), '
+                '\\+ get_attr(X, n, _).', engine)
+
+
 def test_del_attributes():
     assert_true("del_attr(X, m).")
     assert_true("del_attr(a, m).")
@@ -207,17 +272,31 @@ def test_term_attvars():
     assert_true("put_attr(X, m, Y), term_variables(X, L), L == [X].")
 
 def test_term_attvars_fail_fast():
-    pytest.skip("")
-    e = get_engine("""
-    f(1, [X]) :-
-        put_attr(X, m, 1).
-    f(N, [X|R]) :-
-        N >= 1,
-        put_attr(X, m, 1),
-        N1 is N - 1,
-        f(N1, R).
-    """)
-    assert_false("f(10000, L), term_attvars(L, []).", e)
+    from prolog.builtin.attvars import impl_term_attvars
+    from prolog.interpreter.error import UnificationFailed
+    from prolog.interpreter.heap import Heap
+    from prolog.interpreter.term import BindingVar
+
+    class SentinelVisited(Exception):
+        pass
+
+    class Sentinel(BindingVar):
+        def getbinding(self):
+            raise SentinelVisited
+
+    heap = Heap()
+    attvar = heap.new_attvar()
+    attvar.add_attribute('m', Callable.build('value'))
+    subject = Callable.build('pair', [attvar, Sentinel()])
+
+    # [] cannot hold even the first attributed variable. Traversal must fail
+    # before examining the second argument, rather than collect and unify.
+    pytest.raises(UnificationFailed, impl_term_attvars,
+                  None, heap, subject, Callable.build('[]'))
+    # With unrestricted output the sentinel must be reachable, validating
+    # that the first assertion really checks early termination.
+    pytest.raises(SentinelVisited, impl_term_attvars,
+                  None, heap, subject, heap.newvar())
 
 def test_copy_term_2():
     assert_true("put_attr(X, m, 1), copy_term(X, Y), attvar(Y).")

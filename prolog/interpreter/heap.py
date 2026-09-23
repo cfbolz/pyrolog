@@ -155,9 +155,8 @@ class Heap(object):
 
             if self.trail_attrs is not None:
                 if current_heap.trail_attrs is not None:
-                    current_heap.trail_attrs.extend(self.trail_attrs)
-                else:
-                    current_heap.trail_attrs = self.trail_attrs
+                    self.trail_attrs.extend(current_heap.trail_attrs)
+                current_heap.trail_attrs = self.trail_attrs
 
             current_heap.prev = self.prev
             self.trail_var = None
@@ -191,28 +190,41 @@ class Heap(object):
 
     def _discard_try_remove_current_trail_attvars(self, discarded_heap):
         trail_attrs = []
-        targetpos = 0
         for var, attr, value in self.trail_attrs:
             if var.created_after_choice_point is discarded_heap:
                 var.created_after_choice_point = discarded_heap.prev
             else:
-                trail_attrs[targetpos] = (var, attr, value)
+                trail_attrs.append((var, attr, value))
         if not trail_attrs:
             trail_attrs = None
         self.trail_attrs = trail_attrs
 
 
     @jit.look_inside_iff(lambda self, current_heap:
-            self.i < UNROLL_SIZE)
+            self.i + current_heap.i < UNROLL_SIZE)
     def _discard_move_bindings_to_current(self, current_heap):
+        if self.i == 0:
+            return
+        # Older undo records must precede newer ones: _revert walks backwards.
+        # Path compression can trail the same variable in both frames.
+        # _double_size expects every nonempty allocation to have >= 2 slots.
+        size = max(2, self.i + current_heap.i)
+        trail_var = [None] * size
+        trail_binding = [None] * size
+        targetpos = 0
         for i in range(jit.promote(self.i)):
             var = self.trail_var[i]
-            currbinding = var.binding
-            binding = self.trail_binding[i]
-
-            var.binding = binding
-            current_heap.add_trail(var)
-            var.binding = currbinding
+            if not current_heap._is_created_in_self(var):
+                trail_var[targetpos] = var
+                trail_binding[targetpos] = self.trail_binding[i]
+                targetpos += 1
+        for i in range(jit.promote(current_heap.i)):
+            trail_var[targetpos] = current_heap.trail_var[i]
+            trail_binding[targetpos] = current_heap.trail_binding[i]
+            targetpos += 1
+        current_heap.trail_var = trail_var
+        current_heap.trail_binding = trail_binding
+        current_heap.i = targetpos
 
     def __repr__(self):
         return "<Heap %r trailed vars>" % (self.i, )
