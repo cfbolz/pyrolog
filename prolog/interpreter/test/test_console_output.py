@@ -49,7 +49,8 @@ class TestInteraction:
         return child
 
     def spawn(self, argv):
-        env = {"PYTHONPATH": str(path), "PATH": os.environ["PATH"]}
+        env = {"PYTHONPATH": str(path), "PATH": os.environ["PATH"],
+               "NO_COLOR": "1"}
         return self._spawn(sys.executable, [app_main] + argv, env=env)
 
     def expect_bindings(self, child, bindings):
