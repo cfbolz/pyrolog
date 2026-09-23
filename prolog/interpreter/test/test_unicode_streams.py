@@ -69,3 +69,34 @@ def test_consult_unicode_filename_and_bom(tmpdir):
     with open(path, 'wb') as f:
         f.write('\xef\xbb\xbf词(😀).\n')
     assert_true("consult('%s'), 词('😀')." % path)
+
+
+@pytest.mark.parametrize('bindings, options', [
+    ('T=binary', '[type(T)]'),
+    ('T=U,U=binary', '[type(T)]'),
+    ('O=type(binary)', '[O]'),
+    ('O=type(T),T=binary,Options=[O]', 'Options'),
+])
+def test_bound_stream_type_options(tmpdir, bindings, options):
+    path = tmpdir.join('bound-options.bin')
+    path.write('\xff', mode='wb')
+    assert_true("%s, open('%s',read,S,%s), get_byte(S,255), close(S)." %
+                (bindings, path, options))
+
+
+def test_bound_stream_alias_and_encoding(tmpdir):
+    path = tmpdir.join('bound-options.txt')
+    assert_true("A=unicode_output,E=utf8,O=alias(A), "
+                "open('%s',write,S,[O,encoding(E)]), S==unicode_output, "
+                "put_code(S,233), close(S)." % path)
+    assert path.read(mode='rb') == 'é'
+
+
+@pytest.mark.parametrize('option, value, expected', [
+    ('type', 'invalid', 'domain_error(stream_option,invalid)'),
+    ('encoding', 'invalid', 'domain_error(encoding,invalid)'),
+    ('buffer', 'invalid', 'domain_error(buffering,invalid)'),
+])
+def test_bound_stream_options_are_validated(option, value, expected):
+    prolog_raises(expected,
+                  "V=%s,O=%s(V),open(unused,read,_,[O])" % (value, option))

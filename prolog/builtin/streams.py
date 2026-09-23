@@ -19,12 +19,13 @@ seek_mode = {"bof": os.SEEK_SET, "current": os.SEEK_CUR, "eof": os.SEEK_END}
 def make_option_dict(options):
     opts = {}
     for option in options:
+        option = option.dereference(None)
         if isinstance(option, term.Var):
             error.throw_instantiation_error()
         if isinstance(option, term.Numeric):
             error.throw_domain_error("stream_option", option)
         if isinstance(option, term.Callable) and option.argument_count() == 1:
-            arg0 = option.argument_at(0)
+            arg0 = option.argument_at(0).dereference(None)
             if isinstance(arg0, term.Atom):
                 opts[option.name()] = arg0.name()
     return opts
