@@ -55,6 +55,119 @@ class UnicodeRunner(object):
     def fail(self, start, line, column):
         raise LexerError(self.text, 0, SourcePos(start, line, column))
 
+    def scan_block_comment(self, start, line, column):
+        text = self.text
+        size = len(text)
+        self.advance()
+        self.advance()
+        while self.pos < size and not rstring.startswith(text, '*/', self.pos, size):
+            self.advance()
+        if self.pos == size:
+            self.fail(start, line, column)
+        self.advance()
+        self.advance()
+
+    def scan_quoted(self, start, line, column):
+        text = self.text
+        size = len(text)
+        char = text[start]
+        self.advance()
+        while self.pos < size:
+            c = text[self.pos]
+            self.advance()
+            if c == '\\':
+                if self.pos < size:
+                    escape = text[self.pos]
+                    self.advance()
+                    if escape == 'x' or '0' <= escape <= '7':
+                        while self.pos < size and text[self.pos] != '\\':
+                            self.advance()
+                        if self.pos < size:
+                            self.advance()
+            elif c == char:
+                if self.pos < size and text[self.pos] == char:
+                    self.advance()
+                else:
+                    return
+        self.fail(start, line, column)
+
+    def scan_character_code(self, start, line, column):
+        # The initial zero has been consumed; the cursor is on the quote.
+        text = self.text
+        size = len(text)
+        self.advance()
+        if self.pos == size:
+            self.fail(start, line, column)
+        if text[self.pos] == '\\':
+            self.advance()
+            if self.pos == size:
+                self.fail(start, line, column)
+            escape = text[self.pos]
+            self.advance()
+            if escape in 'uU':
+                count = 4 if escape == 'u' else 8
+                for unused in range(count):
+                    if self.pos == size:
+                        self.fail(start, line, column)
+                    self.advance()
+            elif escape == 'x' or '0' <= escape <= '7':
+                while self.pos < size and text[self.pos] != '\\':
+                    self.advance()
+                if self.pos == size:
+                    self.fail(start, line, column)
+                self.advance()
+        else:
+            self.advance()
+
+    def scan_decimal_digits(self):
+        text = self.text
+        while self.pos < len(text) and '0' <= text[self.pos] <= '9':
+            self.advance()
+
+    def scan_number(self, start, line, column):
+        text = self.text
+        size = len(text)
+        char = text[start]
+        self.advance()
+        if char == '0' and self.pos < size and text[self.pos] == "'":
+            self.scan_character_code(start, line, column)
+            return 'NUMBER'
+        self.scan_decimal_digits()
+        if (self.pos + 1 >= size or text[self.pos] != '.' or
+                not '0' <= text[self.pos + 1] <= '9'):
+            return 'NUMBER'
+        self.advance()
+        self.scan_decimal_digits()
+        if self.pos < size and text[self.pos] in 'eE':
+            self.advance()
+            if self.pos < size and text[self.pos] in '+-':
+                self.advance()
+            digits = self.pos
+            self.scan_decimal_digits()
+            if self.pos == digits:
+                self.fail(start, line, column)
+        return 'FLOAT'
+
+    def scan_ascii_graphic(self, start, line, column):
+        text = self.text
+        size = len(text)
+        for symbol in GRAPHIC_TOKENS:
+            if rstring.startswith(text, symbol, start, size):
+                for unused in range(len(symbol)):
+                    self.advance()
+                return
+        self.fail(start, line, column)
+
+    def scan_unicode_graphic(self):
+        text = self.text
+        size = len(text)
+        self.advance()
+        while self.pos < size:
+            following = rutf8.codepoint_at_pos(text, self.pos)
+            if following < 128 or not utf8.graphic(following):
+                break
+            self.advance()
+
     def find_next_token(self):
         text = self.text
         size = len(text)
@@ -73,40 +186,12 @@ class UnicodeRunner(object):
                     self.advance()
                 name = 'IGNORE'
             elif rstring.startswith(text, '/*', start, size):
-                self.advance()
-                self.advance()
-                while self.pos < size and not rstring.startswith(text, '*/', self.pos, size):
-                    self.advance()
-                if self.pos == size:
-                    self.fail(start, line, column)
-                self.advance()
-                self.advance()
+                self.scan_block_comment(start, line, column)
                 name = 'IGNORE'
             elif char in "'\"":
                 if char == '"':
                     name = 'STRING'
-                self.advance()
-                closed = False
-                while self.pos < size:
-                    c = text[self.pos]
-                    self.advance()
-                    if c == '\\':
-                        if self.pos < size:
-                            escape = text[self.pos]
-                            self.advance()
-                            if escape == 'x' or '0' <= escape <= '7':
-                                while self.pos < size and text[self.pos] != '\\':
-                                    self.advance()
-                                if self.pos < size:
-                                    self.advance()
-                    elif c == char:
-                        if self.pos < size and text[self.pos] == char:
-                            self.advance()
-                        else:
-                            closed = True
-                            break
-                if not closed:
-                    self.fail(start, line, column)
+                self.scan_quoted(start, line, column)
             elif utf8.identifier_start(code):
                 if utf8.variable_start(code):
                     name = 'VAR'
@@ -115,50 +200,7 @@ class UnicodeRunner(object):
                         rutf8.codepoint_at_pos(text, self.pos)):
                     self.advance()
             elif '0' <= char <= '9':
-                name = 'NUMBER'
-                self.advance()
-                if char == '0' and self.pos < size and text[self.pos] == "'":
-                    self.advance()
-                    if self.pos == size:
-                        self.fail(start, line, column)
-                    if text[self.pos] == '\\':
-                        self.advance()
-                        if self.pos == size:
-                            self.fail(start, line, column)
-                        escape = text[self.pos]
-                        self.advance()
-                        if escape in 'uU':
-                            count = 4 if escape == 'u' else 8
-                            for unused in range(count):
-                                if self.pos == size:
-                                    self.fail(start, line, column)
-                                self.advance()
-                        elif escape == 'x' or '0' <= escape <= '7':
-                            while self.pos < size and text[self.pos] != '\\':
-                                self.advance()
-                            if self.pos == size:
-                                self.fail(start, line, column)
-                            self.advance()
-                    else:
-                        self.advance()
-                else:
-                    while self.pos < size and '0' <= text[self.pos] <= '9':
-                        self.advance()
-                    if (self.pos + 1 < size and text[self.pos] == '.' and
-                            '0' <= text[self.pos + 1] <= '9'):
-                        name = 'FLOAT'
-                        self.advance()
-                        while self.pos < size and '0' <= text[self.pos] <= '9':
-                            self.advance()
-                        if self.pos < size and text[self.pos] in 'eE':
-                            self.advance()
-                            if self.pos < size and text[self.pos] in '+-':
-                                self.advance()
-                            digits = self.pos
-                            while self.pos < size and '0' <= text[self.pos] <= '9':
-                                self.advance()
-                            if self.pos == digits:
-                                self.fail(start, line, column)
+                name = self.scan_number(start, line, column)
             elif rstring.startswith(text, '[]', start, size) or rstring.startswith(text, '{}', start, size):
                 self.advance()
                 self.advance()
@@ -168,22 +210,9 @@ class UnicodeRunner(object):
             elif char in '!,;':
                 self.advance()
             elif code < 128:
-                matched = False
-                for symbol in GRAPHIC_TOKENS:
-                    if rstring.startswith(text, symbol, start, size):
-                        for unused in range(len(symbol)):
-                            self.advance()
-                        matched = True
-                        break
-                if not matched:
-                    self.fail(start, line, column)
+                self.scan_ascii_graphic(start, line, column)
             elif utf8.graphic(code):
-                self.advance()
-                while self.pos < size:
-                    following = rutf8.codepoint_at_pos(text, self.pos)
-                    if following < 128 or not utf8.graphic(following):
-                        break
-                    self.advance()
+                self.scan_unicode_graphic()
             else:
                 self.fail(start, line, column)
             if name == 'IGNORE' and self.ignore_layout:
