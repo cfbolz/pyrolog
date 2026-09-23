@@ -94,6 +94,43 @@ def test_retract_successful_bindings_are_backtrackable():
     assert_true('p(b).', e)
 
 
+def test_retract_enumerates_removals_on_backtracking():
+    e = get_engine('p(a). p(b). p(c).')
+    assert_true('findall(X, retract(p(X)), L), L == [a, b, c].', e)
+    # All matching clauses must actually have been removed, not just returned.
+    assert_false('retract(p(_)).', e)
+
+
+@pytest.mark.parametrize('assertion', ['asserta(p(new))', 'assertz(p(new))'])
+def test_retract_keeps_original_candidates_after_assertion(assertion):
+    e = get_engine('p(a). p(b).')
+    assert_true('findall(X, (retract(p(X)), '
+                '(X == a -> %s; true)), L), L == [a, b].' % assertion, e)
+    assert_true('findall(X, p(X), L), L == [new].', e)
+
+
+def test_retract_skips_failed_candidates_between_answers():
+    e = get_engine('p(a, b). p(c, c). p(d, e). p(f, f). p(g, h).')
+    assert_true('findall(X, retract(p(X, X)), L), L == [c, f].', e)
+    assert_true('findall(pair(X, Y), p(X, Y), L), '
+                'L == [pair(a, b), pair(d, e), pair(g, h)].', e)
+
+
+def test_retract_keeps_original_candidates_after_other_retraction():
+    e = get_engine('p(a). p(b). p(c).')
+    assert_true('findall(X, (retract(p(X)), '
+                '(X == a -> once(retract(p(b))); true)), L), '
+                'L == [a, b, c].', e)
+    assert_false('retract(p(_)).', e)
+
+
+def test_retract_distinguishes_identical_clauses_after_assertion():
+    e = get_engine('p(a). p(a).')
+    assert_true('findall(X, (retract(p(X)), assertz(p(a))), L), '
+                'L == [a, a].', e)
+    assert_true('findall(X, p(X), L), L == [a, a].', e)
+
+
 def test_assert_retract():
     e = get_engine("g(b, b).")
     assert_true("g(B, B).", e)

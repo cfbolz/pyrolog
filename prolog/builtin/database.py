@@ -1,4 +1,4 @@
-from prolog.interpreter import helper, term, error
+from prolog.interpreter import helper, term, error, continuation
 from prolog.interpreter.signature import Signature
 from prolog.builtin.register import expose_builtin
 
@@ -81,7 +81,13 @@ def impl_retract(engine, heap, module, pattern, scont, fcont):
                 pattern).lookup(head.signature())
     if function.rulechain is None:
         raise error.UnificationFailed
-    rulechain = function.rulechain
+    return continue_retract(engine, scont, fcont, heap, function,
+                            function.rulechain, head, body)
+
+
+@continuation.make_failure_continuation
+def continue_retract(Choice, engine, scont, fcont, heap,
+                     function, rulechain, head, body):
     candidate_heap = heap.branch()
     while rulechain:
         rule = rulechain
@@ -92,18 +98,20 @@ def impl_retract(engine, heap, module, pattern, scont, fcont):
                 body.unify(deleted_body, candidate_heap)
         except error.UnificationFailed:
             candidate_heap.revert_upto(heap)
-        except error.CatchableError:
+        except error.CatchableError, exc:
             candidate_heap.revert_upto(heap)
-            raise
+            return engine.throw(exc, scont, fcont, heap)
         else:
-            if function.rulechain is rulechain:
-                function.rulechain = rulechain.next
-            else:
-                function.remove(rulechain)
+            function.remove(rulechain)
+            if rulechain.next is not None:
+                fcont = Choice(engine, scont, fcont, heap, function,
+                               rulechain.next, head, body)
             break
         rulechain = rulechain.next
     else:
-        raise error.UnificationFailed()
+        # On retry this helper is called from fcont.fail(), outside the
+        # driver's exception handler. Resume the caller's failure directly.
+        return fcont.fail(heap)
     # Continue on the matching frame so its bindings and queued hooks remain
     # part of execution, and outer backtracking can undo the bindings.
     return scont, fcont, candidate_heap
