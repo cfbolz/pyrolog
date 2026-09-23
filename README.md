@@ -16,6 +16,10 @@ Source identifiers use Unicode 15.0 XID character classes; an initial uppercase
 letter or underscore introduces a variable. Lexer source offsets remain byte
 offsets, while diagnostic columns count code points. Printing, highlighting,
 and predicate completion use the same lexical rules.
+Following newer SWI-Prolog syntax, non-ASCII symbols (`S*`) and punctuation
+in categories `Pc`, `Pd`, and `Po` form single-character atoms rather than
+joining adjacent symbols. Identifier rules take precedence (e.g. `a·b` is
+one identifier); multi-symbol atom names such as `'≤≥'` must be quoted.
 
 Text streams use UTF-8 (`encoding(utf8)`); malformed UTF-8 raises
 `representation_error(character)`. `get_char/2`, `get_code/2`, their peek

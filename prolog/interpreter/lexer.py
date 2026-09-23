@@ -158,16 +158,6 @@ class UnicodeRunner(object):
                 return
         self.fail(start, line, column)
 
-    def scan_unicode_graphic(self):
-        text = self.text
-        size = len(text)
-        self.advance()
-        while self.pos < size:
-            following = rutf8.codepoint_at_pos(text, self.pos)
-            if following < 128 or not utf8.graphic(following):
-                break
-            self.advance()
-
     def find_next_token(self):
         text = self.text
         size = len(text)
@@ -211,8 +201,8 @@ class UnicodeRunner(object):
                 self.advance()
             elif code < 128:
                 self.scan_ascii_graphic(start, line, column)
-            elif utf8.graphic(code):
-                self.scan_unicode_graphic()
+            elif utf8.unicode_solo(code):
+                self.advance()
             else:
                 self.fail(start, line, column)
             if name == 'IGNORE' and self.ignore_layout:

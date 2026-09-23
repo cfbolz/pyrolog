@@ -31,7 +31,10 @@ def layout(code):
     return unicodedb.isspace(code)
 
 
-def graphic(code):
+def unicode_solo(code):
+    # SWI's newer syntax keeps non-ASCII symbols and these punctuation
+    # categories separate. Identifier recognition takes precedence.
     if code < 128:
-        return chr(code) in '#$&*+-./:<=>?@^~\\'
-    return unicodedb.category(code).startswith('S')
+        return False
+    category = unicodedb.category(code)
+    return category.startswith('S') or category in ('Pc', 'Pd', 'Po')
