@@ -77,3 +77,62 @@ def test_unicode_offsets_integer_range():
 ])
 def test_unicode_number_conversion(query):
     assert_true(query + '.')
+
+
+@pytest.mark.parametrize('query', [
+    "findall(B-1-A-S,sub_atom('é😀é',B,1,A,S),R), "
+        "R == [0-1-2-'é',1-1-1-'😀',2-1-0-'é']",
+    "findall(B-L-S,sub_atom('é😀é',B,L,1,S),R), "
+        "R == [0-2-'é😀',1-1-'😀',2-0-'']",
+    "findall(L-A-S,sub_atom('é😀é',1,L,A,S),R), "
+        "R == [0-2-'',1-1-'😀',2-0-'😀é']",
+    "findall(B-L-A,sub_atom('ééé',B,L,A,'éé'),R), "
+        "R == [0-2-1,1-2-0]",
+    "findall(B-L-A,sub_atom('é😀',B,L,A,''),R), "
+        "R == [0-0-2,1-0-1,2-0-0]",
+    "findall(B-L-S,sub_atom('é😀é',B,L,B,S),R), "
+        "R == [0-3-'é😀é',1-1-'😀']",
+    "findall(B-A-S,sub_atom('é😀é',B,B,A,S),R), "
+        "R == [0-3-'',1-1-'😀']",
+    "findall(B-L-S,sub_atom('é😀é',B,L,L,S),R), "
+        "R == [1-1-'😀',3-0-'']",
+    "findall(X,sub_atom('é😀é',X,X,X,_),[1])",
+    "findall(B,sub_atom('é😀é',B,1,1,'😀'),[1])",
+    "findall(S,sub_atom('é😀é',1,_,1,S),['😀'])",
+    "findall(S,sub_atom('é😀é',1,2,_,S),['😀é'])",
+])
+def test_sub_atom_constrained_enumeration(query):
+    assert_true(query + '.')
+
+
+@pytest.mark.parametrize('query', [
+    "sub_atom('é😀',_,0,_,'é')", "sub_atom('é😀',_,_,_,'é😀é')",
+    "sub_atom('é😀',2,1,_,_)", "sub_atom('é😀',_,2,1,_)",
+    "sub_atom('é😀',2,_,1,_)",
+])
+def test_sub_atom_inconsistent_constraints(query):
+    assert_false(query + '.')
+
+
+def test_sub_atom_unbound_source():
+    prolog_raises('instantiation_error', 'sub_atom(_,0,1,0,a)')
+
+
+def test_sub_atom_fixed_prefix_does_not_scan_whole_atom(monkeypatch):
+    from prolog.interpreter import term
+    from prolog.interpreter.continuation import Engine
+    engine = Engine()
+    result = term.BindingVar()
+    query = Callable.build('sub_atom', [Callable.build('é' * 10000),
+        term.Number(0), term.Number(1), term.Number(9999), result])
+    advance = rutf8.next_codepoint_pos
+    calls = [0]
+
+    def counted_advance(text, pos):
+        calls[0] += 1
+        return advance(text, pos)
+
+    monkeypatch.setattr(rutf8, 'next_codepoint_pos', counted_advance)
+    engine.run_query_in_current(query)
+    assert result.dereference(None).name() == 'é'
+    assert calls[0] <= 2

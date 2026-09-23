@@ -5,7 +5,7 @@ from prolog.interpreter.term import specialized_term_classes
 from prolog.interpreter.term import Callable
 import re
 import sys
-from rpython.rlib import rutf8
+from rpython.rlib import rutf8, rstring
 
 # ___________________________________________________________________
 # analysing and construction atoms
@@ -77,65 +77,110 @@ def sub_atom_index(value):
     return result
 
 
+def advance_codepoints(text, pos, count):
+    for unused in range(count):
+        pos = rutf8.next_codepoint_pos(text, pos)
+    return pos
+
+
 @continuation.make_failure_continuation
-def continue_sub_atom(Choice, engine, scont, fcont, heap, text, offsets,
-                      before, length, after, sub, b, l, wanted_b, wanted_l,
-                      wanted_a):
-    size = len(offsets) - 1
-    while b <= size:
-        while l <= size - b:
-            current_l = l
+def continue_sub_atom(Choice, engine, scont, fcont, heap, text, size,
+                      before, length, after, sub, b, l, start, stop,
+                      last_b, wanted_l, wanted_a):
+    while b <= last_b:
+        current_b, current_l = b, l
+        current_start, current_stop = start, stop
+        # Save the next candidate's character indices and byte cursors before
+        # unification. Backtracking resumes directly at that candidate.
+        if wanted_l >= 0 or wanted_a >= 0 or l == size - b:
+            b += 1
+            if b <= last_b:
+                start = rutf8.next_codepoint_pos(text, start)
+                if wanted_l >= 0:
+                    stop = rutf8.next_codepoint_pos(text, stop)
+                elif wanted_a >= 0:
+                    l = size - b - wanted_a
+                else:
+                    l = 0
+                    stop = start
+        else:
             l += 1
-            if wanted_l >= 0 and current_l != wanted_l:
+            stop = rutf8.next_codepoint_pos(text, stop)
+        if isinstance(sub, term.Atom):
+            if not rstring.startswith(text, sub.name(), current_start, len(text)):
                 continue
-            a = size - b - current_l
-            if wanted_a >= 0 and a != wanted_a:
-                continue
-            start = offsets[b]
-            stop = offsets[b + current_l]
-            assert 0 <= start <= stop
-            part = text[start:stop]
-            if isinstance(sub, term.Atom) and part != sub.name():
-                continue
-            undoheap = heap
-            heap = heap.branch()
-            try:
-                before.unify(term.Number(b), heap)
-                length.unify(term.Number(current_l), heap)
-                after.unify(term.Number(a), heap)
-                sub.unify(Callable.build(part, cache=False), heap)
-            except error.UnificationFailed:
-                heap = heap.revert_upto(undoheap, discard_choicepoint=True)
-                continue
-            fcont = Choice(engine, scont, fcont, undoheap, text, offsets,
-                           before, length, after, sub, b, l, wanted_b,
-                           wanted_l, wanted_a)
-            return scont, fcont, heap
-        if wanted_b >= 0:
-            break
-        b += 1
-        l = 0
+            part = sub
+        else:
+            assert 0 <= current_start <= current_stop
+            part = Callable.build(text[current_start:current_stop], cache=False)
+        undoheap = heap
+        heap = heap.branch()
+        try:
+            before.unify(term.Number(current_b), heap)
+            length.unify(term.Number(current_l), heap)
+            after.unify(term.Number(size - current_b - current_l), heap)
+            sub.unify(part, heap)
+        except error.UnificationFailed:
+            heap = heap.revert_upto(undoheap, discard_choicepoint=True)
+            continue
+        if b <= last_b:
+            fcont = Choice(engine, scont, fcont, undoheap, text, size,
+                           before, length, after, sub, b, l, start, stop,
+                           last_b, wanted_l, wanted_a)
+        return scont, fcont, heap
     return fcont.fail(heap)
 
 
-@expose_builtin("sub_atom", unwrap_spec=["atom", "obj", "obj", "obj", "obj"],
+@expose_builtin("sub_atom", unwrap_spec=["obj", "obj", "obj", "obj", "obj"],
                 handles_continuation=True)
-def impl_sub_atom(engine, heap, text, before, length, after, sub, scont, fcont):
+def impl_sub_atom(engine, heap, atom, before, length, after, sub, scont, fcont):
+    if isinstance(atom, term.Var):
+        error.throw_instantiation_error()
+    text = helper.unwrap_atom(atom)
+    assert isinstance(atom, term.Atom)
+    size = atom.signature().name_length
     b = sub_atom_index(before)
     l = sub_atom_index(length)
     a = sub_atom_index(after)
     if not isinstance(sub, term.Var) and not isinstance(sub, term.Atom):
         error.throw_type_error("atom", sub)
-    if b > len(text) or l > len(text) or a > len(text):
+    if isinstance(sub, term.Atom):
+        sub_length = sub.signature().name_length
+        if l >= 0 and l != sub_length:
+            return fcont.fail(heap)
+        l = sub_length
+    if b > size or l > size or a > size:
         return fcont.fail(heap)
-    # Keep byte offsets separate from the code-point indices exposed to Prolog.
-    offsets = [0]
-    pos = 0
-    while pos < len(text):
-        pos = rutf8.next_codepoint_pos(text, pos)
-        offsets.append(pos)
-    return continue_sub_atom(engine, scont, fcont, heap, text, offsets,
-                             before, length, after, sub, max(0, b), 0, b, l, a)
+    # Derive a missing index from Before + Length + After = Total. Use
+    # subtraction so oversized, but machine-sized, inputs cannot overflow.
+    if b >= 0 and l >= 0:
+        remaining = size - b - l
+        if remaining < 0 or (a >= 0 and a != remaining):
+            return fcont.fail(heap)
+        a = remaining
+    elif b >= 0 and a >= 0:
+        l = size - b - a
+        if l < 0:
+            return fcont.fail(heap)
+    elif l >= 0 and a >= 0:
+        b = size - l - a
+        if b < 0:
+            return fcont.fail(heap)
+    if b >= 0:
+        last_b = b
+    elif l >= 0:
+        last_b = size - l
+    elif a >= 0:
+        last_b = size - a
+    else:
+        last_b = size
+    b = max(0, b)
+    current_l = l if l >= 0 else (size - b - a if a >= 0 else 0)
+    start = advance_codepoints(text, 0, b)
+    stop = advance_codepoints(text, start, current_l)
+    return continue_sub_atom(engine, scont, fcont, heap, text, size,
+                             before, length, after, sub, b, current_l,
+                             start, stop, last_b, l, a)
 
 
 def atom_to_cons(atom, codes=False):
