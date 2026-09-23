@@ -13,6 +13,10 @@ GRAPHIC_TOKENS = sorted([
     '//', '<<', '>>', '**', '^'], key=len, reverse=True)
 
 
+class IncompleteTokenError(LexerError):
+    """A quoted token or block comment needs more input."""
+
+
 class UnicodeLexer(object):
     def get_runner(self, text, eof=False, ignore_layout=True):
         return UnicodeRunner(text, eof, ignore_layout)
@@ -63,7 +67,7 @@ class UnicodeRunner(object):
         while self.pos < size and not rstring.startswith(text, '*/', self.pos, size):
             self.advance()
         if self.pos == size:
-            self.fail(start, line, column)
+            raise IncompleteTokenError(text, 0, SourcePos(start, line, column))
         self.advance()
         self.advance()
 
@@ -89,7 +93,7 @@ class UnicodeRunner(object):
                     self.advance()
                 else:
                     return
-        self.fail(start, line, column)
+        raise IncompleteTokenError(text, 0, SourcePos(start, line, column))
 
     def scan_character_code(self, start, line, column):
         # The initial zero has been consumed; the cursor is on the quote.

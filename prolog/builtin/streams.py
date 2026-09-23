@@ -335,6 +335,7 @@ def impl_write_term_2(engine, heap, term, options):
 
 def read_till_next_dot(stream):
     from prolog.interpreter.parsing import lexer, LexerError
+    from prolog.interpreter.lexer import IncompleteTokenError
     from prolog.interpreter.utf8 import layout
     chars = []
     while True:
@@ -357,8 +358,10 @@ def read_till_next_dot(stream):
         source = "".join(chars)
         try:
             tokens = lexer.tokenize(source)
+        except IncompleteTokenError:
+            continue  # The dot is inside an unfinished quote or comment.
         except LexerError:
-            continue  # The dot may be inside an unfinished quote or comment.
+            error.throw_syntax_error("Invalid token")
         if tokens and tokens[-1].name == '.' and tokens[-1].source_pos.i == len(source) - 1:
             return source
 
