@@ -4,6 +4,7 @@ from prolog.builtin.register import expose_builtin
 from prolog.interpreter.term import specialized_term_classes
 from prolog.interpreter.term import Callable
 import re
+from rpython.rlib import rutf8
 
 # ___________________________________________________________________
 # analysing and construction atoms
@@ -11,7 +12,8 @@ import re
 @continuation.make_failure_continuation
 def continue_atom_concat(Choice, engine, scont, fcont, heap, var1, var2, result, i):
     if i < len(result):
-        fcont = Choice(engine, scont, fcont, heap, var1, var2, result, i + 1)
+        fcont = Choice(engine, scont, fcont, heap, var1, var2, result,
+                       rutf8.next_codepoint_pos(result, i))
         heap = heap.branch()
     var1.unify(term.Callable.build(result[:i], cache=False), heap)
     var2.unify(term.Callable.build(result[i:], cache=False), heap)
@@ -48,7 +50,7 @@ def impl_atom_concat(engine, heap, a1, a2, result, scont, fcont):
 def impl_atom_length(engine, heap, s, length):
     if not (isinstance(length, term.Var) or isinstance(length, term.Number)):
         error.throw_type_error("integer", length)
-    term.Number(len(s)).unify(length, heap)
+    term.Number(rutf8.get_utf8_length(s)).unify(length, heap)
 
 
 
@@ -189,9 +191,10 @@ def impl_sub_atom(engine, heap, s, before, length, after, sub, scont, fcont):
 
 def atom_to_cons(atom, codes=False):
     if codes:
-        charlist = [term.Number(ord(c)) for c in atom.name()]
+        charlist = [term.Number(c) for c in rutf8.Utf8StringIterator(atom.name())]
     else:
-        charlist = [term.Callable.build(c) for c in atom.name()]
+        charlist = [term.Callable.build(rutf8.unichr_as_utf8(c))
+                    for c in rutf8.Utf8StringIterator(atom.name())]
     return helper.wrap_list(charlist)
         
 def cons_to_atom(cons, codes=False):
@@ -231,8 +234,8 @@ def impl_char_code(engine, heap, char, code):
     if isinstance(char, term.Var):
         char.unify(Callable.build(helper.unwrap_char_code(code)), heap)
     else:
-        if not isinstance(char, term.Atom) or len(char.name()) != 1:
+        if not isinstance(char, term.Atom) or rutf8.get_utf8_length(char.name()) != 1:
             error.throw_type_error("character", char)
         if not isinstance(code, term.Var):
             helper.unwrap_char_code(code)
-        code.unify(term.Number(ord(char.name()[0])), heap)
+        code.unify(term.Number(rutf8.codepoint_at_pos(char.name(), 0)), heap)

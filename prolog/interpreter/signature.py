@@ -1,4 +1,4 @@
-from rpython.rlib import jit, rstring
+from rpython.rlib import jit, rutf8
 from rpython.rlib.objectmodel import specialize, we_are_translated
 from rpython.rlib.unroll import unrolling_iterable
 
@@ -67,7 +67,8 @@ class Signature(object):
     def __init__(self, name, numargs, cached=False, factory=None):
         assert name is not None
         assert isinstance(name, str)
-        name = rstring.assert_str0(name)
+        # Names are UTF-8 byte strings, including embedded NUL characters.
+        rutf8.check_utf8(name, allow_surrogates=False)
         self.name = name
         self.numargs = numargs
         self.cached = cached
