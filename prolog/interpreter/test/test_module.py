@@ -8,6 +8,19 @@ from prolog.interpreter.signature import Signature
 from prolog.interpreter.continuation import Engine
 from prolog.interpreter.error import UncaughtError
 
+@pytest.mark.parametrize('predicate', ['assert', 'asserta', 'assertz'])
+@pytest.mark.parametrize('original_module', ['user', 'origin'])
+def test_assertion_error_restores_current_module(predicate, original_module):
+    e = get_engine('', m=':- module(m, []).', origin=':- module(origin, []).')
+    e.switch_module(original_module)
+    # Catching the permission error must already see the restored context.
+    assert_true('catch((%s(m:atom(a)), fail), '
+                'error(permission_error(_, _, _)), this_module(%s)), '
+                'this_module(%s).' %
+                (predicate, original_module, original_module), e)
+    assert e.modulewrapper.current_module.name == original_module
+
+
 def test_set_currently_parsed_module():
     e = get_engine("""
     f(a).

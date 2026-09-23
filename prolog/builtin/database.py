@@ -51,12 +51,14 @@ def impl_asserta(engine, heap, module, rule):
 def handle_assert(engine, heap, module, rule, end):
     m = engine.modulewrapper
     current_modname = m.current_module.name
-    engine.switch_module(module.name)
-    if rule.signature().eq(prefixsig):
-        modname, rule = unpack_modname_and_predicate(rule)
-        engine.switch_module(modname)
-    engine.add_rule(rule.dereference(heap), end=end)
-    engine.switch_module(current_modname)
+    try:
+        engine.switch_module(module.name)
+        if rule.signature().eq(prefixsig):
+            modname, rule = unpack_modname_and_predicate(rule)
+            engine.switch_module(modname)
+        engine.add_rule(rule.dereference(heap), end=end)
+    finally:
+        engine.switch_module(current_modname)
 
 @expose_builtin("retract", unwrap_spec=["callable"], needs_module=True,
                 handles_continuation=True)
