@@ -143,7 +143,8 @@ class Engine(object):
         if helper.is_term(ruleterm):
             assert isinstance(ruleterm, Callable)
             if ruleterm.signature().eq(predsig):
-                return Rule(ruleterm.argument_at(0), ruleterm.argument_at(1), module)
+                head = helper.ensure_callable(ruleterm.argument_at(0).dereference(None))
+                return Rule(head, ruleterm.argument_at(1), module)
             else:
                 return Rule(ruleterm, None, module)
         elif isinstance(ruleterm, Atom):
