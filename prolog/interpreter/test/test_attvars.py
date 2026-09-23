@@ -44,6 +44,15 @@ def test_backtracking():
     assert_true("put_attr(X, a, 2), ((put_attr(X, a, 1), put_attr(X, a, 3), fail); get_attr(X, a, 2)).")
     assert_true("put_attr(X, a, 2), ((put_attr(X, b, 1), put_attr(X, c, 3), fail); get_attr(X, a, 2)), \+ get_attr(X, b, 1), \+ get_attr(X, c, 3).")
 
+def test_cut_preserves_attribute_trail_for_outer_backtracking():
+    engine = get_engine('p(X) :- (true; true), put_attr(X, m, 2), !.')
+    # Cutting the inner choice point must retain the trail entry needed to
+    # restore the original attribute when the outer disjunction backtracks.
+    assert_true('put_attr(X, m, 1), '
+                '(p(X), get_attr(X, m, 2), fail; get_attr(X, m, V)), '
+                'V = 1.', engine)
+
+
 def test_del_attributes():
     assert_true("del_attr(X, m).")
     assert_true("del_attr(a, m).")

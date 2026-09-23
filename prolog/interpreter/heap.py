@@ -155,9 +155,8 @@ class Heap(object):
 
             if self.trail_attrs is not None:
                 if current_heap.trail_attrs is not None:
-                    current_heap.trail_attrs.extend(self.trail_attrs)
-                else:
-                    current_heap.trail_attrs = self.trail_attrs
+                    self.trail_attrs.extend(current_heap.trail_attrs)
+                current_heap.trail_attrs = self.trail_attrs
 
             current_heap.prev = self.prev
             self.trail_var = None
@@ -191,12 +190,11 @@ class Heap(object):
 
     def _discard_try_remove_current_trail_attvars(self, discarded_heap):
         trail_attrs = []
-        targetpos = 0
         for var, attr, value in self.trail_attrs:
             if var.created_after_choice_point is discarded_heap:
                 var.created_after_choice_point = discarded_heap.prev
             else:
-                trail_attrs[targetpos] = (var, attr, value)
+                trail_attrs.append((var, attr, value))
         if not trail_attrs:
             trail_attrs = None
         self.trail_attrs = trail_attrs
