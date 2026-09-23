@@ -80,6 +80,50 @@ def test_heap_discard():
     assert v1.binding is None
     assert v2.binding == 3 # not backtracked, because it goes away
 
+@pytest.mark.parametrize('length', [2, 8])
+def test_discard_preserves_path_compression_undo_order(length):
+    root = Heap()
+    variables = [root.newvar() for _ in range(length)]
+    older = root.branch()
+    for i in range(length - 1):
+        variables[i].unify(variables[i + 1], older)
+    # Also exercise multiple undo entries for one variable in the older frame.
+    assert variables[0].dereference(older) is variables[-1]
+
+    current = older.branch()
+    value = Number(7)
+    variables[-1].unify(value, current)
+    for var in variables:
+        assert var.dereference(current) is value
+        assert var.binding is value
+
+    assert older.discard(current) is current
+    assert current.prev is root
+    # A cut changes bookkeeping, not the live bindings.
+    for var in variables:
+        assert var.binding is value
+
+    current.revert_upto(root)
+    # Undo compression before undoing the original aliases: all variables
+    # must become independent again, not remain linked to each other.
+    for var in variables:
+        assert var.binding is None
+
+
+def test_trailing_after_discard_with_one_binding():
+    root = Heap()
+    variables = [root.newvar() for _ in range(4)]
+    older = root.branch()
+    variables[0].unify(Number(0), older)
+    current = older.branch()
+    older.discard(current)
+    for i in range(1, len(variables)):
+        variables[i].unify(Number(i), current)
+    current.revert_upto(root)
+    for var in variables:
+        assert var.binding is None
+
+
 def test_heap_discard_variable_shunting():
     h0 = Heap()
     v0 = h0.newvar()
@@ -304,5 +348,3 @@ def test_hookchain_size():
     assert size(h) == 2
     h.hook = None
     assert size(h) == 0
-
-
