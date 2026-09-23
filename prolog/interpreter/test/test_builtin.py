@@ -131,6 +131,20 @@ def test_retract_distinguishes_identical_clauses_after_assertion():
     assert_true('findall(X, p(X), L), L == [a, a].', e)
 
 
+def test_retract_fact_with_explicit_true_body():
+    e = get_engine('p(a). p(b).')
+    assert_true('once(retract((p(X) :- true))), X == a.', e)
+    assert_false('p(a).', e)
+    assert_true('p(b).', e)
+
+
+def test_retract_fact_does_not_match_nontrue_body():
+    e = get_engine('p(a). p(b) :- q.')
+    assert_true('retract((p(X) :- q)), X == b.', e)
+    assert_true('p(a).', e)
+    assert_false('retract((p(_) :- q)).', e)
+
+
 def test_assert_retract():
     e = get_engine("g(b, b).")
     assert_true("g(B, B).", e)

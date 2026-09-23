@@ -7,6 +7,7 @@ from prolog.builtin.register import expose_builtin
 
 prefixsig = Signature.getsignature(":", 2)
 implsig = Signature.getsignature(":-", 2)
+TRUE_ATOM = term.Callable.build("true")
 
 def unpack_modname_and_predicate(rule):
     if helper.is_numeric(rule.argument_at(0)):
@@ -95,6 +96,8 @@ def continue_retract(Choice, engine, scont, fcont, heap,
         try:
             deleted_body = rule.clone_and_unify_head(candidate_heap, head)
             if body is not None:
+                if deleted_body is None:
+                    deleted_body = TRUE_ATOM
                 body.unify(deleted_body, candidate_heap)
         except error.UnificationFailed:
             candidate_heap.revert_upto(heap)
