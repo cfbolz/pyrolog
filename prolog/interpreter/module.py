@@ -29,6 +29,7 @@ class ModuleWrapper(object):
         self.current_module = self.user_module
 
     def get_module(self, name, errorterm):
+        self = jit.promote(self)
         module = self._get_module(name, self.version)
         if module is not None:
             return module
@@ -57,11 +58,12 @@ class ModuleWrapper(object):
 
 
 class Module(object):
-    _immutable_fields_ = ["name", "nameatom", "_toplevel_rule"]
+    _immutable_fields_ = ["name", "nameatom", "_toplevel_rule", "version?"]
     def __init__(self, name):
         self.name = name
         self.nameatom = Atom(name)
         self.functions = {}
+        self.version = VersionTag()
         self.meta_predicates = {}
         self.exports = []
         self._toplevel_rule = _make_toplevel_rule(self)
@@ -73,8 +75,11 @@ class Module(object):
             func.meta_args = arglist
 
     def lookup(self, signature):
-        # Entries can be replaced by imports or removed by abolish/1, so this
-        # lookup is not elidable without dictionary versioning.
+        self = jit.promote(self)
+        return self._lookup(signature, self.version)
+
+    @jit.elidable
+    def _lookup(self, signature, version):
         return self.functions.get(signature, None)
 
     def use_module(self, module, imports=None):
@@ -87,9 +92,13 @@ class Module(object):
                     importlist.append(pred)
         for sig in importlist:
             try:
-                self.functions[sig] = module.functions[sig]
+                function = module.functions[sig]
             except KeyError:
                 pass
+            else:
+                if self.functions.get(sig, None) is not function:
+                    self.functions[sig] = function
+                    self.version = VersionTag()
 
     def __repr__(self):
         return "Module('%s')" % self.name

@@ -7,7 +7,7 @@ from prolog.interpreter.term import Term, Atom, BindingVar, Callable, Var
 from prolog.interpreter.function import Function, Rule
 from prolog.interpreter.heap import Heap
 from prolog.interpreter.signature import Signature
-from prolog.interpreter.module import Module, ModuleWrapper
+from prolog.interpreter.module import Module, ModuleWrapper, VersionTag
 from prolog.interpreter.helper import unwrap_predicate_indicator
 from prolog.interpreter.stream import StreamWrapper
 from prolog.interpreter.small_list import inline_small_list
@@ -140,6 +140,7 @@ class Engine(object):
             function = Function()
             function.meta_args = module.meta_predicates.get(signature, None)
             module.functions[signature] = function
+            module.version = VersionTag()
         function.add_rule(rule, end)
         return rule
 
@@ -280,9 +281,7 @@ class Engine(object):
         try:
             m.current_module = m.modules[modulename]
         except KeyError:
-            module = Module(modulename)
-            m.modules[modulename] = module
-            m.current_module = module
+            m.add_module(modulename)
 
     # _____________________________________________________
     # error handling

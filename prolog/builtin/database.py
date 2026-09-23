@@ -1,5 +1,6 @@
 from prolog.interpreter import helper, term, error, continuation
 from prolog.interpreter.signature import Signature
+from prolog.interpreter.module import VersionTag
 from prolog.builtin.register import expose_builtin
 
 # ___________________________________________________________________
@@ -38,6 +39,8 @@ def impl_abolish(engine, heap, module, predicate):
         del module.functions[signature]
     except KeyError:
         pass
+    else:
+        module.version = VersionTag()
     module.meta_predicates.pop(signature, None)
 
 @expose_builtin(["assert", "assertz"], unwrap_spec=["callable"],
