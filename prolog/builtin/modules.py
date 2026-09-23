@@ -54,10 +54,10 @@ def handle_use_module(engine, heap, module, path, imports=None):
         assert stop >= 0
         modulename = modulename[:stop]
     if modulename not in m.modules and modulename not in m.seen_modules: # prevent recursive imports
-        m.seen_modules[modulename] = None
         current_module = m.current_module
         try:
             file_content, file_name = get_source(path)
+            m.seen_modules[modulename] = None
             engine.runstring(file_content, file_name)
             for sig in m.current_module.exports:
                 if sig not in m.current_module.functions:
