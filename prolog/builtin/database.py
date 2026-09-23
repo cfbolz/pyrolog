@@ -78,7 +78,7 @@ def impl_retract(engine, heap, module, pattern, scont, fcont):
             helper.ensure_callable(body)
     else:
         head = pattern
-        body = None
+        body = TRUE_ATOM
     assert isinstance(head, term.Callable)
     if head.signature().get_extra("builtin"):
         error.throw_permission_error("modify", "static_procedure", 
@@ -103,10 +103,9 @@ def continue_retract(Choice, engine, scont, fcont, heap,
         # standardizing apart
         try:
             deleted_body = rule.clone_and_unify_head(candidate_heap, head)
-            if body is not None:
-                if deleted_body is None:
-                    deleted_body = TRUE_ATOM
-                body.unify(deleted_body, candidate_heap)
+            if deleted_body is None:
+                deleted_body = TRUE_ATOM
+            body.unify(deleted_body, candidate_heap)
         except error.UnificationFailed:
             candidate_heap.revert_upto(heap)
         except error.CatchableError, exc:

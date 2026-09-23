@@ -131,3 +131,13 @@ def test_retract_last_imported_clause_leaves_defined_predicate():
     assert_true("retract(m:p(a)).", e)
     assert_false("p(_).", e)
     assert_false("m:p(_).", e)
+
+
+def test_head_only_retract_does_not_remove_rule():
+    e = get_engine("p(rule) :- q. p(fact). p(explicit_true) :- true. q.")
+    assert_true("findall(X, retract(p(X)), Xs), "
+                "Xs == [fact, explicit_true].", e)
+    assert_true("p(rule).", e)
+    assert_false("retract(p(_)).", e)
+    assert_false("p(fact).", e)
+    assert_false("p(explicit_true).", e)
