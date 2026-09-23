@@ -305,6 +305,7 @@ def impl_seek(engine, heap, stream, offset, mode, obj):
 
 @expose_builtin("nl", unwrap_spec=["outstream"])
 def impl_nl(engine, heap, stream):
+    check_stream_type(stream, False, 'output')
     stream.write("\n")
 
 @expose_builtin("nl", unwrap_spec=[])
@@ -313,6 +314,7 @@ def impl_nl_0(engine, heap):
 
 @expose_builtin("write", unwrap_spec=["outstream", "raw"])
 def impl_write(engine, heap, stream, term):
+    check_stream_type(stream, False, 'output')
     formatter = TermFormatter.from_option_list(engine, [])
     stream.write(formatter.format(term))
 
@@ -322,6 +324,7 @@ def impl_write_1(engine, heap, term):
 
 @expose_builtin("write_term", unwrap_spec=["outstream", "raw", "list"])
 def impl_write_term(engine, heap, stream, term, options):
+    check_stream_type(stream, False, 'output')
     formatter = TermFormatter.from_option_list(engine, options)
     stream.write(formatter.format(term))
  
@@ -331,35 +334,33 @@ def impl_write_term_2(engine, heap, term, options):
             term, options)
 
 def read_till_next_dot(stream):
-    charlist = []
-    tlist = ["%", "", "end_of_file"]
-    whitespace = True
-    ignore = False
+    from prolog.interpreter.parsing import lexer, LexerError
+    from prolog.interpreter.utf8 import layout
+    chars = []
     while True:
-        char, _ = read_unicode_char(stream)
-        if char == "%":
-            ignore = True
-        if char == "\n":
-            ignore = False
-            continue
-        if char == "end_of_file":
-            ignore = False
-        if rstring.strip_spaces(char) == "":
-            continue
-        if not ignore:
-            if char == "end_of_file":
-                if whitespace:
+        char, size = read_unicode_char(stream)
+        if not size:
+            source = "".join(chars)
+            try:
+                if not lexer.tokenize(source):
                     return "end_of_file."
-                else:
-                    error.throw_syntax_error("Unexpected end of file")
-            else:
-                whitespace = False
-            charlist.append(char)
-            if char == ".":
-                nextchar, n = read_unicode_char(stream)
-                stream.seek(-n, 1)
-                if rstring.strip_spaces(nextchar) in tlist:
-                    return "".join(charlist)
+            except LexerError:
+                pass
+            error.throw_syntax_error("Unexpected end of file")
+        chars.append(char)
+        if char != '.':
+            continue
+        following = peek_unicode_char(stream)
+        if (following != 'end_of_file' and following not in ('%', '/') and
+                not layout(rutf8.codepoint_at_pos(following, 0))):
+            continue
+        source = "".join(chars)
+        try:
+            tokens = lexer.tokenize(source)
+        except LexerError:
+            continue  # The dot may be inside an unfinished quote or comment.
+        if tokens and tokens[-1].name == '.' and tokens[-1].source_pos.i == len(source) - 1:
+            return source
 
 @expose_builtin("read", unwrap_spec=["instream", "obj"])
 def impl_read(engine, heap, stream, obj):

@@ -1,3 +1,5 @@
+from rpython.rlib import rutf8
+from prolog.interpreter.utf8 import unicodedb
 import os
 import string
 
@@ -154,11 +156,22 @@ class TermFormatter(object):
             try:
                 tokens = parsing.lexer.tokenize(s)
                 if (len(tokens) == 1 and tokens[0].name == 'ATOM' and
-                    tokens[0].source == s):
+                    tokens[0].source == s and not s.startswith("'")):
                     return s
             except LexerError:
                 pass
-            return "'%s'" % (s, )
+            parts = []
+            for code in rutf8.Utf8StringIterator(s):
+                if code == 39 or code == 92:
+                    parts.append("\\" + chr(code))
+                elif unicodedb.category(code).startswith('C') or code in (0x2028, 0x2029):
+                    if code <= 0xffff:
+                        parts.append("\\u%04x" % code)
+                    else:
+                        parts.append("\\U%08x" % code)
+                else:
+                    parts.append(rutf8.unichr_as_utf8(code))
+            return "'%s'" % "".join(parts)
         return s
 
     def format_number(self, num):
