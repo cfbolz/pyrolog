@@ -55,3 +55,14 @@ def test_sub_atom_errors_and_failure():
     prolog_raises('domain_error(not_less_than_zero, -1)', "sub_atom(a,-1,_,_,_)")
     prolog_raises('type_error(integer, x)', "sub_atom(a,_,x,_,_)")
     prolog_raises('type_error(atom, 1)', "sub_atom(a,_,_,_,1)")
+
+
+@pytest.mark.parametrize('query', [
+    "number_chars(N, ['١','٢','٣']), N == 123",
+    "number_codes(N, [65297,65298,65299]), N == 123",
+    "number_chars(N, [' ','2','3']), N == 23",
+    "number_chars(N, ['0', '\\'', '😀']), N == 128512",
+    "number_chars(N, ['0', '\\'', 'é']), N == 233",
+])
+def test_unicode_number_conversion(query):
+    assert_true(query + '.')
