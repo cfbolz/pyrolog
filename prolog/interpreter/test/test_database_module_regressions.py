@@ -141,3 +141,29 @@ def test_head_only_retract_does_not_remove_rule():
     assert_false("retract(p(_)).", e)
     assert_false("p(fact).", e)
     assert_false("p(explicit_true).", e)
+
+
+@pytest.mark.xfail(reason="Deferred: failed module loads retain partial state and prevent reparsing")
+def test_use_module_retry_after_parse_error(tmpdir):
+    path = tmpdir.join("broken.pl")
+    path.write(":- module(broken, [p/1]).\np(old).\nbad( .\n")
+    e = Engine()
+    pytest.raises(error.PrologParseError, assert_true,
+                  "use_module('%s')." % path, e)
+    path.write(":- module(broken, [p/1]).\np(new).\n")
+    assert_true("use_module('%s'), p(new)." % path, e)
+
+
+@pytest.mark.xfail(reason="Deferred: separate clause destination from body module context")
+def test_assert_rule_with_module_qualified_head():
+    # Qualifying only the head changes its destination, not the body's context.
+    e = get_engine("q.", m=":- module(m, []).")
+    assert_true("assertz((m:p :- q)), m:p.", e)
+
+
+@pytest.mark.xfail(reason="Deferred: import binding semantics across abolition and redefinition")
+def test_abolishing_exported_predicate_invalidates_import():
+    e = get_engine(":- use_module(m).",
+                   m=":- module(m, [p/1]). p(old).")
+    assert_true("abolish(m:p/1).", e)
+    prolog_raises("existence_error(procedure, p/1)", "p(_)", e)
