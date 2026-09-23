@@ -8,6 +8,7 @@ from prolog.interpreter.stream import PrologStream, PrologInputStream, \
 PrologOutputStream
 from prolog.interpreter import helper
 from prolog.builtin.formatting import TermFormatter
+from prolog.builtin.sourcehelper import path_for_os
 
 from rpython.rlib.streamio import fdopen_as_stream, open_file_as_stream
 from rpython.rlib import rstring, rutf8
@@ -40,9 +41,7 @@ def impl_open_options(engine, heap, srcpath, mode, stream, options):
     encoding = opts.get('encoding', 'octet' if binary else 'utf8')
     if encoding != ('octet' if binary else 'utf8'):
         error.throw_domain_error('encoding', term.Callable.build(encoding))
-    if '\x00' in srcpath:
-        error.throw_domain_error('source_sink', term.Callable.build(srcpath))
-    srcpath = rstring.assert_str0(srcpath)
+    srcpath = path_for_os(srcpath)
     mode = rwa.get(mode, None)
     if mode is None:
         error.throw_domain_error("io_mode", term.Callable.build(
@@ -375,6 +374,7 @@ def impl_read_1(engine, heap, obj):
 
 @expose_builtin("see", unwrap_spec=["atom"])
 def impl_see(engine, heap, obj):
+    obj = path_for_os(obj)
     w = engine.streamwrapper
     try:
         stream = w.aliases[obj]

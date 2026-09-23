@@ -56,3 +56,16 @@ def test_binary_bytes_and_stream_types(tmpdir):
                   "open('%s',write,S,[type(binary)]),put_code(S,233)" % path)
     prolog_raises('type_error(byte,256)',
                   "open('%s',write,S,[type(binary)]),put_byte(S,256)" % path)
+
+
+@pytest.mark.parametrize('goal', ['open(P,read,_)', 'consult(P)', 'see(P)', 'add_library_dir(P)'])
+def test_nul_is_valid_in_atoms_but_not_os_paths(goal):
+    prolog_raises('domain_error(source_sink,_)',
+                  'atom_codes(P,[97,0,98]), ' + goal)
+
+
+def test_consult_unicode_filename_and_bom(tmpdir):
+    path = str(tmpdir) + '/词.pl'
+    with open(path, 'wb') as f:
+        f.write('\xef\xbb\xbf词(😀).\n')
+    assert_true("consult('%s'), 词('😀')." % path)
