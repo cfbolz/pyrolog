@@ -1,4 +1,5 @@
 import py
+import math
 from rpython.rlib.parsing.ebnfparse import parse_ebnf
 from rpython.rlib.parsing.regexparse import parse_regex
 from rpython.rlib.parsing.lexer import Lexer, DummyLexer
@@ -412,7 +413,13 @@ class TermBuilder(RPythonVisitor):
     def visit_FLOAT(self, node):
         from prolog.interpreter.term import Float
         s = node.additional_info
-        return Float(float(s))
+        try:
+            value = float(s)
+        except OverflowError:
+            error.throw_syntax_error("float_overflow")
+        if math.isinf(value):
+            error.throw_syntax_error("float_overflow")
+        return Float(value)
 
     def visit_STRING(self, node):
         from prolog.interpreter import helper

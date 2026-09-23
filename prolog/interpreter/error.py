@@ -74,6 +74,9 @@ class TermedError(PrologError):
                     return "Exported procedure %s:%s is not defined" % (
                     f.format_with_cycles(errorterm.argument_at(0)),
                     f.format_with_cycles(errorterm.argument_at(1)))
+            elif errorterm.name() == "resource_error":
+                return "Resource error: %s" % f.format_with_cycles(
+                    errorterm.argument_at(0))
             else:
                 return "Internal error" # AKA, I have no clue what went wrong.
 
@@ -228,3 +231,9 @@ def throw_evaluation_error(error):
     from prolog.interpreter import term
     raise wrap_error(
         term.Callable.build("evaluation_error", [term.Callable.build(error)]))
+
+
+def throw_resource_error(resource):
+    from prolog.interpreter import term
+    raise wrap_error(
+        term.Callable.build("resource_error", [term.Callable.build(resource)]))

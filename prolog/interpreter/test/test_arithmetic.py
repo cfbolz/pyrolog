@@ -143,8 +143,7 @@ class TestArithmeticMethod(object):
         assert BigInt(rbigint.fromint(256)).arith_shr(BigInt(rbigint.fromint(5))).num == 8
         assert Number(256).arith_shr(BigInt(rbigint.fromint(5))).num == 8
 
-        with pytest.raises(ValueError):
-            BigInt(rbigint.fromint(2)).arith_shr(BigInt(rbigint.fromdecimalstr('100000000000000000000000000000000000000000000000')))
+        assert BigInt(rbigint.fromint(2)).arith_shr(BigInt(rbigint.fromdecimalstr('100000000000000000000000000000000000000000000000'))).num == 0
 
     def test_shl(self):
         assert Number(2).arith_shl(Number(5)).num == 64

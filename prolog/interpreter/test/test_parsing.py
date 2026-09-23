@@ -6,6 +6,16 @@ from prolog.interpreter.heap import Heap
 from prolog.interpreter import error
 
 
+@pytest.mark.parametrize('literal', ['1.0e999', '1' + '0' * 400 + '.0'])
+@pytest.mark.parametrize('sign', ['', '-'])
+def test_float_literal_overflow(literal, sign):
+    with pytest.raises(error.CatchableError) as exc:
+        parse_query_term('X = %s%s.' % (sign, literal))
+    syntax_error = exc.value.term.argument_at(0)
+    assert syntax_error.name() == 'syntax_error'
+    assert syntax_error.argument_at(0).name() == 'float_overflow'
+
+
 def test_simple():
     t = parse_file("""
 h(X, Y, Z) :- -Y = Z.

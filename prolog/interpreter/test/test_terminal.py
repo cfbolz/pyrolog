@@ -33,6 +33,14 @@ def test_getch_eof(monkeypatch):
     pytest.raises(translatedmain.EndOfInput, translatedmain.getch)
 
 
+def test_console_recovers_from_float_literal_overflow(monkeypatch):
+    output = terminal_input(monkeypatch, 'X is 1.0e999.\ntrue.\nhalt.\n')
+    translatedmain.run_console(Engine())
+    text = ''.join(output)
+    assert "Syntax error: 'float_overflow'" in text
+    assert 'yes' in text
+
+
 @pytest.mark.parametrize('text, expected', [
     ('', 'welcome!'),
     ('\n', 'welcome!'),
