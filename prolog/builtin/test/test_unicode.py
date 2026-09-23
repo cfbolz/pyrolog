@@ -33,3 +33,25 @@ def test_atom_rejects_invalid_utf8(raw):
 
 def test_combining_sequence_is_not_one_character():
     prolog_raises("type_error(character, 'é')", "char_code('é', C)")
+
+
+@pytest.mark.parametrize('query', [
+    "sub_atom('aé😀', 1, 1, 1, 'é')",
+    "sub_atom('aé😀', B, 1, A, '😀'), B == 2, A == 0",
+    "findall(B-L-A-S, sub_atom('é😀',B,L,A,S), R), "
+        "R == [0-0-2-'',0-1-1-'é',0-2-0-'é😀',1-0-1-'',1-1-0-'😀',2-0-0-'']",
+    "findall(B, sub_atom('ééé',B,2,_, 'éé'), [0,1])",
+    "findall(B, sub_atom('é😀',B,0,_, ''), [0,1,2])",
+    "sub_atom('é😀',B,L,0,'😀'), B == 1, L == 1",
+    "sub_atom('',0,0,0,'')",
+])
+def test_sub_atom_codepoints(query):
+    assert_true(query + '.')
+
+
+def test_sub_atom_errors_and_failure():
+    assert_false("sub_atom('é😀',0,1,0,_).")
+    assert_false("sub_atom('é😀',4,_,_,_).")
+    prolog_raises('domain_error(not_less_than_zero, -1)', "sub_atom(a,-1,_,_,_)")
+    prolog_raises('type_error(integer, x)', "sub_atom(a,_,x,_,_)")
+    prolog_raises('type_error(atom, 1)', "sub_atom(a,_,_,_,1)")
