@@ -3,6 +3,7 @@ from hypothesis import settings, strategies as st
 from hypothesis.stateful import RuleBasedStateMachine, invariant, precondition, rule
 
 from prolog.builtin.attvars import impl_del_attr, impl_del_attrs, impl_put_attr
+from prolog.interpreter.continuation import FailureContinuation
 from prolog.interpreter.heap import Heap
 from prolog.interpreter.term import BindingVar, Number
 
@@ -102,14 +103,18 @@ class AttributeStateMachine(RuleBasedStateMachine):
         del self.variables[len(bindings):]
 
     @precondition(lambda self: len(self.snapshots) >= 2)
-    @rule()
-    def cut(self):
-        # Remove the inner restoration boundary, retaining the outer snapshot.
-        # Live attributes/bindings do not change, and the root heap is never cut.
-        discarded, _, _ = self.snapshots.pop()
-        current = self.heap
-        self.heap = discarded.discard(current)
-        assert self.heap is current
+    @rule(data=st.data())
+    def cut(self, data):
+        count = data.draw(st.integers(1, len(self.snapshots) - 1))
+        # Exercise the real continuation cut loop, newest choice point first.
+        # Keep an outer boundary; neither live state nor variable lifetimes
+        # change until a later backtrack crosses their creation boundary.
+        stop = FailureContinuation(None, None, None, None)
+        continuation = stop
+        for parent, _, _ in self.snapshots[-count:]:
+            continuation = FailureContinuation(None, None, continuation, parent)
+        continuation.cut(stop, self.heap)
+        del self.snapshots[-count:]
         assert self.heap.prev is self.snapshots[-1][0]
 
     @invariant()
