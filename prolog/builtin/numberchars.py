@@ -37,7 +37,7 @@ def parse_number(chars):
     if text.startswith("0'"):
         from prolog.interpreter.parsing import unescape
         char = unescape(text[2:])
-        if rutf8.get_utf8_length(char) != 1:
+        if rutf8.codepoints_in_utf8(char) != 1:
             error.throw_syntax_error("Illegal number")
         return term.Number(rutf8.codepoint_at_pos(char, 0))
     # Numeric conversions accept Unicode decimal digits; source literals stay ASCII.

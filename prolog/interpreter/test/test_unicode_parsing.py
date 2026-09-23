@@ -16,6 +16,9 @@ from prolog.interpreter.test.tool import assert_true
     "atom_codes('it\\'s', [105,116,39,115])",
     '"é😀\\n\\u20ac" == [233,128512,10,8364]',
     "0'😀 =:= 128512",
+    "0'\\x1f600\\ =:= 128512",
+    "0'\\351\\ =:= 233",
+    "0'\\U0001f600 =:= 128512",
     "é == é",
 ])
 def test_unicode_syntax(query):
@@ -34,3 +37,12 @@ def test_lexer_byte_offsets_and_character_columns():
     assert y.source_pos.i == len('é(X).\n😀(')
     assert y.source_pos.lineno == 1
     assert y.source_pos.columnno == 2
+
+
+def test_invalid_utf8_position():
+    prefix = 'é.\n 😀('
+    with pytest.raises(parsing.LexerError) as exc:
+        parsing.lexer.tokenize(prefix + '\xff')
+    assert exc.value.source_pos.i == len(prefix)
+    assert exc.value.source_pos.lineno == 1
+    assert exc.value.source_pos.columnno == 3

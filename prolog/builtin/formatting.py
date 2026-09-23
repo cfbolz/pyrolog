@@ -166,9 +166,11 @@ class TermFormatter(object):
                     parts.append("\\" + chr(code))
                 elif unicodedb.category(code).startswith('C') or code in (0x2028, 0x2029):
                     if code <= 0xffff:
-                        parts.append("\\u%04x" % code)
+                        prefix, width = '\\u', 4
                     else:
-                        parts.append("\\U%08x" % code)
+                        prefix, width = '\\U', 8
+                    digits = '%x' % code
+                    parts.append(prefix + '0' * (width - len(digits)) + digits)
                 else:
                     parts.append(rutf8.unichr_as_utf8(code))
             return "'%s'" % "".join(parts)

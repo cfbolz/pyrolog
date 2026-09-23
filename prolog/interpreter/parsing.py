@@ -360,7 +360,7 @@ class TermBuilder(RPythonVisitor):
         s = node.additional_info
         if s.startswith("0'"):
             char = unescape(s[2:])
-            if rutf8.get_utf8_length(char) != 1:
+            if rutf8.codepoints_in_utf8(char) != 1:
                 error.throw_syntax_error("character_code")
             return Number(rutf8.codepoint_at_pos(char, 0))
         try:
@@ -384,7 +384,9 @@ class TermBuilder(RPythonVisitor):
         from prolog.interpreter import helper
         from prolog.interpreter.term import Callable, Number
         info = node.additional_info
-        s = unescape(info[1:len(info) - 1], '"')
+        end = len(info) - 1
+        assert end >= 1
+        s = unescape(info[1:end], '"')
         l = [Number(c) for c in rutf8.Utf8StringIterator(s)]
         return helper.wrap_list(l)
 

@@ -4,6 +4,7 @@ from prolog.builtin.register import expose_builtin
 from prolog.interpreter.term import specialized_term_classes
 from prolog.interpreter.term import Callable
 import re
+import sys
 from rpython.rlib import rutf8
 
 # ___________________________________________________________________
@@ -48,16 +49,25 @@ def impl_atom_concat(engine, heap, a1, a2, result, scont, fcont):
 
 @expose_builtin("atom_length", unwrap_spec = ["atom", "obj"])
 def impl_atom_length(engine, heap, s, length):
-    if not (isinstance(length, term.Var) or isinstance(length, term.Number)):
-        error.throw_type_error("integer", length)
-    term.Number(rutf8.get_utf8_length(s)).unify(length, heap)
+    sub_atom_index(length)
+    term.Number(rutf8.codepoints_in_utf8(s)).unify(length, heap)
 
 
 
 def sub_atom_index(value):
     if isinstance(value, term.Var):
         return -1
-    result = helper.unwrap_int(value)
+    if isinstance(value, term.BigInt):
+        if value.value.get_sign() < 0:
+            error.throw_domain_error('not_less_than_zero', value)
+        try:
+            return value.value.toint()
+        except OverflowError:
+            # An offset larger than any byte string cannot match.
+            return sys.maxint
+    if not isinstance(value, term.Number):
+        error.throw_type_error('integer', value)
+    result = value.num
     if result < 0:
         error.throw_domain_error("not_less_than_zero", value)
     return result
@@ -112,6 +122,8 @@ def impl_sub_atom(engine, heap, text, before, length, after, sub, scont, fcont):
     a = sub_atom_index(after)
     if not isinstance(sub, term.Var) and not isinstance(sub, term.Atom):
         error.throw_type_error("atom", sub)
+    if b > len(text) or l > len(text) or a > len(text):
+        return fcont.fail(heap)
     # Keep byte offsets separate from the code-point indices exposed to Prolog.
     offsets = [0]
     pos = 0
@@ -167,7 +179,7 @@ def impl_char_code(engine, heap, char, code):
     if isinstance(char, term.Var):
         char.unify(Callable.build(helper.unwrap_char_code(code)), heap)
     else:
-        if not isinstance(char, term.Atom) or rutf8.get_utf8_length(char.name()) != 1:
+        if not isinstance(char, term.Atom) or rutf8.codepoints_in_utf8(char.name()) != 1:
             error.throw_type_error("character", char)
         if not isinstance(code, term.Var):
             helper.unwrap_char_code(code)

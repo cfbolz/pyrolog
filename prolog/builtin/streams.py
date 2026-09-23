@@ -11,7 +11,7 @@ from prolog.builtin.formatting import TermFormatter
 from prolog.builtin.sourcehelper import path_for_os
 
 from rpython.rlib.streamio import fdopen_as_stream, open_file_as_stream
-from rpython.rlib import rstring, rutf8
+from rpython.rlib import rutf8
 
 rwa = {"read": "r", "write": "w", "append": "a"}
 seek_mode = {"bof": os.SEEK_SET, "current": os.SEEK_CUR, "eof": os.SEEK_END}
@@ -222,7 +222,7 @@ def impl_peek_code(engine, heap, stream, obj):
 @expose_builtin("put_char", unwrap_spec=["outstream", "atom"])
 def impl_put_char(engine, heap, stream, atom):
     check_stream_type(stream, False, 'output')
-    if rutf8.get_utf8_length(atom) == 1:
+    if rutf8.codepoints_in_utf8(atom) == 1:
         stream.write(atom)
         return
     error.throw_type_error("character", term.Callable.build(atom))

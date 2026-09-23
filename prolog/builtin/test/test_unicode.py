@@ -54,7 +54,18 @@ def test_sub_atom_errors_and_failure():
     assert_false("sub_atom('é😀',4,_,_,_).")
     prolog_raises('domain_error(not_less_than_zero, -1)', "sub_atom(a,-1,_,_,_)")
     prolog_raises('type_error(integer, x)', "sub_atom(a,_,x,_,_)")
+    prolog_raises('type_error(integer, 1.0)', "sub_atom(a,_,1.0,_,_)")
     prolog_raises('type_error(atom, 1)', "sub_atom(a,_,_,_,1)")
+
+
+def test_unicode_offsets_integer_range():
+    huge = '1' + '0' * 100
+    assert_false("sub_atom('é',%s,_,_,_)." % huge)
+    assert_false("sub_atom('é',_,%s,_,_)." % huge)
+    assert_false("atom_length('é',%s)." % huge)
+    prolog_raises('domain_error(not_less_than_zero,_)',
+                  "sub_atom('é',-%s,_,_,_)" % huge)
+    prolog_raises('domain_error(not_less_than_zero,-1)', "atom_length('é',-1)")
 
 
 @pytest.mark.parametrize('query', [

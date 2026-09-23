@@ -1,5 +1,5 @@
 """Code-point aware Prolog lexer with byte offsets into the original source."""
-from rpython.rlib import rutf8
+from rpython.rlib import rutf8, rstring
 from rpython.rlib.parsing.lexer import Token, SourcePos
 from rpython.rlib.parsing.deterministic import LexerError
 from prolog.interpreter import utf8
@@ -38,7 +38,10 @@ class UnicodeRunner(object):
         try:
             rutf8.check_utf8(text, allow_surrogates=False)
         except rutf8.CheckError as exc:
-            raise LexerError(text, 0, SourcePos(exc.pos, 0, 0))
+            # check_utf8 reports the start of the first invalid sequence.
+            while self.pos < exc.pos:
+                self.advance()
+            raise LexerError(text, 0, SourcePos(exc.pos, self.lineno, self.columnno))
 
     def advance(self):
         code = rutf8.codepoint_at_pos(self.text, self.pos)
@@ -69,10 +72,10 @@ class UnicodeRunner(object):
                 while self.pos < size and text[self.pos] != '\n':
                     self.advance()
                 name = 'IGNORE'
-            elif text.startswith('/*', start):
+            elif rstring.startswith(text, '/*', start, size):
                 self.advance()
                 self.advance()
-                while self.pos < size and not text.startswith('*/', self.pos):
+                while self.pos < size and not rstring.startswith(text, '*/', self.pos, size):
                     self.advance()
                 if self.pos == size:
                     self.fail(start, line, column)
@@ -130,6 +133,12 @@ class UnicodeRunner(object):
                                 if self.pos == size:
                                     self.fail(start, line, column)
                                 self.advance()
+                        elif escape == 'x' or '0' <= escape <= '7':
+                            while self.pos < size and text[self.pos] != '\\':
+                                self.advance()
+                            if self.pos == size:
+                                self.fail(start, line, column)
+                            self.advance()
                     else:
                         self.advance()
                 else:
@@ -150,7 +159,7 @@ class UnicodeRunner(object):
                                 self.advance()
                             if self.pos == digits:
                                 self.fail(start, line, column)
-            elif text.startswith('[]', start) or text.startswith('{}', start):
+            elif rstring.startswith(text, '[]', start, size) or rstring.startswith(text, '{}', start, size):
                 self.advance()
                 self.advance()
             elif char in '()[]{}|.':
@@ -161,7 +170,7 @@ class UnicodeRunner(object):
             elif code < 128:
                 matched = False
                 for symbol in GRAPHIC_TOKENS:
-                    if text.startswith(symbol, start):
+                    if rstring.startswith(text, symbol, start, size):
                         for unused in range(len(symbol)):
                             self.advance()
                         matched = True
