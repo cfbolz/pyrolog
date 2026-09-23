@@ -38,6 +38,7 @@ def impl_abolish(engine, heap, module, predicate):
         del module.functions[signature]
     except KeyError:
         pass
+    module.meta_predicates.pop(signature, None)
 
 @expose_builtin(["assert", "assertz"], unwrap_spec=["callable"],
         needs_module=True)
@@ -84,7 +85,7 @@ def impl_retract(engine, heap, module, pattern, scont, fcont):
     else:
         function = engine.modulewrapper.get_module(modname,
                 pattern).lookup(head.signature())
-    if function.rulechain is None:
+    if function is None or function.rulechain is None:
         raise error.UnificationFailed
     return continue_retract(engine, scont, fcont, heap, function,
                             function.rulechain, head, body)

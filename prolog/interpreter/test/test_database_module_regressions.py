@@ -2,6 +2,7 @@ import pytest
 
 from prolog.interpreter import error
 from prolog.interpreter.continuation import Engine
+from prolog.interpreter.signature import Signature
 from prolog.interpreter.test.tool import assert_false, assert_true, get_engine, prolog_raises
 
 
@@ -99,6 +100,17 @@ def test_failed_lookup_does_not_define_predicate():
         prolog_raises("existence_error(procedure, p/1)", "p(_)", e)
     assert_false("retract(p(_)).", e)
     prolog_raises("existence_error(procedure, p/1)", "p(_)", e)
+    assert Signature.getsignature("p", 1) not in e.modulewrapper.current_module.functions
+
+
+def test_meta_declaration_after_definition_and_abolish():
+    e = get_engine("p(X).")
+    module = e.modulewrapper.current_module
+    signature = Signature.getsignature("p", 1)
+    assert_true("meta_predicate(p(0)).", e)
+    assert module.lookup(signature).meta_args == "0"
+    assert_true("abolish(p/1), assertz(p(a)).", e)
+    assert module.lookup(signature).meta_args is None
 
 
 def test_empty_local_predicate_shadows_system_predicate():

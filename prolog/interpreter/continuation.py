@@ -136,6 +136,10 @@ class Engine(object):
                 "modify", "static_procedure", rule.head.get_prolog_signature())
 
         function = module.lookup(signature)
+        if function is None:
+            function = Function()
+            function.meta_args = module.meta_predicates.get(signature, None)
+            module.functions[signature] = function
         function.add_rule(rule, end)
         return rule
 
@@ -248,6 +252,8 @@ class Engine(object):
         function = self._get_function(signature, module, query)
         query = function.add_meta_prefixes(query, module.nameatom)
         startrulechain = jit.hint(function.rulechain, promote=True)
+        if startrulechain is None:
+            raise error.UnificationFailed
         rulechain = startrulechain.find_applicable_rule(query)
         if rulechain is None:
             raise error.UnificationFailed
@@ -259,9 +265,9 @@ class Engine(object):
 
     def _get_function(self, signature, module, query): 
         function = module.lookup(signature)
-        if function.rulechain is None and self.modulewrapper.system is not None:
+        if function is None and self.modulewrapper.system is not None:
             function = self.modulewrapper.system.lookup(signature)
-        if function.rulechain is None:
+        if function is None:
             return error.throw_existence_error(
                     "procedure", query.get_prolog_signature())
         return function

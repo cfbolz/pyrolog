@@ -105,9 +105,11 @@ def test_lookup():
     m = e.modulewrapper.modules["m"]
 
     assert user.lookup(g_sig) == m.functions[g_sig]
-    assert user.lookup(h_sig).rulechain is None
+    assert user.lookup(h_sig) is None
+    assert h_sig not in user.functions
     assert m.lookup(g_sig) == m.functions[g_sig]
-    assert m.lookup(f_sig).rulechain is None
+    assert m.lookup(f_sig) is None
+    assert f_sig not in m.functions
     assert m.lookup(h_sig) == m.functions[h_sig]
 
 def test_modules_use_module():
@@ -228,7 +230,7 @@ def test_abolish():
     assert_true("g(a).", e)
     assert_true("abolish(g/1).", e)
     prolog_raises("existence_error(A, B)", "g(a)", e)
-    assert len(e.modulewrapper.modules["user"].functions) == 2
+    assert len(e.modulewrapper.modules["user"].functions) == 0
     assert len(e.modulewrapper.modules["m"].functions) == 1
 
 def test_if():
@@ -316,7 +318,7 @@ def test_module_assert_retract():
     assert_true("x.", e)
     assert_true("module(m).", e)
     assert_true("retract(x).", e)
-    prolog_raises("existence_error(X, Y)", "x", e)
+    assert_false("x.", e)
     assert_true("module(user).", e)
     assert_true("x.", e)
 
@@ -900,15 +902,14 @@ def test_meta_function():
     a(FooBar).
     """)
     user = e.modulewrapper.modules["user"]
-    assert len(user.functions) == 4
-
-    for key in user.functions.keys():
-        assert key.name in ["f","g","h","a"]
-        assert key.numargs == 1
-        if key.name in ["f", "g", "h"]:
-            assert user.functions[key].meta_args != []
-        else:
-            assert not user.functions[key].meta_args == []
+    assert len(user.functions) == 2
+    assert user.lookup(Signature.getsignature("f", 1)).meta_args == ":"
+    assert user.lookup(Signature.getsignature("a", 1)).meta_args is None
+    for name, args in [("f", ":"), ("g", "?"), ("h", "0")]:
+        assert user.meta_predicates[Signature.getsignature(name, 1)] == args
+    prolog_raises("existence_error(procedure, g/1)", "g(a)", e)
+    assert_true("assertz(g(a)), g(a).", e)
+    assert user.lookup(Signature.getsignature("g", 1)).meta_args == "?"
 
 def test_meta_predicate():
     e = get_engine("""

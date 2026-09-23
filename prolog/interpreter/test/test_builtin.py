@@ -215,7 +215,7 @@ def test_assert_retract_colon():
     assert_true("assert(:(a, b, c, d)).", e)
     assert_true(":(a, b, c, d).", e)
     assert_true("retract(:(a, b, c, d)).", e)
-    prolog_raises("existence_error(_, _)", ":(a, b, c, d)", e)
+    assert_false(":(a, b, c, d).", e)
 
 def test_abolish_colon():
     e = get_engine("""
