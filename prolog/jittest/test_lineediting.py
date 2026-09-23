@@ -365,3 +365,21 @@ def test_no_more_solutions_color(console_factory, color):
     child.expect(pexpect.EOF)
     child.close()
     assert child.exitstatus == 0
+
+
+def test_unicode_identifiers_and_completion(console_factory):
+    child = console_factory()
+    child.expect_exact('>?- ')
+    child.send(u'assertz(\u00e9clair).\r'.encode('utf-8'))
+    child.expect_exact('yes\r\n')
+    child.expect_exact('>?- ')
+    child.send(u'\u00e9c\t.\r'.encode('utf-8'))
+    child.expect_exact('yes\r\n')
+    child.expect_exact('>?- ')
+    child.send(u'\u00c9 = "\U0001f600".\r'.encode('utf-8'))
+    child.expect_exact(u'\u00c9 = [128512]\r\n'.encode('utf-8'))
+    child.expect_exact('>?- ')
+    child.send('\x04')
+    child.expect(pexpect.EOF)
+    child.close()
+    assert child.exitstatus == 0
