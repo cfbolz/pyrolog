@@ -20,17 +20,17 @@ def test_retract_variable_body():
     "catch((p(a), fail), error(existence_error(procedure, p/1)), true)",
 ])
 def test_database_bound_module_qualifier(operation):
-    e = get_engine("p(a).")
+    e = get_engine("p(a). p(keep).")
     assert_true("M = user, %s." % operation, e)
 
 
 def test_retract_bound_qualified_pattern():
-    e = get_engine("p(a).")
+    e = get_engine("p(a). p(keep).")
     assert_true("P = p(a), retract(user:P), \\+ p(a).", e)
 
 
 def test_retract_bound_clause_head():
-    e = get_engine("p(a).")
+    e = get_engine("p(a). p(keep).")
     assert_true("H = p(a), retract((H :- true)), \\+ p(a).", e)
 
 
