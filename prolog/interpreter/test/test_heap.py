@@ -212,7 +212,8 @@ def test_heap_dont_trail_new_attvars():
     assert h3 is h2
     
 def test_discard_with_attvars():
-    pytest.skip("not implemented yet")
+    from prolog.builtin.attvars import impl_put_attr
+
     h0 = Heap()
     v0 = h0.new_attvar()
 
@@ -222,22 +223,29 @@ def test_discard_with_attvars():
     h2 = h1.branch()
     v2 = h2.new_attvar()
 
-    h2.add_trail_atts(v0, "m")
-    v0.atts = {"m": 1}
-    h2.add_trail_atts(v1, "n")
-    v1.atts = {"n": 2}
+    impl_put_attr(None, h2, v0, "m", Number(1))
+    impl_put_attr(None, h2, v1, "n", Number(2))
 
     h3 = h2.branch()
-    h3.add_trail_atts(v2, "a")
-    v2.atts = {"a": 3}
+    impl_put_attr(None, h3, v2, "a", Number(3))
+    impl_put_attr(None, h3, v0, "m", Number(4))
 
     h = h2.discard(h3)
     assert h3.prev is h1
     assert h3 is h
-    assert h3.revert_upto(h0)
-    assert v0.atts == {}
-    assert v1.atts == {}
-    assert v2.atts == {"a": 3}
+    # The cut keeps all live values, despite discarding v2's undo record.
+    assert v0.get_attribute_value("m").num == 4
+    assert v1.get_attribute_value("n").num == 2
+    assert v2.get_attribute_value("a").num == 3
+
+    h3.revert_upto(h0)
+    assert v0.is_empty()
+    assert v0.get_attribute_value("m") is None
+    assert v1.is_empty()
+    assert v1.get_attribute_value("n") is None
+    # v2 was created in the discarded frame and dies on outer backtracking;
+    # its attribute therefore does not need to be restored.
+    assert v2.get_attribute_value("a").num == 3
 
 def test_hookchain():
     hc = Heap()

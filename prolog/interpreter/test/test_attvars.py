@@ -272,17 +272,31 @@ def test_term_attvars():
     assert_true("put_attr(X, m, Y), term_variables(X, L), L == [X].")
 
 def test_term_attvars_fail_fast():
-    pytest.skip("")
-    e = get_engine("""
-    f(1, [X]) :-
-        put_attr(X, m, 1).
-    f(N, [X|R]) :-
-        N >= 1,
-        put_attr(X, m, 1),
-        N1 is N - 1,
-        f(N1, R).
-    """)
-    assert_false("f(10000, L), term_attvars(L, []).", e)
+    from prolog.builtin.attvars import impl_term_attvars
+    from prolog.interpreter.error import UnificationFailed
+    from prolog.interpreter.heap import Heap
+    from prolog.interpreter.term import BindingVar
+
+    class SentinelVisited(Exception):
+        pass
+
+    class Sentinel(BindingVar):
+        def getbinding(self):
+            raise SentinelVisited
+
+    heap = Heap()
+    attvar = heap.new_attvar()
+    attvar.add_attribute('m', Callable.build('value'))
+    subject = Callable.build('pair', [attvar, Sentinel()])
+
+    # [] cannot hold even the first attributed variable. Traversal must fail
+    # before examining the second argument, rather than collect and unify.
+    pytest.raises(UnificationFailed, impl_term_attvars,
+                  None, heap, subject, Callable.build('[]'))
+    # With unrestricted output the sentinel must be reachable, validating
+    # that the first assertion really checks early termination.
+    pytest.raises(SentinelVisited, impl_term_attvars,
+                  None, heap, subject, heap.newvar())
 
 def test_copy_term_2():
     assert_true("put_attr(X, m, 1), copy_term(X, Y), attvar(Y).")
