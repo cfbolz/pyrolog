@@ -47,10 +47,14 @@ def impl_atom_concat(engine, heap, a1, a2, result, scont, fcont):
             result.unify(term.Callable.build(s1 + s2, cache=False), heap)
     return scont, fcont, heap
 
-@expose_builtin("atom_length", unwrap_spec = ["atom", "obj"])
-def impl_atom_length(engine, heap, s, length):
+@expose_builtin("atom_length", unwrap_spec=["obj", "obj"])
+def impl_atom_length(engine, heap, atom, length):
+    if isinstance(atom, term.Var):
+        error.throw_instantiation_error()
+    if not isinstance(atom, term.Atom):
+        error.throw_type_error('atom', atom)
     sub_atom_index(length)
-    term.Number(rutf8.codepoints_in_utf8(s)).unify(length, heap)
+    term.Number(atom.signature().name_length).unify(length, heap)
 
 
 
@@ -179,7 +183,7 @@ def impl_char_code(engine, heap, char, code):
     if isinstance(char, term.Var):
         char.unify(Callable.build(helper.unwrap_char_code(code)), heap)
     else:
-        if not isinstance(char, term.Atom) or rutf8.codepoints_in_utf8(char.name()) != 1:
+        if not isinstance(char, term.Atom) or char.signature().name_length != 1:
             error.throw_type_error("character", char)
         if not isinstance(code, term.Var):
             helper.unwrap_char_code(code)

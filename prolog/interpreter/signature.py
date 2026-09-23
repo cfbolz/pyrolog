@@ -62,13 +62,13 @@ class Signature(object):
 
     _cache = SignatureFactory()
 
-    _immutable_fields_ = ["name", "numargs", "atom_signature", "factory"]
+    _immutable_fields_ = ["name", "name_length", "numargs", "atom_signature", "factory"]
 
     def __init__(self, name, numargs, cached=False, factory=None):
         assert name is not None
         assert isinstance(name, str)
         # Names are UTF-8 byte strings, including embedded NUL characters.
-        rutf8.check_utf8(name, allow_surrogates=False)
+        self.name_length = rutf8.check_utf8(name, allow_surrogates=False)
         self.name = name
         self.numargs = numargs
         self.cached = cached

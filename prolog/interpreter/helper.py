@@ -101,7 +101,7 @@ def unwrap_char_list(prolog_list, allow_partial=False, codes=False):
             partial = True
         elif codes:
             result.append(unwrap_char_code(char))
-        elif not isinstance(char, term.Atom) or rutf8.codepoints_in_utf8(char.name()) != 1:
+        elif not isinstance(char, term.Atom) or char.signature().name_length != 1:
             error.throw_type_error("character", char)
         else:
             result.append(char.name())
