@@ -45,6 +45,17 @@ class AttributeStateMachine(RuleBasedStateMachine):
         self.heap = self.heap.revert_upto(parent, discard_choicepoint=True)
         self.model = model
 
+    @precondition(lambda self: len(self.snapshots) >= 2)
+    @rule()
+    def cut(self):
+        # Remove the inner restoration boundary, retaining the outer snapshot.
+        # The live attributes do not change, and the root heap is never cut.
+        discarded, _ = self.snapshots.pop()
+        current = self.heap
+        self.heap = discarded.discard(current)
+        assert self.heap is current
+        assert self.heap.prev is self.snapshots[-1][0]
+
     @invariant()
     def attributes_match_model(self):
         values = self.variable.value_list
