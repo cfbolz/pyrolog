@@ -268,7 +268,15 @@ class AttVar(BindingVar):
             return newvar
         return self.copy(heap, memo)
 
+    def _ensure_attribute_storage(self):
+        if self.value_list is None:
+            # Deletion and hook processing retain the map. Recreate every
+            # slot, including absent attributes not mentioned by an undo entry.
+            attmap = jit.promote(self.attmap)
+            self.value_list = [None] * len(attmap.indexes)
+
     def add_attribute(self, attname, attribute):
+        self._ensure_attribute_storage()
         attmap = jit.hint(self.attmap, promote=True)
         index = attmap.get_index(attname)
         if index != -1:
@@ -280,8 +288,9 @@ class AttVar(BindingVar):
     def del_attribute(self, attname):
         attmap = jit.hint(self.attmap, promote=True)
         index = attmap.get_index(attname)
-        if self.value_list is not None:
-            self.value_list[index] = None
+        assert index >= 0 # the caller needs to make sure the attribute exists
+        assert self.value_list is not None
+        self.value_list[index] = None
 
     def get_attribute(self, attname):
         if self.value_list is None:
@@ -292,12 +301,17 @@ class AttVar(BindingVar):
             return None, -1
         return self.value_list[index], index
 
-    def reset_field(self, index, value):
+    def get_attribute_value(self, attname):
         if self.value_list is None:
-            self.value_list = [None] * (index + 1)
-        else:
-            self.value_list = self.value_list + [None] * (
-                    index - len(self.value_list) + 1)
+            return None
+        attmap = jit.promote(self.attmap)
+        index = attmap.get_index(attname)
+        if index == -1:
+            return None
+        return self.value_list[index]
+
+    def reset_field(self, index, value):
+        self._ensure_attribute_storage()
         self.value_list[index] = value
 
     def get_attribute_index(self, attname):

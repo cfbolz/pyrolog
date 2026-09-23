@@ -53,6 +53,62 @@ def test_cut_preserves_attribute_trail_for_outer_backtracking():
                 'V = 1.', engine)
 
 
+def test_cut_restores_oldest_attribute_value():
+    engine = get_engine('p(X) :- put_attr(X, m, 2), (true; true), '
+                        'put_attr(X, m, 3), !.')
+    # Both heap frames contain an undo entry for the same attribute. Cutting
+    # must preserve their chronological order for reverse-order restoration.
+    result = assert_true('put_attr(X, m, 1), '
+                         '(p(X), get_attr(X, m, 3), fail; get_attr(X, m, V)).',
+                         engine)
+    assert result['V'].num == 1
+
+
+@pytest.mark.parametrize('backtrack', [False, True])
+def test_delete_unknown_attribute_preserves_existing(backtrack):
+    deletion = 'del_attr(X, missing)'
+    if backtrack:
+        deletion = '(' + deletion + ', fail; true)'
+    assert_true('put_attr(X, m, 1), %s, get_attr(X, m, 1).' % deletion)
+
+
+@pytest.mark.parametrize('module', ['m', 'n'])
+def test_put_attribute_after_del_attrs(module):
+    # Exercise both reusing a slot and adding a previously unknown module.
+    assert_true('put_attr(X, m, 1), del_attrs(X), '
+                'put_attr(X, %s, 2), get_attr(X, %s, 2), attvar(X).' %
+                (module, module))
+
+
+@pytest.mark.parametrize('module', ['m', 'n', 'new'])
+def test_backtrack_put_attribute_after_del_attrs(module):
+    assert_true('put_attr(X, m, 1), put_attr(X, n, 2), del_attrs(X), '
+                '(put_attr(X, %s, 3), get_attr(X, %s, 3), fail; true), '
+                '\\+ attvar(X), \\+ get_attr(X, m, _), '
+                '\\+ get_attr(X, n, _), \\+ get_attr(X, new, _), '
+                'put_attr(X, n, 4), get_attr(X, n, 4).' % (module, module))
+
+
+def test_backtrack_delete_attribute_after_del_attrs():
+    # There is no remaining value to trail; deleting an already cleared slot
+    # must remain harmless when this branch is undone.
+    assert_true('put_attr(X, m, 1), del_attrs(X), '
+                '(del_attr(X, m), fail; true), '
+                '\\+ attvar(X), \\+ get_attr(X, m, _).')
+
+
+def test_hook_backtracking_preserves_deleted_attribute_slots():
+    engine = get_engine('', m='''
+        :- module(m, []).
+        attr_unify_hook(_, _).
+    ''')
+    # The map retains n's slot after deletion. Restoring m after running its
+    # hook must leave n safely readable as absent, even though n has no hook.
+    assert_true('put_attr(X, m, 1), put_attr(X, n, 2), del_attr(X, n), '
+                '(X = a, fail; true), get_attr(X, m, 1), '
+                '\\+ get_attr(X, n, _).', engine)
+
+
 def test_del_attributes():
     assert_true("del_attr(X, m).")
     assert_true("del_attr(a, m).")
