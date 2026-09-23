@@ -69,7 +69,9 @@ def impl_retract(engine, heap, module, pattern, scont, fcont):
     assert isinstance(pattern, term.Callable)
     if helper.is_term(pattern) and pattern.signature().eq(implsig):
         head = helper.ensure_callable(pattern.argument_at(0))
-        body = helper.ensure_callable(pattern.argument_at(1))
+        body = pattern.argument_at(1).dereference(heap)
+        if not isinstance(body, term.Var):
+            helper.ensure_callable(body)
     else:
         head = pattern
         body = None
