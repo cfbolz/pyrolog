@@ -6,7 +6,7 @@ from prolog.interpreter.signature import Signature
 from prolog.interpreter.error import UnificationFailed
 from rpython.rlib.rarithmetic import ovfcheck_float_to_int
 from rpython.rlib.unroll import unrolling_iterable
-from rpython.rlib import jit, rarithmetic
+from rpython.rlib import jit, rarithmetic, objectmodel
 from rpython.rlib.rbigint import rbigint
 
 Signature.register_extr_attr("arithmetic")
@@ -232,6 +232,11 @@ def int_pow(base, exponent):
                 raise
     return result
 
+@objectmodel.dont_inline
+def rbigint_lshift(value, count):
+    # work around the always_inline annotation for lshift, which clashes with
+    # exception handling in arith_shl
+    return value.lshift(count)
 
 class __extend__(term.Numeric):
     def arith_sqrt(self):
@@ -251,7 +256,7 @@ class __extend__(term.Numeric):
                 return make_int(term.BigInt(
                     rbigint.lshift_int_int_bigint_result(self.num, count)))
             assert isinstance(self, term.BigInt)
-            return make_int(term.BigInt(self.value.lshift(count)))
+            return make_int(term.BigInt(rbigint_lshift(self.value, count)))
         except MemoryError:
             error.throw_resource_error("memory")
 
