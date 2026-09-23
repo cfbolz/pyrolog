@@ -70,11 +70,16 @@ for ext, prolog, python in [("eq", "=:=", "=="),
     exec py.code.Source("""
 @expose_builtin(prolog, unwrap_spec=["arithmetic", "arithmetic"])
 def impl_arith_%s(engine, heap, num1, num2):
+    # Compare machine integers directly so the JIT emits one comparison.
+    if isinstance(num1, term.Number) and isinstance(num2, term.Number):
+        if not (num1.num %s num2.num):
+            raise error.UnificationFailed()
+        return
     comparison = arithmetic.compare_numbers(num1, num2)
     if comparison == arithmetic.UNORDERED:
         matches = %r
     else:
         matches = comparison %s 0
     if not matches:
-        raise error.UnificationFailed()""" % (ext, ext == "ne", python)).compile()
+        raise error.UnificationFailed()""" % (ext, python, ext == "ne", python)).compile()
  
