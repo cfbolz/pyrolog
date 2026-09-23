@@ -6,6 +6,7 @@ from prolog.builtin.formatting import TermFormatter
 from prolog.interpreter.completion import PrologCompleter
 from prolog.interpreter.test.test_highlighting import highlighted
 from prolog.interpreter.test.tool import assert_true
+from prolog.interpreter.replpolicy import PrologInputPolicy
 
 
 @pytest.mark.parametrize('name', ['é', '变量', '😀', 'É', 'é', "l'été", 'a\\b',
@@ -44,3 +45,14 @@ def test_read_unicode_terms_with_layout_and_quotes(tmpdir):
     assert_true("open('%s',read,S), read(S,词('é space. %% text',[128512])), "
                 "read(S,'it\\'s'), read(S,A), atom_codes(A,[0]), "
                 "read(S,end_of_file), close(S)." % path)
+
+
+@pytest.mark.parametrize('text, more', [
+    ("X = 'é\\'😀'.", False),
+    ("X = 'é\\'😀", True),
+    ("X = '\\x0\\'.", False),
+    ("X = 'it''s'.", False),
+    ('X = 0\'😀.', False),
+])
+def test_unicode_query_termination(text, more):
+    assert PrologInputPolicy().more_lines(text) == more
