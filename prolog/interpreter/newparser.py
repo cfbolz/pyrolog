@@ -84,6 +84,13 @@ class Parser(object):
             return res
         if current.name == "[":
             return self._parse_list()
+        if current.name == "{":
+            if self._peek().name == "}":
+                self._get_next()
+                return term.Callable.build("{}")
+            res = self._parse_toplevel_op_expr()
+            self._expect("}")
+            return term.Callable.build("{}", [res])
         self._error("expected a term", current)
 
     def _unescape(self, text, current, quote="'"):

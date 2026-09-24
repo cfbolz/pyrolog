@@ -286,3 +286,49 @@ def test_nested_list():
 def test_invalid_list(source):
     with pytest.raises(ParseError):
         parse(source)
+
+
+@pytest.mark.parametrize("source", ["{}.", "{ }."])
+def test_empty_braces(source):
+    result = parse(source)
+    assert isinstance(result, Atom)
+    assert result.name() == "{}"
+
+
+def test_braces():
+    result = parse("{a}.")
+    assert result.name() == "{}"
+    assert result.argument_count() == 1
+    assert isinstance(result.argument_at(0), Atom)
+    assert result.argument_at(0).name() == "a"
+
+
+def test_nested_braces():
+    result = parse("{{f(a, b)}}.")
+    assert result.name() == "{}"
+    assert result.argument_count() == 1
+    inner = result.argument_at(0)
+    assert inner.name() == "{}"
+    assert inner.argument_count() == 1
+    compound = inner.argument_at(0)
+    assert compound.name() == "f"
+    assert compound.argument_count() == 2
+    assert compound.argument_at(0).name() == "a"
+    assert compound.argument_at(1).name() == "b"
+
+
+def test_braces_variable_sharing():
+    parser = Parser(UnicodeLexer().tokenize("f(X, {X})."), [])
+    result = parser.parse()
+    braces = result.argument_at(1)
+    assert braces.name() == "{}"
+    assert braces.argument_count() == 1
+    assert isinstance(result.argument_at(0), Var)
+    assert braces.argument_at(0) is result.argument_at(0)
+    assert braces.argument_at(0) is parser.varname_to_var["X"]
+
+
+@pytest.mark.parametrize("source", ["{a", "{a.", "{a).", "{a b}.", "{a, b}."])
+def test_invalid_braces_without_operators(source):
+    with pytest.raises(ParseError):
+        parse(source)
