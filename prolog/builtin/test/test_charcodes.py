@@ -9,13 +9,13 @@ def test_char_code():
     assert_false("char_code(a, 98).")
 
 
-@pytest.mark.parametrize('code', [1, 127, 128, 163, 255])
-def test_byte_char_code_roundtrip(code):
+@pytest.mark.parametrize('code', [0, 1, 127, 128, 163, 255, 256, 0x20ac, 0x1f600, 0x10ffff])
+def test_unicode_char_code_roundtrip(code):
     assert_true("char_code(Char, %d), atom_length(Char, 1), "
                 "char_code(Char, Code), Code == %d." % (code, code))
 
 
-@pytest.mark.parametrize('code', [-1, 0, 256, 1000, 10 ** 100])
+@pytest.mark.parametrize('code', [-1, 0xd800, 0xdfff, 0x110000, 10 ** 100])
 def test_invalid_char_code(code):
     prolog_raises('representation_error(character_code)',
                  'char_code(Char, %s)' % code)
@@ -56,8 +56,8 @@ def test_atom_codes_validation():
     prolog_raises('type_error(integer, a)', 'atom_codes(Atom, [a])')
     prolog_raises('type_error(integer, 97.0)', 'atom_codes(a, [97.0])')
     prolog_raises('type_error(list, [97|bad])', 'atom_codes(a, [97|bad])')
-    prolog_raises('representation_error(character_code)', 'atom_codes(Atom, [256])')
-    prolog_raises('representation_error(character_code)', 'atom_codes(a, [0])')
+    prolog_raises('representation_error(character_code)', 'atom_codes(Atom, [1114112])')
+    prolog_raises('representation_error(character_code)', 'atom_codes(a, [55296])')
     assert_true("atom_codes(Atom, [1,128,255]), atom_codes(Atom, Codes), "
                 "Codes == [1,128,255].")
 
@@ -87,8 +87,8 @@ def test_number_codes_errors():
     prolog_raises('type_error(number, a)', 'number_codes(a, [49])')
     prolog_raises('type_error(integer, a)', 'number_codes(N, [a])')
     prolog_raises('type_error(list, [49|bad])', 'number_codes(N, [49|bad])')
-    prolog_raises('representation_error(character_code)', 'number_codes(N, [256])')
-    prolog_raises('representation_error(character_code)', 'number_codes(N, [0])')
+    prolog_raises('syntax_error(E)', 'number_codes(N, [256])')
+    prolog_raises('syntax_error(E)', 'number_codes(N, [0])')
     prolog_raises('syntax_error(E)', 'number_codes(N, [45])')
     prolog_raises('syntax_error(E)', 'number_codes(N, [49,32])')
 

@@ -1010,7 +1010,7 @@ def test_meta_predicate_colon_predicate():
     :- use_module(m).
     """,
     m = """
-    :- module(m, [:/3]).
+    :- module(m, [':'/3]).
     :- meta_predicate :(:, :, '?'), :(:, :).
 
     :(A, B, C) :-

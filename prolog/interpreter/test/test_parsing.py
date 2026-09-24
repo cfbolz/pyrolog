@@ -266,11 +266,11 @@ def test_missing_dot():
 def test_parse_error():
     s = """
     f(a).
-    f(b) :- $%.
+    f(b) :- `%.
     """
     info = pytest.raises(error.PrologParseError, parse_file, s)
     assert "LexerError" in info.value.message
-    assert " f(b) :- $%." in info.value.message
+    assert " f(b) :- `%." in info.value.message
     assert "line 3" in info.value.message
 
     s = """

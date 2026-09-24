@@ -105,6 +105,8 @@ def impl_module_prefixing(engine, heap, modulename,
 @expose_builtin("add_library_dir", unwrap_spec=["atom"])
 def impl_add_library_dir(engine, heap, path):
     from os.path import isdir
+    from prolog.builtin.sourcehelper import path_for_os
+    path = path_for_os(path)
     assert path is not None
     if not isdir(path):
         error.throw_existence_error("source_sink", Callable.build(path))

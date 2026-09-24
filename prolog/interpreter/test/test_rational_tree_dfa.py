@@ -76,7 +76,7 @@ def test_print_numbered_states(engine, capfd):
     assert_true('dfa_blog_post(D), number_states(D, L), '
                 'write_term(L, [quoted(true)]).', engine)
     out, err = capfd.readouterr()
-    assert out.startswith("'@'(")
+    assert out.startswith("@(")
     assert '...' not in out
     assert not err
     # Reconstruct the printed graph and check semantic identity, without relying

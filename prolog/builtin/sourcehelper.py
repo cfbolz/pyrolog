@@ -1,7 +1,8 @@
 import os
 import sys
-from prolog.interpreter.error import throw_existence_error
+from prolog.interpreter.error import throw_existence_error, throw_domain_error
 from prolog.interpreter.term import Callable
+from rpython.rlib import rstring
 
 path = os.path.dirname(__file__)
 path = os.path.join(path, "..", "prolog_modules")
@@ -25,7 +26,14 @@ def get_source(filename):
         os.close(fd)
     return file_content, actual_filename
 
+def path_for_os(filename):
+    if '\x00' in filename:
+        throw_domain_error('source_sink', Callable.build(filename))
+    return rstring.assert_str0(filename)
+
+
 def get_filehandle(filename, stdlib=False):
+    filename = path_for_os(filename)
     filename_with_pl =  filename + '.pl'
     candidates = [
         filename,

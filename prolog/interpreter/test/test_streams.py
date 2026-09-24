@@ -127,7 +127,7 @@ def test_get_byte():
     create_file(src, "\xa4\x17\xcf")
     try:
         assert_true("""
-        open('%s', read, S),
+        open('%s', read, S, [type(binary)]),
         get_byte(S, B), B = 164,
         get_byte(S, C), C = 23,
         get_byte(S, D), D = 207,
@@ -145,8 +145,7 @@ def test_get_code():
         open('%s', read, S),
         get_code(S, B), B = 97,
         get_code(S, C), C = 49,
-        get_code(S, D), D = 194,
-        get_code(S, E), E = 188,
+        get_code(S, D), D = 188,
         get_code(S, F), F = -1,
         close(S).
         """ % src)
@@ -158,7 +157,7 @@ def test_at_end_of_stream_1():
     create_file(src, "abc")
     try:
         assert_true("""
-        open('%s', read, S),
+        open('%s', read, S, [type(binary)]),
         get_byte(S, B1),
         get_byte(S, B2),
         get_byte(S, B3),
@@ -166,7 +165,7 @@ def test_at_end_of_stream_1():
         close(S).
         """ % src)
         assert_false("""
-        open('%s', read, S),
+        open('%s', read, S, [type(binary)]),
         get_byte(S, B1),
         get_byte(S, B2),
         at_end_of_stream(S).
@@ -233,7 +232,7 @@ def test_peek_byte():
     create_file(empty, "")
     try:
         assert_true("""
-        open('%s', read, S),
+        open('%s', read, S, [type(binary)]),
         peek_byte(S, C), C = 148,
         peek_byte(S, D), D = 148,
         get_byte(S, _),
@@ -245,7 +244,7 @@ def test_peek_byte():
         """ % src)
 
         assert_true("""
-        open('%s', read, S),
+        open('%s', read, S, [type(binary)]),
         peek_byte(S, -1),
         close(S).
         """ % empty)
@@ -261,10 +260,8 @@ def test_peek_code():
     try:
         assert_true("""
         open('%s', read, S),
-        peek_code(S, C), C = 194,
-        peek_code(S, D), D = 194,
-        get_code(S, _),
-        peek_code(S, E), E = 188,
+        peek_code(S, C), C = 188,
+        peek_code(S, D), D = 188,
         get_code(S, _),
         peek_code(S, F), F = -1,
         close(S).
@@ -314,7 +311,7 @@ def test_put_byte():
     create_file(target, "")
     try:
         assert_true("""
-        open('%s', write, S),
+        open('%s', write, S, [type(binary)]),
         put_byte(S, 97),
         put_byte(S, 194),
         put_byte(S, 165),
@@ -329,7 +326,7 @@ def test_put_byte_below_zero():
     create_file(target, "")
     try:
         prolog_raises("type_error(byte, X)", """
-        open('%s', write, S),
+        open('%s', write, S, [type(binary)]),
         put_byte(S, -1)
         """ % target)
     finally:
@@ -476,7 +473,7 @@ def test_seek():
     create_file(src, "\xab\xcd\xef")
     try:
         assert_true("""
-        open('%s', read, S),
+        open('%s', read, S, [type(binary)]),
         seek(S, 1, current, 1), peek_byte(S, 205),
         seek(S, -1, current, 0), peek_byte(S, 171),
         seek(S, -1, eof, 2), peek_byte(S, 239),
@@ -714,7 +711,7 @@ def test_append():
     create_file(src, "")
     try:
         assert_true("""
-        open('%s', append, S),
+        open('%s', append, S, [type(binary)]),
         put_byte(S, 97), put_byte(S, 98), put_byte(S, 99),
         close(S).
         """ % src)
@@ -747,30 +744,12 @@ def test_open_stream_strange_buffering():
     prolog_raises("domain_error(buffering, _)",
             "open(blub, write, _, [buffer(strange_stuff)])")
 
-def test_open_with_options():
-    m = "mod"
-    create_file(m, """
-    :- module(%s, []).
-    """ % s)
-    try:
-        prolog_raises("domain_error(stream_option, _)", "open(%s, read, _, [g, 1, a, f(a)])" % m)
-        prolog_raises("instantiation_error", "open(%s, read, _, [f(a), X])" % m)
-        assert_true("open(%s, read, _, [])." % m)
-        assert_true("open(%s, read, _, [a, f(a), []])." % m)
-        assert_true("open(%s, read, _, [a, f(a), g(X)])." % m)
-    finally:
-        delete_file(m)
-
-def test_open_with_options():
-    m = "mod"
-    create_file(m, """
-    :- module(%s, []).
-    """ % m)
-    try:
-        prolog_raises("domain_error(stream_option, _)", "open(%s, read, _, [g, 1, a, f(a)])" % m)
-        prolog_raises("instantiation_error", "open(%s, read, _, [f(a), X])" % m)
-        assert_true("open(%s, read, _, [])." % m)
-        assert_true("open(%s, read, _, [a, f(a), []])." % m)
-        assert_true("open(%s, read, _, [a, f(a), []])." % m)
-    finally:
-        delete_file(m)
+def test_open_with_options(tmpdir):
+    path = tmpdir.join('options.pl')
+    path.write('')
+    prolog_raises('domain_error(stream_option, 1)',
+                  "open('%s',read,_,[f(a),1])" % path)
+    prolog_raises('instantiation_error',
+                  "open('%s',read,_,[f(a),X])" % path)
+    assert_true("open('%s',read,S,[]),close(S)." % path)
+    assert_true("open('%s',read,S,[f(a),g(X)]),close(S)." % path)

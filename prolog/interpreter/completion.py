@@ -1,26 +1,28 @@
 """Predicate-name completion without executing Prolog code."""
 from rpyrepl.completion import Completer, Completion
 from prolog.interpreter.highlighting import PrologHighlighter
-
-
-def identifier_char(char):
-    return ('a' <= char <= 'z' or 'A' <= char <= 'Z' or
-            '0' <= char <= '9' or char == '_')
+from prolog.interpreter import utf8
+from rpython.rlib import rutf8
 
 
 def plain_name(name):
-    if not name or not 'a' <= name[0] <= 'z':
-        return False
-    for char in name:
-        if not identifier_char(char):
-            return False
-    return True
+    return utf8.plain_atom(name)
+
+
+def identifier_start_backwards(text, end):
+    while end > 0:
+        previous = rutf8.prev_codepoint_pos(text, end)
+        if not utf8.identifier_continue(rutf8.codepoint_at_pos(text, previous)):
+            break
+        end = previous
+    return end
 
 
 def skip_layout_backwards(text, end, colors):
     while end > 0:
-        if text[end - 1] in ' \t\r\n':
-            end -= 1
+        previous_char = rutf8.prev_codepoint_pos(text, end)
+        if utf8.layout(rutf8.codepoint_at_pos(text, previous_char)):
+            end = previous_char
             continue
         previous = end
         for color in colors:
@@ -41,9 +43,7 @@ class PrologCompleter(Completer):
     def complete(self, text, pos):
         from prolog.builtin.register import builtin_names
         assert pos >= 0
-        start = pos
-        while start > 0 and identifier_char(text[start - 1]):
-            start -= 1
+        start = identifier_start_backwards(text, pos)
         assert start >= 0
         stem = text[start:pos]
         colors = self.highlighter.gen_colors(text)
@@ -70,9 +70,7 @@ class PrologCompleter(Completer):
         module = self.engine.modulewrapper.current_module
         if qualified:
             end = skip_layout_backwards(text, separator_end - 1, colors)
-            begin = end
-            while begin > 0 and identifier_char(text[begin - 1]):
-                begin -= 1
+            begin = identifier_start_backwards(text, end)
             assert 0 <= begin <= end
             name = text[begin:end]
             if not plain_name(name):

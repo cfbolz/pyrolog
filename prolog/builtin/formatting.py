@@ -1,3 +1,6 @@
+from rpython.rlib import rutf8
+from prolog.interpreter.utf8 import unicodedb
+from prolog.interpreter import utf8
 import os
 import string
 
@@ -10,6 +13,21 @@ from prolog.interpreter.stream import PrologStream
 conssig = Signature.getsignature(".", 2)
 nilsig = Signature.getsignature("[]", 0)
 tuplesig = Signature.getsignature(",", 2)
+
+
+def join_operator_parts(parts):
+    """Separate adjacent graphic tokens so printing cannot merge them."""
+    result = []
+    previous = ''
+    for part in parts:
+        if not part:
+            continue
+        if (previous and utf8.ascii_graphic(ord(previous[-1])) and
+                utf8.ascii_graphic(ord(part[0]))):
+            result.append(' ')
+        result.append(part)
+        previous = part
+    return ''.join(result)
 
 
 class CycleFactorizer(object):
@@ -84,10 +102,7 @@ class TermFormatter(object):
         cycles = True
         number_vars = False
         for option in options:
-            if (not helper.is_term(option) or (isinstance(option, Callable) and option.argument_count() != 1)):
-                error.throw_domain_error('write_option', option)
-            assert isinstance(option, Callable)
-            arg = option.argument_at(0)
+            option, arg = helper.unwrap_option(option, 'write_option')
             if option.name()== "max_depth":
                 try:
                     max_depth = helper.unwrap_int(arg)
@@ -154,11 +169,24 @@ class TermFormatter(object):
             try:
                 tokens = parsing.lexer.tokenize(s)
                 if (len(tokens) == 1 and tokens[0].name == 'ATOM' and
-                    tokens[0].source == s):
+                    tokens[0].source == s and not s.startswith("'")):
                     return s
             except LexerError:
                 pass
-            return "'%s'" % (s, )
+            parts = []
+            for code in rutf8.Utf8StringIterator(s):
+                if code == 39 or code == 92:
+                    parts.append("\\" + chr(code))
+                elif unicodedb.category(code).startswith('C') or code in (0x2028, 0x2029):
+                    if code <= 0xffff:
+                        prefix, width = '\\u', 4
+                    else:
+                        prefix, width = '\\U', 8
+                    digits = '%x' % code
+                    parts.append(prefix + '0' * (width - len(digits)) + digits)
+                else:
+                    parts.append(rutf8.unichr_as_utf8(code))
+            return "'%s'" % "".join(parts)
         return s
 
     def format_number(self, num):
@@ -275,7 +303,7 @@ class TermFormatter(object):
                     result.append(child)
                 curr_index += 1
         assert curr_index == term.argument_count()
-        return (prec, "".join(result))
+        return (prec, join_operator_parts(result))
 
     def _make_reverse_op_mapping(self):
         m = {}

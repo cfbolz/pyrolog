@@ -1,6 +1,5 @@
 """Tolerant editor highlighting using the parser's existing lexer."""
 from rpython.rlib import rutf8
-from rpython.rlib.parsing.lexer import LexingDFARunner
 from rpython.rlib.parsing.deterministic import LexerError
 from rpyrepl.highlight import Highlighter, ColorSpan, Span, delimiter_colors
 from prolog.interpreter import parsing
@@ -11,13 +10,11 @@ class PrologHighlighter(Highlighter):
         return delimiter_colors(text, pos, self.gen_colors(text))
 
     def gen_colors(self, text):
-        # Reuse the generated matcher and DFA, but retain IGNORE tokens so
-        # comments can be styled. Never change the parser's ignore dictionary.
-        lexer = parsing.lexer
-        runner = LexingDFARunner(lexer.matcher, lexer.automaton, text, {})
+        # Use the same code-point boundaries and token classes as the parser.
+        runner = parsing.lexer.get_runner(text, ignore_layout=False)
         spans = []
-        while runner.last_matched_index + 1 < len(text):
-            start = runner.last_matched_index + 1
+        while runner.pos < len(text):
+            start = runner.pos
             assert start >= 0
             # An unfinished block comment otherwise lexes as '/' and '*'.
             if (text[start] == '/' and start + 1 < len(text) and
@@ -33,7 +30,7 @@ class PrologHighlighter(Highlighter):
                 # Leave an invalid character plain and resume after it. Skip
                 # a whole UTF-8 code point, keeping every span on a boundary.
                 end = rutf8.next_codepoint_pos(text, start)
-                runner.last_matched_index = end - 1
+                runner.pos = end
                 continue
             except StopIteration:
                 break

@@ -3,7 +3,7 @@
 from prolog.interpreter import term
 from prolog.interpreter import error
 from prolog.interpreter.signature import Signature
-from rpython.rlib import jit
+from rpython.rlib import jit, rutf8
 from prolog.interpreter.stream import PrologOutputStream, PrologInputStream,\
         PrologStream
 
@@ -101,7 +101,7 @@ def unwrap_char_list(prolog_list, allow_partial=False, codes=False):
             partial = True
         elif codes:
             result.append(unwrap_char_code(char))
-        elif not isinstance(char, term.Atom) or len(char.name()) != 1:
+        elif not isinstance(char, term.Atom) or char.signature().name_length != 1:
             error.throw_type_error("character", char)
         else:
             result.append(char.name())
@@ -119,7 +119,7 @@ def unwrap_char_list(prolog_list, allow_partial=False, codes=False):
 
 
 def unwrap_char_code(obj):
-    """Convert a code to a byte character; atom signatures exclude NUL."""
+    """Convert a Unicode scalar value to a UTF-8 byte string."""
     if isinstance(obj, term.Var):
         error.throw_instantiation_error()
     if isinstance(obj, term.Number):
@@ -131,9 +131,9 @@ def unwrap_char_code(obj):
             raise error.throw_representation_error("character_code")
     else:
         raise error.throw_type_error("integer", obj)
-    if code <= 0 or code > 255:
+    if code < 0 or code > 0x10ffff or 0xd800 <= code <= 0xdfff:
         error.throw_representation_error("character_code")
-    return chr(code)
+    return rutf8.unichr_as_utf8(code)
 
 
 def is_callable(var, engine):
@@ -157,6 +157,17 @@ def unwrap_int(obj):
     elif isinstance(obj, term.Var):
         error.throw_instantiation_error()
     error.throw_type_error('integer', obj)
+
+def unwrap_option(option, domain):
+    """Return a dereferenced unary option and its value; callers validate values."""
+    option = option.dereference(None)
+    if isinstance(option, term.Var):
+        error.throw_instantiation_error()
+    if not isinstance(option, term.Callable) or option.argument_count() != 1:
+        error.throw_domain_error(domain, option)
+    assert isinstance(option, term.Callable)
+    return option, option.argument_at(0).dereference(None)
+
 
 def unwrap_atom(obj):
     if isinstance(obj, term.Atom):

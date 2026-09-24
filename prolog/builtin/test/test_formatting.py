@@ -17,7 +17,7 @@ from prolog.interpreter.test.tool import assert_true
     ('[a].', 2, '[a]'),
     ('[f(a),f(b)].', 2, '[f(...)|...]'),
     ('[a,b|tail].', 0, '[a, b|tail]'),
-    ('1+(2*3).', 2, '1+...*...'),
+    ('1+(2*3).', 2, '1+ ... * ...'),
 ])
 def test_depth_per_path(text, depth, expected):
     formatter = formatting.TermFormatter(Engine(), max_depth=depth)
@@ -222,3 +222,13 @@ def test_atom_formatting():
     assert f.format(t) == "'abc def'"
     t = parse_query_term("abc.")
     assert f.format(t) == "abc"
+
+
+@pytest.mark.parametrize('bindings, options, obj, expected', [
+    ('O=quoted(V),V=true', '[O]', "'Capital'", "'Capital'"),
+    ('D=1', '[max_depth(D)]', 'f(a)', 'f(...)'),
+    ('B=true,O=ignore_ops(B)', '[O]', '1+2', '+(1, 2)'),
+])
+def test_bound_write_options(capfd, bindings, options, obj, expected):
+    assert_true('%s,write_term(%s,%s).' % (bindings, obj, options))
+    assert capfd.readouterr()[0] == expected

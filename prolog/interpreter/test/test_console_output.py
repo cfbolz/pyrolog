@@ -121,9 +121,9 @@ class TestInteraction:
         child = self.spawn([])
         child.expect("welcome!")
         child.expect(">?- ")
-        child.sendline("X = $.")
+        child.sendline("X = `.")
         child.expect("  File <stdin>, line 1")
-        child.expect(re.escape("X = $."))
+        child.expect(re.escape("X = `."))
         child.expect(re.escape("    ^"))
         child.expect("LexerError")
 

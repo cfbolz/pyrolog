@@ -8,9 +8,10 @@ from prolog.interpreter.stream import PrologStream, PrologInputStream, \
 PrologOutputStream
 from prolog.interpreter import helper
 from prolog.builtin.formatting import TermFormatter
+from prolog.builtin.sourcehelper import path_for_os
 
 from rpython.rlib.streamio import fdopen_as_stream, open_file_as_stream
-from rpython.rlib import rstring
+from rpython.rlib import rutf8
 
 rwa = {"read": "r", "write": "w", "append": "a"}
 seek_mode = {"bof": os.SEEK_SET, "current": os.SEEK_CUR, "eof": os.SEEK_END}
@@ -18,14 +19,13 @@ seek_mode = {"bof": os.SEEK_SET, "current": os.SEEK_CUR, "eof": os.SEEK_END}
 def make_option_dict(options):
     opts = {}
     for option in options:
-        if isinstance(option, term.Var):
+        option, value = helper.unwrap_option(option, 'stream_option')
+        name = option.name()
+        if name not in ('type', 'encoding', 'alias', 'buffer'):
+            continue
+        if isinstance(value, term.Var):
             error.throw_instantiation_error()
-        if isinstance(option, term.Numeric):
-            error.throw_domain_error("stream_option", option)
-        if isinstance(option, term.Callable) and option.argument_count() == 1:
-            arg0 = option.argument_at(0)
-            if isinstance(arg0, term.Atom):
-                opts[option.name()] = arg0.name()
+        opts[name] = helper.unwrap_atom(value)
     return opts
 
 @expose_builtin("open", unwrap_spec=["atom", "atom", "obj", "list"])
@@ -33,6 +33,14 @@ def impl_open_options(engine, heap, srcpath, mode, stream, options):
     if not isinstance(stream, term.Var):
         error.throw_type_error("variable", stream)
     opts = make_option_dict(options)
+    kind = opts.get('type', 'text')
+    if kind not in ('text', 'binary'):
+        error.throw_domain_error('stream_option', term.Callable.build(kind))
+    binary = kind == 'binary'
+    encoding = opts.get('encoding', 'octet' if binary else 'utf8')
+    if encoding != ('octet' if binary else 'utf8'):
+        error.throw_domain_error('encoding', term.Callable.build(encoding))
+    srcpath = path_for_os(srcpath)
     mode = rwa.get(mode, None)
     if mode is None:
         error.throw_domain_error("io_mode", term.Callable.build(
@@ -52,10 +60,10 @@ def impl_open_options(engine, heap, srcpath, mode, stream, options):
         try:
             if mode == "r":
                 prolog_stream = PrologInputStream(open_file_as_stream(
-                        srcpath, mode, bufmode))
+                        srcpath, mode, bufmode), binary)
             else:
                 prolog_stream = PrologOutputStream(open_file_as_stream(
-                        srcpath, mode, bufmode))
+                        srcpath, mode, bufmode), binary)
         except OSError:
             error.throw_existence_error("source_sink", term.Callable.build(srcpath))
             assert 0, "unreachable"
@@ -92,33 +100,52 @@ def impl_close(engine, heap, stream):
         except KeyError:
             pass
 
-def read_unicode_char(stream):  
+def check_stream_type(stream, binary, operation):
+    if stream.binary != binary:
+        kind = 'binary_stream' if stream.binary else 'text_stream'
+        error.throw_permission_error(operation, kind, term.Callable.build(stream.alias))
+
+
+def read_unicode_char(stream):
     assert isinstance(stream, PrologInputStream)
+    check_stream_type(stream, False, 'input')
     c = stream.read(1)
-    bytes_read = 1
     if c == "":
         return "end_of_file", 0
-    if ord(c[0]) > 127: # beyond ASCII, so a character consists of 2 bytes
-        c += stream.read(1)
-        bytes_read += 1
-    return c, bytes_read
+    first = ord(c[0])
+    size = 1
+    if 0xc2 <= first <= 0xdf:
+        size = 2
+    elif 0xe0 <= first <= 0xef:
+        size = 3
+    elif 0xf0 <= first <= 0xf4:
+        size = 4
+    elif first >= 0x80:
+        error.throw_representation_error('character')
+    while len(c) < size:
+        byte = stream.read(1)
+        if not byte:
+            error.throw_representation_error('character')
+        if not 0x80 <= ord(byte[0]) <= 0xbf:
+            stream.unread(byte)
+            error.throw_representation_error('character')
+        c += byte
+    try:
+        rutf8.check_utf8(c, allow_surrogates=False)
+    except rutf8.CheckError:
+        error.throw_representation_error('character')
+    return c, size
 
 def peek_unicode_char(stream):
     c, num = read_unicode_char(stream)
     if num > 0:
-        try:
-            stream.seek(-num, os.SEEK_CUR)
-        except OSError:
-            pass
+        stream.unread(c)
     return c
 
 def peek_byte(stream):
     byte = stream.read(1)
     if byte != '':
-        try:
-            stream.seek(-1, os.SEEK_CUR)
-        except OSError:
-            pass
+        stream.unread(byte)
         return ord(byte[0])
     return -1
 
@@ -146,6 +173,7 @@ def impl_get_char_1(engine, heap, obj):
 @expose_builtin("get_byte", unwrap_spec=["instream", "obj"])
 def impl_get_byte(engine, heap, stream, obj):
     assert isinstance(stream, PrologInputStream)
+    check_stream_type(stream, True, 'input')
     byte = stream.read(1)
     if byte != '':
         code = ord(byte[0])
@@ -159,7 +187,9 @@ def impl_get_byte_1(engine, heap, obj):
 
 @expose_builtin("get_code", unwrap_spec=["instream", "obj"])
 def impl_get_code(engine, heap, stream, obj):
-    impl_get_byte(engine, heap, stream, obj)
+    char, size = read_unicode_char(stream)
+    code = rutf8.codepoint_at_pos(char, 0) if size else -1
+    obj.unify(term.Number(code), heap)
 
 @expose_builtin("get_code", unwrap_spec=["obj"])
 def impl_get_code_1(engine, heap, obj):
@@ -178,23 +208,22 @@ def impl_peek_char(engine, heap, stream, obj):
 
 @expose_builtin("peek_byte", unwrap_spec=["instream", "obj"])
 def impl_peek_byte(engine, heap, stream, obj):
+    check_stream_type(stream, True, 'input')
     byte = peek_byte(stream)
     obj.unify(term.Number(byte), heap)
 
 @expose_builtin("peek_code", unwrap_spec=["instream", "obj"])
 def impl_peek_code(engine, heap, stream, obj):
-    impl_peek_byte(engine, heap, stream, obj)
+    char = peek_unicode_char(stream)
+    code = -1 if char == 'end_of_file' else rutf8.codepoint_at_pos(char, 0)
+    obj.unify(term.Number(code), heap)
 
 @expose_builtin("put_char", unwrap_spec=["outstream", "atom"])
 def impl_put_char(engine, heap, stream, atom):
-    length = len(atom)
-    if length == 1:
+    check_stream_type(stream, False, 'output')
+    if rutf8.codepoints_in_utf8(atom) == 1:
         stream.write(atom)
         return
-    elif length == 2:
-        if ord(atom[0]) > 127: # not ASCII
-            stream.write(atom)
-            return
     error.throw_type_error("character", term.Callable.build(atom))
 
 @expose_builtin("put_char", unwrap_spec=["atom"])
@@ -203,7 +232,8 @@ def impl_put_char_1(engine, heap, obj):
 
 @expose_builtin("put_byte", unwrap_spec=["outstream", "int"])
 def impl_put_byte(engine, heap, stream, byte):
-    if byte < 0:
+    check_stream_type(stream, True, 'output')
+    if byte < 0 or byte > 255:
         # XXX have to care about bigints
         error.throw_type_error("byte", term.Number(byte))
     stream.write(chr(byte))
@@ -211,6 +241,32 @@ def impl_put_byte(engine, heap, stream, byte):
 @expose_builtin("put_byte", unwrap_spec=["int"])
 def impl_put_byte_1(engine, heap, obj):
     impl_put_byte(engine, heap, engine.streamwrapper.current_outstream, obj)
+
+
+@expose_builtin('put_code', unwrap_spec=['outstream', 'obj'])
+def impl_put_code(engine, heap, stream, code):
+    check_stream_type(stream, False, 'output')
+    stream.write(helper.unwrap_char_code(code))
+
+
+@expose_builtin('put_code', unwrap_spec=['obj'])
+def impl_put_code_1(engine, heap, code):
+    impl_put_code(engine, heap, engine.streamwrapper.current_outstream, code)
+
+
+@expose_builtin('peek_char', unwrap_spec=['obj'])
+def impl_peek_char_1(engine, heap, obj):
+    impl_peek_char(engine, heap, engine.streamwrapper.current_instream, obj)
+
+
+@expose_builtin('peek_code', unwrap_spec=['obj'])
+def impl_peek_code_1(engine, heap, obj):
+    impl_peek_code(engine, heap, engine.streamwrapper.current_instream, obj)
+
+
+@expose_builtin('peek_byte', unwrap_spec=['obj'])
+def impl_peek_byte_1(engine, heap, obj):
+    impl_peek_byte(engine, heap, engine.streamwrapper.current_instream, obj)
 
 @expose_builtin("current_input", unwrap_spec=["obj"])
 def impl_current_input(engine, heap, obj):
@@ -247,6 +303,7 @@ def impl_seek(engine, heap, stream, offset, mode, obj):
 
 @expose_builtin("nl", unwrap_spec=["outstream"])
 def impl_nl(engine, heap, stream):
+    check_stream_type(stream, False, 'output')
     stream.write("\n")
 
 @expose_builtin("nl", unwrap_spec=[])
@@ -255,6 +312,7 @@ def impl_nl_0(engine, heap):
 
 @expose_builtin("write", unwrap_spec=["outstream", "raw"])
 def impl_write(engine, heap, stream, term):
+    check_stream_type(stream, False, 'output')
     formatter = TermFormatter.from_option_list(engine, [])
     stream.write(formatter.format(term))
 
@@ -264,6 +322,7 @@ def impl_write_1(engine, heap, term):
 
 @expose_builtin("write_term", unwrap_spec=["outstream", "raw", "list"])
 def impl_write_term(engine, heap, stream, term, options):
+    check_stream_type(stream, False, 'output')
     formatter = TermFormatter.from_option_list(engine, options)
     stream.write(formatter.format(term))
  
@@ -273,35 +332,36 @@ def impl_write_term_2(engine, heap, term, options):
             term, options)
 
 def read_till_next_dot(stream):
-    charlist = []
-    tlist = ["%", "", "end_of_file"]
-    whitespace = True
-    ignore = False
+    from prolog.interpreter.parsing import lexer, LexerError
+    from prolog.interpreter.lexer import IncompleteTokenError
+    from prolog.interpreter.utf8 import layout
+    chars = []
     while True:
-        char, _ = read_unicode_char(stream)
-        if char == "%":
-            ignore = True
-        if char == "\n":
-            ignore = False
-            continue
-        if char == "end_of_file":
-            ignore = False
-        if rstring.strip_spaces(char) == "":
-            continue
-        if not ignore:
-            if char == "end_of_file":
-                if whitespace:
+        char, size = read_unicode_char(stream)
+        if not size:
+            source = "".join(chars)
+            try:
+                if not lexer.tokenize(source):
                     return "end_of_file."
-                else:
-                    error.throw_syntax_error("Unexpected end of file")
-            else:
-                whitespace = False
-            charlist.append(char)
-            if char == ".":
-                nextchar, n = read_unicode_char(stream)
-                stream.seek(-n, 1)
-                if rstring.strip_spaces(nextchar) in tlist:
-                    return "".join(charlist)
+            except LexerError:
+                pass
+            error.throw_syntax_error("Unexpected end of file")
+        chars.append(char)
+        if char != '.':
+            continue
+        following = peek_unicode_char(stream)
+        if (following != 'end_of_file' and following != '%' and
+                not layout(rutf8.codepoint_at_pos(following, 0))):
+            continue
+        source = "".join(chars)
+        try:
+            tokens = lexer.tokenize(source)
+        except IncompleteTokenError:
+            continue  # The dot is inside an unfinished quote or comment.
+        except LexerError:
+            raise error.throw_syntax_error("Invalid token")
+        if tokens and tokens[-1].name == '.' and tokens[-1].source_pos.i == len(source) - 1:
+            return source
 
 @expose_builtin("read", unwrap_spec=["instream", "obj"])
 def impl_read(engine, heap, stream, obj):
@@ -316,6 +376,7 @@ def impl_read_1(engine, heap, obj):
 
 @expose_builtin("see", unwrap_spec=["atom"])
 def impl_see(engine, heap, obj):
+    obj = path_for_os(obj)
     w = engine.streamwrapper
     try:
         stream = w.aliases[obj]

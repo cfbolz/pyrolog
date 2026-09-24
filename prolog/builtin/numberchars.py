@@ -6,6 +6,8 @@ from rpython.rlib.rstring import ParseStringError, ParseStringOverflowError
 from rpython.rlib.rarithmetic import string_to_int
 from rpython.rlib.rbigint import rbigint
 from prolog.interpreter.helper import wrap_list
+from rpython.rlib import rutf8
+from prolog.interpreter.utf8 import unicodedb, layout
 
 def num_to_list(num, codes=False):
     from prolog.interpreter.helper import wrap_list
@@ -27,7 +29,31 @@ def num_to_list(num, codes=False):
 
 def parse_number(chars):
     # Validate the complete decimal token before invoking host conversions.
-    text = "".join(chars).lstrip()
+    text = "".join(chars)
+    start = 0
+    while start < len(text) and layout(rutf8.codepoint_at_pos(text, start)):
+        start = rutf8.next_codepoint_pos(text, start)
+    text = text[start:]
+    if text.startswith("0'"):
+        from prolog.interpreter.parsing import unescape
+        char = unescape(text[2:])
+        if rutf8.codepoints_in_utf8(char) != 1:
+            error.throw_syntax_error("Illegal number")
+        return term.Number(rutf8.codepoint_at_pos(char, 0))
+    # Numeric conversions accept Unicode decimal digits; source literals stay ASCII.
+    normalized = []
+    digit_block = -1
+    for code in rutf8.Utf8StringIterator(text):
+        if unicodedb.category(code) == 'Nd':
+            digit = unicodedb.decimal(code)
+            block = code - digit
+            if digit_block >= 0 and block != digit_block:
+                error.throw_syntax_error("Illegal number")
+            digit_block = block
+            normalized.append(chr(48 + digit))
+        else:
+            normalized.append(rutf8.unichr_as_utf8(code))
+    text = "".join(normalized)
     size = len(text)
     i = 0
     if i < size and text[i] in "+-":

@@ -1,4 +1,19 @@
+import pytest
 from prolog.interpreter.signature import Signature, SignatureFactory
+
+
+@pytest.mark.parametrize('name, length', [
+    ('', 0), ('ascii', 5), ('a\x00b', 3), ('\xc3\xa9', 1),
+    ('e\xcc\x81', 2), ('\xc3\xa9\xe2\x82\xac\xf0\x9f\x98\x80', 3),
+])
+@pytest.mark.parametrize('arity', [0, 2])
+@pytest.mark.parametrize('cached', [False, True])
+def test_name_length(name, length, arity, cached):
+    factory = SignatureFactory()
+    signature = factory.getsignature(name, arity, cache=cached)
+    assert signature.name_length == length
+    assert signature.atom_signature.name_length == length
+    assert signature.ensure_cached().name_length == length
 
 
 def test_eq():

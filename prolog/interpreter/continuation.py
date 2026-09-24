@@ -12,8 +12,6 @@ from prolog.interpreter.helper import unwrap_predicate_indicator
 from prolog.interpreter.stream import StreamWrapper
 from prolog.interpreter.small_list import inline_small_list
 
-Signature.register_extr_attr("function", engine=True)
-
 # ___________________________________________________________________
 # JIT stuff
 

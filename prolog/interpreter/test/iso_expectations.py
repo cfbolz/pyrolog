@@ -19,6 +19,14 @@ def skip(reason):
 
 
 EXPECTATIONS = {
+    ('atom_codes', "atom_codes(A,[ 0'i, 0's, 1000])"):
+        xfail('Suite assumes 1000 is invalid, but it is a Unicode scalar value', UnificationFailed),
+    ('number_codes', "number_codes(A,[ 0'1, 0'2, 1000])"):
+        xfail('Suite expects invalid character code; Unicode U+03E8 instead gives invalid number syntax', UncaughtError),
+    ('number_codes', "number_codes(A,[0'0,0'x,0'f])"):
+        xfail('number_codes/2 does not parse hexadecimal notation', UncaughtError),
+    ('sub_atom', "sub_atom('ab', Before, Length, After, Sub_atom)"):
+        xfail('Suite expects one-based Before offsets; Prolog sub_atom/5 is zero-based', UnificationFailed),
     ('abolish', '(current_prolog_flag(max_arity,A), X is A + 1, abolish(foo/X))'):
         xfail('current_prolog_flag/2 is not implemented', UncaughtError),
     ('arg', 'arg(X,foo(a,b),a)'):
@@ -27,24 +35,6 @@ EXPECTATIONS = {
         xfail('arg/3 fails on atoms instead of raising type_error(compound, ...)', UnificationFailed),
     ('asserta', '(asserta((bar(X) :- X)), clause(bar(X), B))'):
         xfail('Asserting a variable clause body raises instantiation_error instead of wrapping call/1', UncaughtError),
-    ('atom_chars', "atom_chars('''',L)"):
-        xfail('Parser does not support doubled quotes in quoted atoms', PrologParseError),
-    ('atom_codes', 'atom_codes([],L)'):
-        xfail("Parser does not support 0' character-code syntax", PrologParseError),
-    ('atom_codes', "atom_codes('''',L)"):
-        xfail('Parser does not support doubled quotes in quoted atoms', PrologParseError),
-    ('atom_codes', "atom_codes('iso',L)"):
-        xfail("Parser does not support 0' character-code syntax", PrologParseError),
-    ('atom_codes', "atom_codes(A,[ 0'p, 0'r, 0'o, 0'l, 0'o, 0'g])"):
-        xfail("Parser does not support 0' character-code syntax", PrologParseError),
-    ('atom_codes', "atom_codes('North',[0'N | L])"):
-        xfail("Parser does not support 0' character-code syntax", PrologParseError),
-    ('atom_codes', "atom_codes('iso',[0'i, 0's])"):
-        xfail("Parser does not support 0' character-code syntax", PrologParseError),
-    ('atom_codes', "atom_codes(A, 0'x)"):
-        xfail("Parser does not support 0' character-code syntax", PrologParseError),
-    ('atom_codes', "atom_codes(A,[ 0'i, 0's, 1000])"):
-        xfail("Parser does not support 0' character-code syntax", PrologParseError),
     ('bagof', 'bagof(X,(X=1;X=2),L)'):
         xfail('bagof/3 is not implemented', UncaughtError),
     ('bagof', 'bagof(X,(X=1;X=2),X)'):
@@ -79,12 +69,6 @@ EXPECTATIONS = {
         skip('Requires the original outer runner to map uncaught throws to system_error'),
     ('catch-and-throw', 'catch(number_chars(A,L), error(instantiation_error, _), fail)'):
         xfail('Errors use error/1 instead of the expected error/2 with context', UncaughtError),
-    ('char_code', 'char_code(a,Code)'):
-        xfail("Parser does not support 0' character-code syntax", PrologParseError),
-    ('char_code', "char_code(Char,0'c)"):
-        xfail("Parser does not support 0' character-code syntax", PrologParseError),
-    ('char_code', 'char_code(Char,163)'):
-        xfail('Quoted atoms do not decode numeric character escapes', UnificationFailed),
     ('clause', 'clause(x,Body)'):
         xfail('clause/2 is not implemented', UncaughtError),
     ('clause', 'clause(_,B)'):
@@ -143,28 +127,6 @@ EXPECTATIONS = {
         xfail('halt/1 is not implemented', UncaughtError),
     ('number_chars', "number_chars(A,['0',x,f])"):
         xfail('number_chars/2 does not parse hexadecimal notation', UncaughtError),
-    ('number_chars', "number_chars(A,['0','''','A'])"):
-        xfail('Parser does not support doubled quotes in quoted atoms', PrologParseError),
-    ('number_codes', 'number_codes(33,L)'):
-        xfail("Parser does not support 0' character-code syntax", PrologParseError),
-    ('number_codes', "number_codes(33,[0'3,0'3])"):
-        xfail("Parser does not support 0' character-code syntax", PrologParseError),
-    ('number_codes', "number_codes(33.0,[0'3,0'.,0'3,0'E,0'+,0'0,0'1])"):
-        xfail("Parser does not support 0' character-code syntax", PrologParseError),
-    ('number_codes', "number_codes(A,[0'-,0'2,0'5])"):
-        xfail("Parser does not support 0' character-code syntax", PrologParseError),
-    ('number_codes', "number_codes(A,[0' ,0'3])"):
-        xfail("Parser does not support 0' character-code syntax", PrologParseError),
-    ('number_codes', "number_codes(A,[0'0,0'x,0'f])"):
-        xfail("Parser does not support 0' character-code syntax", PrologParseError),
-    ('number_codes', "number_codes(A,[0'0,39,0'a])"):
-        xfail("Parser does not support 0' character-code syntax", PrologParseError),
-    ('number_codes', "number_codes(A,[0'4,0'.,0'2])"):
-        xfail("Parser does not support 0' character-code syntax", PrologParseError),
-    ('number_codes', "number_codes(A,[0'4,0'2,0'.,0'0,0'e,0'-,0'1])"):
-        xfail("Parser does not support 0' character-code syntax", PrologParseError),
-    ('number_codes', "number_codes(A,[ 0'1, 0'2, 1000])"):
-        xfail("Parser does not support 0' character-code syntax", PrologParseError),
     ('set_prolog_flag', '(set_prolog_flag(unknown, fail), current_prolog_flag(unknown, V))'):
         xfail('set_prolog_flag/2 is not implemented', UncaughtError),
     ('set_prolog_flag', 'set_prolog_flag(X, warning)'):
@@ -211,32 +173,6 @@ EXPECTATIONS = {
         xfail('setof/3 is not implemented', UncaughtError),
     ('setof', 'setof(X,1,L)'):
         xfail('setof/3 is not implemented', UncaughtError),
-    ('sub_atom', 'sub_atom(abracadabra, 0, 5, _, S2)'):
-        xfail('sub_atom/5 implementation is not registered as a builtin', UncaughtError),
-    ('sub_atom', 'sub_atom(abracadabra, _, 5, 0, S2)'):
-        xfail('sub_atom/5 implementation is not registered as a builtin', UncaughtError),
-    ('sub_atom', 'sub_atom(abracadabra, 3, Length, 3, S2)'):
-        xfail('sub_atom/5 implementation is not registered as a builtin', UncaughtError),
-    ('sub_atom', 'sub_atom(abracadabra, Before, 2, After, ab)'):
-        xfail('sub_atom/5 implementation is not registered as a builtin', UncaughtError),
-    ('sub_atom', "sub_atom('Banana', 3, 2, _, S2)"):
-        xfail('sub_atom/5 implementation is not registered as a builtin', UncaughtError),
-    ('sub_atom', "sub_atom('charity', _, 3, _, S2)"):
-        xfail('sub_atom/5 implementation is not registered as a builtin', UncaughtError),
-    ('sub_atom', "sub_atom('ab', Before, Length, After, Sub_atom)"):
-        xfail('sub_atom/5 implementation is not registered as a builtin', UncaughtError),
-    ('sub_atom', 'sub_atom(Banana, 3, 2, _, S2)'):
-        xfail('sub_atom/5 implementation is not registered as a builtin', UncaughtError),
-    ('sub_atom', 'sub_atom(f(a), 2, 2, _, S2)'):
-        xfail('sub_atom/5 implementation is not registered as a builtin', UncaughtError),
-    ('sub_atom', "sub_atom('Banana', 4, 2, _, 2)"):
-        xfail('sub_atom/5 implementation is not registered as a builtin', UncaughtError),
-    ('sub_atom', "sub_atom('Banana', a, 2, _, S2)"):
-        xfail('sub_atom/5 implementation is not registered as a builtin', UncaughtError),
-    ('sub_atom', "sub_atom('Banana', 4, n, _, S2)"):
-        xfail('sub_atom/5 implementation is not registered as a builtin', UncaughtError),
-    ('sub_atom', "sub_atom('Banana', 4, _, m, S2)"):
-        xfail('sub_atom/5 implementation is not registered as a builtin', UncaughtError),
     ('t', 'bagof([X,Y], t_foo(X,Y), S)'):
         skip('Requires the original INRIA t_foo fixture'),
 }
