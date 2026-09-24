@@ -86,6 +86,8 @@ class Parser(object):
             res = term.BindingVar()
             self.varname_to_var[varname] = res
             return res
+        if current.name == "[":
+            return self._parse_list()
         self._error("expected a term", current)
 
     def _parse_args(self):
@@ -102,3 +104,26 @@ class Parser(object):
                 self._get_next()
                 return res
             self._expect('ATOM', ',')
+
+    def _parse_list(self):
+        # The opening bracket has already been consumed.
+        tail = term.Callable.build("[]")
+        if self._peek().name == "]":
+            self._get_next()
+            return tail
+        elements = []
+        while True:
+            elements.append(self._parse_toplevel_op_expr())
+            next = self._peek()
+            if next.name == "]":
+                self._get_next()
+                break
+            if next.name == "|":
+                self._get_next()
+                tail = self._parse_toplevel_op_expr()
+                self._expect("]")
+                break
+            self._expect("ATOM", ",")
+        for i in range(len(elements) - 1, -1, -1):
+            tail = term.Callable.build(".", [elements[i], tail])
+        return tail

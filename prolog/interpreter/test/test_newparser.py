@@ -132,3 +132,75 @@ def test_variable_scope():
 def test_invalid_syntax(source):
     with pytest.raises(ParseError):
         parse(source)
+
+
+def list_cell(value):
+    assert value.name() == "."
+    assert value.argument_count() == 2
+    return value.argument_at(0), value.argument_at(1)
+
+
+@pytest.mark.parametrize("source", ["[].", "[ ]."])
+def test_empty_list(source):
+    result = parse(source)
+    assert isinstance(result, Atom)
+    assert result.name() == "[]"
+
+
+@pytest.mark.parametrize("source", ["[a, b].", "[a, b | []]."])
+def test_proper_list(source):
+    first, rest = list_cell(parse(source))
+    second, tail = list_cell(rest)
+    assert isinstance(first, Atom)
+    assert first.name() == "a"
+    assert isinstance(second, Atom)
+    assert second.name() == "b"
+    assert isinstance(tail, Atom)
+    assert tail.name() == "[]"
+
+
+def test_improper_list():
+    head, tail = list_cell(parse("[a | b]."))
+    assert isinstance(head, Atom)
+    assert head.name() == "a"
+    assert isinstance(tail, Atom)
+    assert tail.name() == "b"
+
+
+def test_list_variable_sharing():
+    parser = Parser(UnicodeLexer().tokenize("f(X, [X, a | T], T)."), [])
+    result = parser.parse()
+    first, rest = list_cell(result.argument_at(1))
+    second, tail = list_cell(rest)
+    assert isinstance(first, Var)
+    assert first is result.argument_at(0)
+    assert first is parser.varname_to_var["X"]
+    assert second.name() == "a"
+    assert isinstance(tail, Var)
+    assert tail is result.argument_at(2)
+    assert tail is parser.varname_to_var["T"]
+    assert first is not tail
+
+
+def test_nested_list():
+    nested, rest = list_cell(parse("[[a], f(b, c)]."))
+    head, inner_tail = list_cell(nested)
+    assert head.name() == "a"
+    assert isinstance(inner_tail, Atom)
+    assert inner_tail.name() == "[]"
+    compound, tail = list_cell(rest)
+    assert compound.name() == "f"
+    assert compound.argument_count() == 2
+    assert compound.argument_at(0).name() == "b"
+    assert compound.argument_at(1).name() == "c"
+    assert isinstance(tail, Atom)
+    assert tail.name() == "[]"
+
+
+@pytest.mark.parametrize("source", [
+    "[a,].", "[,a].", "[|T].", "[a|].", "[a|b,c].", "[a|b|c].",
+    "[a b].", "[a.", "[a",
+])
+def test_invalid_list(source):
+    with pytest.raises(ParseError):
+        parse(source)
