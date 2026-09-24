@@ -79,29 +79,27 @@ class Parser(object):
                 if prefix:
                     self.pending.append((token, prefix))
                     continue
-                if len(token) != 1 or token not in '0123456789':
-                    for kind in ('infix', 'postfix'):
-                        incoming = self.operators.get((token, kind))
-                        if incoming and self._reinterpret_infix_as_postfix(incoming.left_limit):
-                            self._push_operator(token, incoming)
-                            expect_operand = incoming.kind == 'infix'
-                            break
-                    else:
-                        raise ParseError('expected a digit, got %r' % token)
+                if len(token) == 1 and token in '0123456789':
+                    self.operands.append((int(token), 0))
+                    expect_operand = False
                     continue
-                self.operands.append((int(token), 0))
-                expect_operand = False
-            else:
-                incoming = self.operators.get((token, 'infix'))
-                if incoming is None:
-                    incoming = self.operators.get((token, 'postfix'))
-                if incoming is None:
-                    raise ParseError('expected an operator, got %r' % token)
-                self._push_operator(token, incoming)
-                expect_operand = incoming.kind == 'infix'
+            incoming = self._select_operator(token, expect_operand)
+            self._push_operator(token, incoming)
+            expect_operand = incoming.kind == 'infix'
                 
         self._complete_operand(expect_operand, 'at end of input')
         return self._finish()
+
+    def _select_operator(self, token, expect_operand):
+        for kind in ('infix', 'postfix'):
+            incoming = self.operators.get((token, kind))
+            if incoming is None:
+                continue
+            if not expect_operand or self._reinterpret_infix_as_postfix(incoming.left_limit):
+                return incoming
+        if expect_operand:
+            raise ParseError('expected a digit, got %r' % token)
+        raise ParseError('expected an operator, got %r' % token)
 
     def _complete_operand(self, expect_operand, context):
         if expect_operand and not self._reinterpret_infix_as_postfix():
