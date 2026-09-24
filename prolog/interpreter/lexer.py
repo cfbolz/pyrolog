@@ -120,6 +120,10 @@ class UnicodeRunner(object):
                 if self.pos == size:
                     self.fail(start, line, column)
                 self.advance()
+        elif rstring.startswith(text, "''", self.pos, size):
+            # A doubled quote denotes the quote character after the 0' prefix.
+            self.advance()
+            self.advance()
         else:
             self.advance()
 

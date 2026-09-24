@@ -46,3 +46,17 @@ def test_invalid_utf8_position():
     assert exc.value.source_pos.i == len(prefix)
     assert exc.value.source_pos.lineno == 1
     assert exc.value.source_pos.columnno == 3
+
+
+@pytest.mark.parametrize('literal', ["0'''", "0''", "0'\\'"])
+def test_quote_character_code_literal(literal):
+    tokens = parsing.lexer.tokenize(literal)
+    assert [(t.name, t.source) for t in tokens] == [('NUMBER', literal)]
+    assert parsing.parse_query_term(literal + '.').num == 39
+    assert_true('[%s,0\'a] == [39,97].' % literal)
+
+
+def test_read_doubled_quote_character_code(tmpdir):
+    path = tmpdir.join('quote-code.pl')
+    path.write("0'''. next.", mode='wb')
+    assert_true("open('%s',read,S),read(S,39),read(S,next),close(S)." % path)
