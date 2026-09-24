@@ -158,6 +158,17 @@ def unwrap_int(obj):
         error.throw_instantiation_error()
     error.throw_type_error('integer', obj)
 
+def unwrap_option(option, domain):
+    """Return a dereferenced unary option and its value; callers validate values."""
+    option = option.dereference(None)
+    if isinstance(option, term.Var):
+        error.throw_instantiation_error()
+    if not isinstance(option, term.Callable) or option.argument_count() != 1:
+        error.throw_domain_error(domain, option)
+    assert isinstance(option, term.Callable)
+    return option, option.argument_at(0).dereference(None)
+
+
 def unwrap_atom(obj):
     if isinstance(obj, term.Atom):
         return obj.name()    

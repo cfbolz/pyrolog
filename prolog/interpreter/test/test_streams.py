@@ -744,30 +744,12 @@ def test_open_stream_strange_buffering():
     prolog_raises("domain_error(buffering, _)",
             "open(blub, write, _, [buffer(strange_stuff)])")
 
-def test_open_with_options():
-    m = "mod"
-    create_file(m, """
-    :- module(%s, []).
-    """ % s)
-    try:
-        prolog_raises("domain_error(stream_option, _)", "open(%s, read, _, [g, 1, a, f(a)])" % m)
-        prolog_raises("instantiation_error", "open(%s, read, _, [f(a), X])" % m)
-        assert_true("open(%s, read, _, [])." % m)
-        assert_true("open(%s, read, _, [a, f(a), []])." % m)
-        assert_true("open(%s, read, _, [a, f(a), g(X)])." % m)
-    finally:
-        delete_file(m)
-
-def test_open_with_options():
-    m = "mod"
-    create_file(m, """
-    :- module(%s, []).
-    """ % m)
-    try:
-        prolog_raises("domain_error(stream_option, _)", "open(%s, read, _, [g, 1, a, f(a)])" % m)
-        prolog_raises("instantiation_error", "open(%s, read, _, [f(a), X])" % m)
-        assert_true("open(%s, read, _, [])." % m)
-        assert_true("open(%s, read, _, [a, f(a), []])." % m)
-        assert_true("open(%s, read, _, [a, f(a), []])." % m)
-    finally:
-        delete_file(m)
+def test_open_with_options(tmpdir):
+    path = tmpdir.join('options.pl')
+    path.write('')
+    prolog_raises('domain_error(stream_option, 1)',
+                  "open('%s',read,_,[f(a),1])" % path)
+    prolog_raises('instantiation_error',
+                  "open('%s',read,_,[f(a),X])" % path)
+    assert_true("open('%s',read,S,[]),close(S)." % path)
+    assert_true("open('%s',read,S,[f(a),g(X)]),close(S)." % path)

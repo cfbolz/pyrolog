@@ -19,15 +19,13 @@ seek_mode = {"bof": os.SEEK_SET, "current": os.SEEK_CUR, "eof": os.SEEK_END}
 def make_option_dict(options):
     opts = {}
     for option in options:
-        option = option.dereference(None)
-        if isinstance(option, term.Var):
+        option, value = helper.unwrap_option(option, 'stream_option')
+        name = option.name()
+        if name not in ('type', 'encoding', 'alias', 'buffer'):
+            continue
+        if isinstance(value, term.Var):
             error.throw_instantiation_error()
-        if isinstance(option, term.Numeric):
-            error.throw_domain_error("stream_option", option)
-        if isinstance(option, term.Callable) and option.argument_count() == 1:
-            arg0 = option.argument_at(0).dereference(None)
-            if isinstance(arg0, term.Atom):
-                opts[option.name()] = arg0.name()
+        opts[name] = helper.unwrap_atom(value)
     return opts
 
 @expose_builtin("open", unwrap_spec=["atom", "atom", "obj", "list"])

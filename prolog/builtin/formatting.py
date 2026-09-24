@@ -102,10 +102,7 @@ class TermFormatter(object):
         cycles = True
         number_vars = False
         for option in options:
-            if (not helper.is_term(option) or (isinstance(option, Callable) and option.argument_count() != 1)):
-                error.throw_domain_error('write_option', option)
-            assert isinstance(option, Callable)
-            arg = option.argument_at(0)
+            option, arg = helper.unwrap_option(option, 'write_option')
             if option.name()== "max_depth":
                 try:
                     max_depth = helper.unwrap_int(arg)

@@ -22,13 +22,9 @@ def impl_leash(engine, heap, options):
     # Validate first, so an invalid option does not partially change the mode.
     changes = []
     for option in options:
-        option = option.dereference(heap)
-        if isinstance(option, term.Var):
-            error.throw_instantiation_error()
-        if (not isinstance(option, term.Callable) or
-                option.argument_count() != 1 or option.name() not in ("+", "-")):
-            error.throw_domain_error("leash_option", option)
-        value = option.argument_at(0).dereference(heap)
+        option, value = helper.unwrap_option(option, 'leash_option')
+        if option.name() not in ('+', '-'):
+            error.throw_domain_error('leash_option', option)
         if isinstance(value, term.Var):
             error.throw_instantiation_error()
         name = helper.unwrap_atom(value)
