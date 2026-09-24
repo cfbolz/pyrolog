@@ -67,6 +67,10 @@ class Parser(object):
         expect_operand = True
         for token in self.tokens:
             if expect_operand:
+                if token == ')' and self._reinterpret_infix_as_postfix():
+                    self._close_parenthesis()
+                    expect_operand = False
+                    continue
                 if token == '(':
                     self.pending.append(('(', OPEN_PAREN))
                     continue
@@ -80,13 +84,7 @@ class Parser(object):
                 expect_operand = False
             else:
                 if token == ')':
-                    while self.pending and self.pending[-1][1].kind != 'open_paren':
-                        self._reduce()
-                    if not self.pending:
-                        raise ParseError("unmatched parenthesis")
-                    self.pending.pop()
-                    term, _ = self.operands.pop()
-                    self.operands.append((term, 0))
+                    self._close_parenthesis()
                     continue
                 incoming = self.operators.get((token, 'infix'))
                 if incoming is not None:
@@ -103,21 +101,36 @@ class Parser(object):
                 
         if expect_operand:
             # maybe we have ended with an infix that could be a postfix
-            if self.pending:
-                name, operator = self.pending[-1]
+            if self._reinterpret_infix_as_postfix():
+                return self._finish()
+            raise ParseError('expected a digit at end of input')
+        return self._finish()
+
+    def _reinterpret_infix_as_postfix(self):
+        if self.pending:
+            name, operator = self.pending[-1]
+            if operator.kind == 'infix':
                 postfix = self.operators.get((name, 'postfix'))
                 if postfix:
                     self.pending.pop()
                     self.pending.append((name, postfix))
-                    return self._finish()
-            raise ParseError('expected a digit at end of input')
-        return self._finish()
+                    return True
+        return False
 
     def _finish(self):
         while self.pending:
             self._reduce()
         assert len(self.operands) == 1
         return self.operands[0][0]
+
+    def _close_parenthesis(self):
+        while self.pending and self.pending[-1][1].kind != 'open_paren':
+            self._reduce()
+        if not self.pending:
+            raise ParseError("unmatched parenthesis")
+        self.pending.pop()
+        term, _ = self.operands.pop()
+        self.operands.append((term, 0))
 
     def _reduce_before(self, incoming):
         while self.pending:
@@ -168,6 +181,25 @@ def test_infix_reinterpreted_as_postfix_at_end():
         ('@', 'postfix'): Operator(400, 'yf'),
     }
     assert parse('1@', operators) == ('@', 1)
+
+
+def test_infix_reinterpreted_as_postfix_before_close():
+    operators = {
+        ('@', 'infix'): Operator(500, 'yfx'),
+        ('@', 'postfix'): Operator(400, 'yf'),
+    }
+    assert parse('(1@)', operators) == ('@', 1)
+
+
+def test_pending_prefix_is_not_reinterpreted_as_postfix():
+    import pytest
+    operators = {
+        ('~', 'prefix'): Operator(500, 'fy'),
+        ('~', 'postfix'): Operator(500, 'yf'),
+    }
+    for source in ('~', '(~)'):
+        with pytest.raises(ParseError):
+            parse(source, operators)
 
 
 def test_number():
