@@ -20,6 +20,10 @@ Following newer SWI-Prolog syntax, non-ASCII symbols (`S*`) and punctuation
 in categories `Pc`, `Pd`, and `Po` form single-character atoms rather than
 joining adjacent symbols. Identifier rules take precedence (e.g. `a·b` is
 one identifier); multi-symbol atom names such as `'≤≥'` must be quoted.
+ASCII graphic characters form maximal runs, so `++` and `:/` are atoms.
+Separate graphic tokens with spaces (e.g. `X = -1` and `abolish(':'/1)`).
+A terminating dot must follow the preceding graphic token with a separator
+and must itself be followed by layout, a `%` comment, or end of input.
 
 Text streams use UTF-8 (`encoding(utf8)`); malformed UTF-8 raises
 `representation_error(character)`. `get_char/2`, `get_code/2`, their peek

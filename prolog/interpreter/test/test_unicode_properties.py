@@ -17,4 +17,4 @@ def test_unicode_roundtrips(value):
     assert cons_to_atom(codes, codes=True).name() == raw
     assert cons_to_atom(atom_to_cons(atom)).name() == raw
     rendered = TermFormatter(get_engine(''), quoted=True).format(atom)
-    assert parse_query_term(rendered + '.').name() == raw
+    assert parse_query_term(rendered + ' .').name() == raw

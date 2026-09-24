@@ -5,14 +5,6 @@ from rpython.rlib.parsing.deterministic import LexerError
 from prolog.interpreter import utf8
 
 
-# Retain the existing ASCII operator tokenization, including :/ predicate indicators.
-GRAPHIC_TOKENS = sorted([
-    '-->', ':-', '?-', '->', '\\+', '~', '<', '=', '=..', '=@=', '=:=',
-    '=<', '==', '=\\=', '>', '?=', '>=', '@<', '@=<', '@>', '@>=',
-    '\\=', '\\==', ':', '+', '-', '/\\', '\\/', '?', '\\', '*', '/',
-    '//', '<<', '>>', '**', '^'], key=len, reverse=True)
-
-
 class IncompleteTokenError(LexerError):
     """A quoted token or block comment needs more input."""
 
@@ -156,15 +148,15 @@ class UnicodeRunner(object):
                 self.fail(start, line, column)
         return 'FLOAT'
 
-    def scan_ascii_graphic(self, start, line, column):
+    def scan_ascii_graphic(self):
         text = self.text
-        size = len(text)
-        for symbol in GRAPHIC_TOKENS:
-            if rstring.startswith(text, symbol, start, size):
-                for unused in range(len(symbol)):
-                    self.advance()
-                return
-        self.fail(start, line, column)
+        while self.pos < len(text) and utf8.ascii_graphic(ord(text[self.pos])):
+            self.advance()
+
+    def is_full_stop(self):
+        following = self.pos + 1
+        return (following == len(self.text) or self.text[following] == '%' or
+                utf8.layout(rutf8.codepoint_at_pos(self.text, following)))
 
     def find_next_token(self):
         text = self.text
@@ -202,13 +194,16 @@ class UnicodeRunner(object):
             elif rstring.startswith(text, '[]', start, size) or rstring.startswith(text, '{}', start, size):
                 self.advance()
                 self.advance()
-            elif char in '()[]{}|.':
+            elif char == '.' and self.is_full_stop():
+                name = '.'
+                self.advance()
+            elif char in '()[]{}|':
                 name = char
                 self.advance()
             elif char in '!,;':
                 self.advance()
-            elif code < 128:
-                self.scan_ascii_graphic(start, line, column)
+            elif utf8.ascii_graphic(code):
+                self.scan_ascii_graphic()
             elif utf8.unicode_solo(code):
                 self.advance()
             else:

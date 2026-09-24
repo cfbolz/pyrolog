@@ -78,7 +78,7 @@ def test_empty_qualified_stem_lists_predicates():
 @pytest.mark.parametrize('before, after', [
     ('', ' '), (' ', ''), (' ', ' '), ('\n', '\t'),
     (' /* qualifier */ ', ' /* predicate */ '),
-    ('/* qualifier */', '/* predicate */'),
+    ('/* qualifier */', ' /* predicate */'),
     (' % qualifier\n', ' % predicate\n'),
 ])
 def test_qualified_completion_ignores_layout(before, after):

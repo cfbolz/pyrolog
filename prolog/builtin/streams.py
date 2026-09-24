@@ -352,7 +352,7 @@ def read_till_next_dot(stream):
         if char != '.':
             continue
         following = peek_unicode_char(stream)
-        if (following != 'end_of_file' and following not in ('%', '/') and
+        if (following != 'end_of_file' and following != '%' and
                 not layout(rutf8.codepoint_at_pos(following, 0))):
             continue
         source = "".join(chars)
@@ -361,7 +361,7 @@ def read_till_next_dot(stream):
         except IncompleteTokenError:
             continue  # The dot is inside an unfinished quote or comment.
         except LexerError:
-            error.throw_syntax_error("Invalid token")
+            raise error.throw_syntax_error("Invalid token")
         if tokens and tokens[-1].name == '.' and tokens[-1].source_pos.i == len(source) - 1:
             return source
 

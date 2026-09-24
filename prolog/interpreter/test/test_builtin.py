@@ -154,10 +154,10 @@ def test_abolish_colon():
     :(a).
     :(1, 2, 3).
     """)
-    assert_true("abolish(:/1).", e)
+    assert_true("abolish(':'/1).", e)
     prolog_raises("existence_error(_, _)", ":(a)", e)
     assert_true(":(1, 2, 3).", e)
-    assert_true("abolish(:/3).", e)
+    assert_true("abolish(':'/3).", e)
     prolog_raises("existence_error(_, _)", ":(1, 2, 3)", e)
 
 def test_retract_logical_update_view():

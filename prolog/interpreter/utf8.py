@@ -38,3 +38,7 @@ def unicode_solo(code):
         return False
     category = unicodedb.category(code)
     return category.startswith('S') or category in ('Pc', 'Pd', 'Po')
+
+
+def ascii_graphic(code):
+    return code < 128 and chr(code) in '#$&*+-./:<=>?@^~\\'

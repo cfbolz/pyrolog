@@ -1,5 +1,6 @@
 from rpython.rlib import rutf8
 from prolog.interpreter.utf8 import unicodedb
+from prolog.interpreter import utf8
 import os
 import string
 
@@ -12,6 +13,21 @@ from prolog.interpreter.stream import PrologStream
 conssig = Signature.getsignature(".", 2)
 nilsig = Signature.getsignature("[]", 0)
 tuplesig = Signature.getsignature(",", 2)
+
+
+def join_operator_parts(parts):
+    """Separate adjacent graphic tokens so printing cannot merge them."""
+    result = []
+    previous = ''
+    for part in parts:
+        if not part:
+            continue
+        if (previous and utf8.ascii_graphic(ord(previous[-1])) and
+                utf8.ascii_graphic(ord(part[0]))):
+            result.append(' ')
+        result.append(part)
+        previous = part
+    return ''.join(result)
 
 
 class CycleFactorizer(object):
@@ -290,7 +306,7 @@ class TermFormatter(object):
                     result.append(child)
                 curr_index += 1
         assert curr_index == term.argument_count()
-        return (prec, "".join(result))
+        return (prec, join_operator_parts(result))
 
     def _make_reverse_op_mapping(self):
         m = {}

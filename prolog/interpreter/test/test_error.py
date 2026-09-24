@@ -39,10 +39,10 @@ def test_resource_error_display():
 
 @pytest.mark.parametrize('query, expected', [
     ('L = [1|L], length(L, N).',
-     "Type error: 'list' expected, found ''@'(_G0, [_G0=[1|_G0]])'"),
-    ('X = f(X), throw(X).', "Unhandled exception: '@'(_G0, [_G0=f(_G0)])"),
+     "Type error: 'list' expected, found '@(_G0, [_G0=[1|_G0]])'"),
+    ('X = f(X), throw(X).', "Unhandled exception: @(_G0, [_G0=f(_G0)])"),
     ('X = f(X), throw(error(domain_error(example, X))).',
-     "Domain error: 'example' expected, found ''@'(_G0, [_G0=f(_G0)])'"),
+     "Domain error: 'example' expected, found '@(_G0, [_G0=f(_G0)])'"),
 ])
 def test_cyclic_error_display(query, expected):
     e = get_engine('', load_system=True)

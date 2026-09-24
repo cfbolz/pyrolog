@@ -17,7 +17,7 @@ from prolog.interpreter.test.tool import assert_true
     ('[a].', 2, '[a]'),
     ('[f(a),f(b)].', 2, '[f(...)|...]'),
     ('[a,b|tail].', 0, '[a, b|tail]'),
-    ('1+(2*3).', 2, '1+...*...'),
+    ('1+(2*3).', 2, '1+ ... * ...'),
 ])
 def test_depth_per_path(text, depth, expected):
     formatter = formatting.TermFormatter(Engine(), max_depth=depth)
