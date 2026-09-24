@@ -363,11 +363,7 @@ class TermBuilder(RPythonVisitor):
             if rutf8.codepoints_in_utf8(char) != 1:
                 error.throw_syntax_error("character_code")
             return Number(rutf8.codepoint_at_pos(char, 0))
-        try:
-            intval = string_to_int(s)
-        except ParseStringOverflowError: # overflow
-            return BigInt(rbigint.fromdecimalstr(s))
-        return Number(intval)
+        return parse_integer_literal(s)
 
     def visit_FLOAT(self, node):
         from prolog.interpreter.term import Float
@@ -436,6 +432,21 @@ ESCAPES = {
     "\\v": "\v",
     "\\\\":  "\\"
 }
+
+
+def parse_integer_literal(s):
+    from prolog.interpreter.term import Number, BigInt
+    base = 10
+    if s.startswith('0x'):
+        base = 16
+    elif s.startswith('0o'):
+        base = 8
+    elif s.startswith('0b'):
+        base = 2
+    try:
+        return Number(string_to_int(s, base))
+    except ParseStringOverflowError:
+        return BigInt(rbigint.fromstr(s, base))
 
 
 def unescape(s, quote="'"):

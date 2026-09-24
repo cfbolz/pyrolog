@@ -6,6 +6,23 @@ from prolog.interpreter.heap import Heap
 from prolog.interpreter import error
 
 
+@pytest.mark.parametrize('literal, expected', [
+    ('0xff', 255), ('0o17', 15), ('0b101', 5), ('009', 9),
+])
+def test_based_integer_literal(literal, expected):
+    from prolog.interpreter.term import Number
+    result = parse_query_term(literal + '.')
+    assert isinstance(result, Number)
+    assert result.num == expected
+
+
+def test_large_based_integer_literal():
+    from prolog.interpreter.term import BigInt
+    result = parse_query_term('0x1' + '0' * 25 + '.')
+    assert isinstance(result, BigInt)
+    assert result.value.str() == str(2 ** 100)
+
+
 @pytest.mark.parametrize('literal', ['1.0e999', '1' + '0' * 400 + '.0'])
 @pytest.mark.parametrize('sign', ['', '-'])
 def test_float_literal_overflow(literal, sign):

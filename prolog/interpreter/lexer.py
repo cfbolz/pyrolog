@@ -132,6 +132,17 @@ class UnicodeRunner(object):
         if char == '0' and self.pos < size and text[self.pos] == "'":
             self.scan_character_code(start, line, column)
             return 'NUMBER'
+        if char == '0' and self.pos < size and text[self.pos] in 'xob':
+            prefix = text[self.pos]
+            digits = '0123456789abcdef' if prefix == 'x' else (
+                '01234567' if prefix == 'o' else '01')
+            self.advance()
+            first_digit = self.pos
+            while self.pos < size and text[self.pos].lower() in digits:
+                self.advance()
+            if self.pos == first_digit:
+                self.fail(start, line, column)
+            return 'NUMBER'
         self.scan_decimal_digits()
         if (self.pos + 1 >= size or text[self.pos] != '.' or
                 not '0' <= text[self.pos + 1] <= '9'):

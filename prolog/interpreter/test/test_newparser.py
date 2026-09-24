@@ -2,7 +2,7 @@ import pytest
 
 from prolog.interpreter.lexer import UnicodeLexer
 from prolog.interpreter.newparser import Parser, ParseError
-from prolog.interpreter.term import Atom, Number, Var
+from prolog.interpreter.term import Atom, Number, BigInt, Float, Var
 
 
 def parse(source):
@@ -54,6 +54,48 @@ def test_integer():
     result = parse("42.")
     assert isinstance(result, Number)
     assert result.num == 42
+
+
+@pytest.mark.parametrize("source, expected", [
+    ("0.", 0), ("009.", 9), ("0xff.", 255),
+    ("0o17.", 15), ("0b101.", 5), ("0xAbCd.", 43981),
+    ("0'a.", 97), ("0'''.", 39), ("0'\xc3\xa9.", 233),
+    (r"0'\n.", 10), (r"0'\U0001f600.", 0x1f600),
+    (r"0'\x41\.", 65), (r"0'\101\.", 65),
+])
+def test_integer_literals(source, expected):
+    result = parse(source)
+    assert isinstance(result, Number)
+    assert result.num == expected
+
+
+@pytest.mark.parametrize("literal", [
+    str(2 ** 100), "0x1" + "0" * 25,
+    "0b1" + "0" * 100, "0o2" + "0" * 33,
+])
+def test_large_integer(literal):
+    result = parse(literal + ".")
+    assert isinstance(result, BigInt)
+    assert result.value.str() == str(2 ** 100)
+
+
+@pytest.mark.parametrize("literal, expected", [
+    ("0.0", 0.0), ("12.5", 12.5), ("1.25e3", 1250.0),
+    ("1.25E-2", 0.0125), ("1.0e+2", 100.0),
+])
+def test_float_literal(literal, expected):
+    result = parse(literal + ".")
+    assert isinstance(result, Float)
+    assert result.floatval == expected
+
+
+@pytest.mark.parametrize("literal", [
+    "1.0e999", "1" + "0" * 400 + ".0",
+    r"0'\q", r"0'\uD800", r"0'\U00110000",
+])
+def test_invalid_numeric_literal(literal):
+    with pytest.raises(ParseError):
+        parse(literal + ".")
 
 
 def test_nested_compound():

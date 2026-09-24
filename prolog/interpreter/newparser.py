@@ -1,8 +1,8 @@
-from rpython.rlib.rstring import ParseStringOverflowError, ParseStringError
-from rpython.rlib.rarithmetic import ovfcheck, string_to_int
-from rpython.rlib.rbigint import rbigint
+import math
+from rpython.rlib import rutf8
+from rpython.rlib.rstring import ParseStringError
 from prolog.interpreter import error, term
-from prolog.interpreter.parsing import unescape
+from prolog.interpreter.parsing import unescape, parse_integer_literal
 
 class ParseError(Exception):
     def __init__(self, msg, tok, parser):
@@ -56,10 +56,7 @@ class Parser(object):
             self._get_next()
             name = current.source
             if name.startswith("'"):
-                try:
-                    name = unescape(name[1:-1])
-                except error.CatchableError:
-                    self._error("invalid escape in quoted atom", current)
+                name = self._unescape(name[1:-1], current)
             args = self._parse_args()
             return term.Callable.build(name, args)
         return self._parse_expr()
@@ -67,12 +64,9 @@ class Parser(object):
     def _parse_expr(self):
         current = self._get_next()
         if current.name == "NUMBER":
-            s = current.source
-            try:
-                intval = string_to_int(s)
-            except ParseStringOverflowError: # overflow
-                return term.BigInt(rbigint.fromdecimalstr(s))
-            return term.Number(intval)
+            return self._parse_number(current)
+        if current.name == "FLOAT":
+            return self._parse_float(current)
         if current.name == "(":
             res = self._parse_toplevel_op_expr()
             self._expect(")")
@@ -89,6 +83,35 @@ class Parser(object):
         if current.name == "[":
             return self._parse_list()
         self._error("expected a term", current)
+
+    def _unescape(self, text, current):
+        try:
+            return unescape(text)
+        except error.CatchableError:
+            self._error("invalid character escape", current)
+
+    def _parse_number(self, current):
+        s = current.source
+        if s.startswith("0'"):
+            char = self._unescape(s[2:], current)
+            if rutf8.codepoints_in_utf8(char) != 1:
+                self._error("expected one character", current)
+            return term.Number(rutf8.codepoint_at_pos(char, 0))
+        try:
+            return parse_integer_literal(s)
+        except ParseStringError:
+            self._error("invalid integer literal", current)
+
+    def _parse_float(self, current):
+        try:
+            value = float(current.source)
+        except ValueError:
+            self._error("invalid float literal", current)
+        except OverflowError:
+            self._error("float overflow", current)
+        if math.isinf(value):
+            self._error("float overflow", current)
+        return term.Float(value)
 
     def _parse_args(self):
         # ( arg1 , ..., argn )
