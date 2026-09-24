@@ -164,13 +164,14 @@ def unwrap_atom(obj):
     error.throw_type_error('atom', obj)
 
 def unwrap_predicate_indicator(predicate):
+    predicate = predicate.dereference(None)
     if not isinstance(predicate, term.Callable):
         error.throw_type_error("predicate_indicator", predicate)
         assert 0, "unreachable"
     if not predicate.name()== "/" or predicate.argument_count() != 2:
         error.throw_type_error("predicate_indicator", predicate)
-    name = unwrap_atom(predicate.argument_at(0))
-    arity = unwrap_int(predicate.argument_at(1))
+    name = unwrap_atom(predicate.argument_at(0).dereference(None))
+    arity = unwrap_int(predicate.argument_at(1).dereference(None))
     return name, arity
 
 def unwrap_stream(engine, obj):

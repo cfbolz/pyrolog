@@ -2,7 +2,7 @@ from rpython.rlib import jit
 from prolog.interpreter.signature import Signature
 from prolog.interpreter import error, term
 from prolog.interpreter.term import Callable, Atom
-from prolog.interpreter.function import Function, _make_toplevel_rule
+from prolog.interpreter.function import _make_toplevel_rule
 from prolog.interpreter.helper import unwrap_predicate_indicator
 
 class VersionTag(object):
@@ -29,6 +29,7 @@ class ModuleWrapper(object):
         self.current_module = self.user_module
 
     def get_module(self, name, errorterm):
+        self = jit.promote(self)
         module = self._get_module(name, self.version)
         if module is not None:
             return module
@@ -57,26 +58,29 @@ class ModuleWrapper(object):
 
 
 class Module(object):
-    _immutable_fields_ = ["name", "nameatom", "_toplevel_rule"]
+    _immutable_fields_ = ["name", "nameatom", "_toplevel_rule", "version?"]
     def __init__(self, name):
         self.name = name
         self.nameatom = Atom(name)
         self.functions = {}
+        self.version = VersionTag()
+        self.meta_predicates = {}
         self.exports = []
         self._toplevel_rule = _make_toplevel_rule(self)
 
     def add_meta_predicate(self, signature, arglist):
+        self.meta_predicates[signature] = arglist
         func = self.lookup(signature)
-        func.meta_args = arglist
+        if func is not None:
+            func.meta_args = arglist
 
-    @jit.elidable_promote("0")
     def lookup(self, signature):
-        try:
-            function = self.functions[signature]
-        except KeyError:
-            function = Function()
-            self.functions[signature] = function
-        return function
+        self = jit.promote(self)
+        return self._lookup(signature, self.version)
+
+    @jit.elidable
+    def _lookup(self, signature, version):
+        return self.functions.get(signature, None)
 
     def use_module(self, module, imports=None):
         if imports is None:
@@ -88,9 +92,13 @@ class Module(object):
                     importlist.append(pred)
         for sig in importlist:
             try:
-                self.functions[sig] = module.functions[sig]
+                function = module.functions[sig]
             except KeyError:
                 pass
+            else:
+                if self.functions.get(sig, None) is not function:
+                    self.functions[sig] = function
+                    self.version = VersionTag()
 
     def __repr__(self):
         return "Module('%s')" % self.name

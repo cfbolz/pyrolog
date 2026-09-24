@@ -54,15 +54,17 @@ def handle_use_module(engine, heap, module, path, imports=None):
         assert stop >= 0
         modulename = modulename[:stop]
     if modulename not in m.modules and modulename not in m.seen_modules: # prevent recursive imports
-        m.seen_modules[modulename] = None
         current_module = m.current_module
-        file_content, file_name = get_source(path)
-        engine.runstring(file_content, file_name)
-        for sig in m.current_module.exports:
-            if sig not in m.current_module.functions:
-                m.current_module = current_module
-                error.throw_import_error(modulename, sig)
-        module = m.current_module = current_module
+        try:
+            file_content, file_name = get_source(path)
+            m.seen_modules[modulename] = None
+            engine.runstring(file_content, file_name)
+            for sig in m.current_module.exports:
+                if sig not in m.current_module.functions:
+                    error.throw_import_error(modulename, sig)
+        finally:
+            m.current_module = current_module
+        module = current_module
         # XXX should use name argument of module here like SWI
     try:
         imported_module = m.modules[modulename]

@@ -7,7 +7,7 @@ from prolog.interpreter.term import Term, Atom, BindingVar, Callable, Var
 from prolog.interpreter.function import Function, Rule
 from prolog.interpreter.heap import Heap
 from prolog.interpreter.signature import Signature
-from prolog.interpreter.module import Module, ModuleWrapper
+from prolog.interpreter.module import Module, ModuleWrapper, VersionTag
 from prolog.interpreter.helper import unwrap_predicate_indicator
 from prolog.interpreter.stream import StreamWrapper
 from prolog.interpreter.small_list import inline_small_list
@@ -136,6 +136,11 @@ class Engine(object):
                 "modify", "static_procedure", rule.head.get_prolog_signature())
 
         function = module.lookup(signature)
+        if function is None:
+            function = Function()
+            function.meta_args = module.meta_predicates.get(signature, None)
+            module.functions[signature] = function
+            module.version = VersionTag()
         function.add_rule(rule, end)
         return rule
 
@@ -143,7 +148,8 @@ class Engine(object):
         if helper.is_term(ruleterm):
             assert isinstance(ruleterm, Callable)
             if ruleterm.signature().eq(predsig):
-                return Rule(ruleterm.argument_at(0), ruleterm.argument_at(1), module)
+                head = helper.ensure_callable(ruleterm.argument_at(0).dereference(None))
+                return Rule(head, ruleterm.argument_at(1), module)
             else:
                 return Rule(ruleterm, None, module)
         elif isinstance(ruleterm, Atom):
@@ -247,6 +253,8 @@ class Engine(object):
         function = self._get_function(signature, module, query)
         query = function.add_meta_prefixes(query, module.nameatom)
         startrulechain = jit.hint(function.rulechain, promote=True)
+        if startrulechain is None:
+            raise error.UnificationFailed
         rulechain = startrulechain.find_applicable_rule(query)
         if rulechain is None:
             raise error.UnificationFailed
@@ -258,9 +266,9 @@ class Engine(object):
 
     def _get_function(self, signature, module, query): 
         function = module.lookup(signature)
-        if function.rulechain is None and self.modulewrapper.system is not None:
+        if function is None and self.modulewrapper.system is not None:
             function = self.modulewrapper.system.lookup(signature)
-        if function.rulechain is None:
+        if function is None:
             return error.throw_existence_error(
                     "procedure", query.get_prolog_signature())
         return function
@@ -273,9 +281,7 @@ class Engine(object):
         try:
             m.current_module = m.modules[modulename]
         except KeyError:
-            module = Module(modulename)
-            m.modules[modulename] = module
-            m.current_module = module
+            m.add_module(modulename)
 
     # _____________________________________________________
     # error handling

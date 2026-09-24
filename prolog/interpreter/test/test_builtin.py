@@ -77,6 +77,74 @@ def test_consult(tmpdir):
     assert_true("g(a, b).", e)
     prolog_raises("_", "consult('/hopefully/does/not/exist')")
 
+def test_retract_rolls_back_failed_candidate_bindings():
+    e = get_engine('p(a, b). p(c, c).')
+    # The first candidate binds X to a before failing on its second argument.
+    # That binding must be undone before attempting the matching second fact.
+    assert_true('retract(p(X, X)), X == c.', e)
+    assert_true('p(a, b).', e)
+    assert_false('p(c, c).', e)
+
+
+def test_retract_successful_bindings_are_backtrackable():
+    e = get_engine('p(a). p(b).')
+    # Retraction persists, but the successful match's variable bindings do not.
+    assert_true('(once(retract(p(X))), X == a, fail; var(X)).', e)
+    assert_false('p(a).', e)
+    assert_true('p(b).', e)
+
+
+def test_retract_enumerates_removals_on_backtracking():
+    e = get_engine('p(a). p(b). p(c).')
+    assert_true('findall(X, retract(p(X)), L), L == [a, b, c].', e)
+    # All matching clauses must actually have been removed, not just returned.
+    assert_false('retract(p(_)).', e)
+
+
+@pytest.mark.parametrize('assertion', ['asserta(p(new))', 'assertz(p(new))'])
+def test_retract_keeps_original_candidates_after_assertion(assertion):
+    e = get_engine('p(a). p(b).')
+    assert_true('findall(X, (retract(p(X)), '
+                '(X == a -> %s; true)), L), L == [a, b].' % assertion, e)
+    assert_true('findall(X, p(X), L), L == [new].', e)
+
+
+def test_retract_skips_failed_candidates_between_answers():
+    e = get_engine('p(a, b). p(c, c). p(d, e). p(f, f). p(g, h).')
+    assert_true('findall(X, retract(p(X, X)), L), L == [c, f].', e)
+    assert_true('findall(pair(X, Y), p(X, Y), L), '
+                'L == [pair(a, b), pair(d, e), pair(g, h)].', e)
+
+
+def test_retract_keeps_original_candidates_after_other_retraction():
+    e = get_engine('p(a). p(b). p(c).')
+    assert_true('findall(X, (retract(p(X)), '
+                '(X == a -> once(retract(p(b))); true)), L), '
+                'L == [a, b, c].', e)
+    assert_false('retract(p(_)).', e)
+
+
+def test_retract_distinguishes_identical_clauses_after_assertion():
+    e = get_engine('p(a). p(a).')
+    assert_true('findall(X, (retract(p(X)), assertz(p(a))), L), '
+                'L == [a, a].', e)
+    assert_true('findall(X, p(X), L), L == [a, a].', e)
+
+
+def test_retract_fact_with_explicit_true_body():
+    e = get_engine('p(a). p(b).')
+    assert_true('once(retract((p(X) :- true))), X == a.', e)
+    assert_false('p(a).', e)
+    assert_true('p(b).', e)
+
+
+def test_retract_fact_does_not_match_nontrue_body():
+    e = get_engine('p(a). p(b) :- q.')
+    assert_true('retract((p(X) :- q)), X == b.', e)
+    assert_true('p(a).', e)
+    assert_false('retract((p(_) :- q)).', e)
+
+
 def test_assert_retract():
     e = get_engine("g(b, b).")
     assert_true("g(B, B).", e)
@@ -147,7 +215,7 @@ def test_assert_retract_colon():
     assert_true("assert(:(a, b, c, d)).", e)
     assert_true(":(a, b, c, d).", e)
     assert_true("retract(:(a, b, c, d)).", e)
-    prolog_raises("existence_error(_, _)", ":(a, b, c, d)", e)
+    assert_false(":(a, b, c, d).", e)
 
 def test_abolish_colon():
     e = get_engine("""

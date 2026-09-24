@@ -8,17 +8,23 @@ from prolog.interpreter.helper import is_callable
 cutsig = Signature.getsignature("!", 0)
 prefixsig = Signature.getsignature(":", 2)
 
+class RuleIdentity(object):
+    """Identity of one assertion, preserved when its chain nodes are copied."""
+    _immutable_ = True
+
+
 class Rule(object):
     _immutable_ = True
     _immutable_fields_ = ["headargs[*]", "groundargs[*]"]
     _attrs_ = ['next', 'head', 'headargs', 'groundargs', 'contains_cut',
                'body', 'env_size_shared', 'env_size_body', 'env_size_head',
                'signature', 'module', 'file_name',
-               'line_range', 'source']
+               'line_range', 'source', 'identity']
     unrolling_attrs = unroll.unrolling_iterable(_attrs_)
 
     def __init__(self, head, body, module, next = None):
         from prolog.interpreter import helper
+        self.identity = RuleIdentity()
         head = head.dereference(None)
         assert isinstance(head, Callable)
         memo = EnumerationMemo()
@@ -228,6 +234,19 @@ class Function(object):
             self.rulechain = rule
 
     def remove(self, rulechain):
-        self.rulechain, last = self.rulechain.copy(rulechain)
-        last.next = rulechain.next
-
+        # A suspended retract may hold a node from an older chain snapshot.
+        # Copies preserve identity; separate assertions of equal terms do not.
+        current = self.rulechain
+        while current is not None and current.identity is not rulechain.identity:
+            current = current.next
+        if current is None:
+            return  # Another retract has already removed this clause.
+        if current is self.rulechain:
+            self.rulechain = current.next
+            if self.rulechain is None:
+                self.last = None
+        else:
+            self.rulechain, last = self.rulechain.copy(current)
+            last.next = current.next
+            if current.next is None:
+                self.last = last
