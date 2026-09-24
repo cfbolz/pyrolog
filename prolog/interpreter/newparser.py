@@ -1,7 +1,7 @@
 import math
 from rpython.rlib import rutf8
 from rpython.rlib.rstring import ParseStringError
-from prolog.interpreter import error, term
+from prolog.interpreter import error, helper, term
 from prolog.interpreter.parsing import unescape, parse_integer_literal
 
 class ParseError(Exception):
@@ -67,6 +67,8 @@ class Parser(object):
             return self._parse_number(current)
         if current.name == "FLOAT":
             return self._parse_float(current)
+        if current.name == "STRING":
+            return self._parse_string(current)
         if current.name == "(":
             res = self._parse_toplevel_op_expr()
             self._expect(")")
@@ -84,11 +86,16 @@ class Parser(object):
             return self._parse_list()
         self._error("expected a term", current)
 
-    def _unescape(self, text, current):
+    def _unescape(self, text, current, quote="'"):
         try:
-            return unescape(text)
+            return unescape(text, quote)
         except error.CatchableError:
             self._error("invalid character escape", current)
+
+    def _parse_string(self, current):
+        text = self._unescape(current.source[1:-1], current, '"')
+        codes = [term.Number(code) for code in rutf8.Utf8StringIterator(text)]
+        return helper.wrap_list(codes)
 
     def _parse_number(self, current):
         s = current.source

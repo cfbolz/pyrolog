@@ -182,6 +182,46 @@ def list_cell(value):
     return value.argument_at(0), value.argument_at(1)
 
 
+@pytest.mark.parametrize("literal, expected", [
+    ('""', []),
+    ('"ab"', [97, 98]),
+    ('"a""b"', [97, 34, 98]),
+    (r'"a\"b"', [97, 34, 98]),
+    (r'"\n\\"', [10, 92]),
+    ('"can\'\'t"', [99, 97, 110, 39, 39, 116]),
+    ('"\xc3\xa9\xf0\x9f\x98\x80"', [233, 0x1f600]),
+    (r'"\u00e9\U0001f600"', [233, 0x1f600]),
+    (r'"\u0000"', [0]),
+])
+def test_double_quoted_codes(literal, expected):
+    result = parse(literal + ".")
+    for code in expected:
+        head, result = list_cell(result)
+        assert isinstance(head, Number)
+        assert head.num == code
+    assert isinstance(result, Atom)
+    assert result.name() == "[]"
+
+
+def test_double_quoted_codes_in_compound():
+    result = parse('f("a", "").')
+    assert result.name() == "f"
+    assert result.argument_count() == 2
+    head, tail = list_cell(result.argument_at(0))
+    assert isinstance(head, Number)
+    assert head.num == 97
+    assert tail.name() == "[]"
+    assert isinstance(result.argument_at(1), Atom)
+    assert result.argument_at(1).name() == "[]"
+
+
+@pytest.mark.parametrize("literal", [r'"\q"', r'"\uD800"', r'"\U00110000"'])
+def test_invalid_double_quoted_escape(literal):
+    with pytest.raises(ParseError) as exc:
+        parse(literal + ".")
+    assert exc.value.tok.source == literal
+
+
 @pytest.mark.parametrize("source", ["[].", "[ ]."])
 def test_empty_list(source):
     result = parse(source)
