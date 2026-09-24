@@ -79,6 +79,12 @@ class Parser(object):
                     self.pending.append((token, prefix))
                     continue
                 if len(token) != 1 or token not in '0123456789':
+                    infix = self.operators.get((token, 'infix'))
+                    if infix and self._reinterpret_infix_as_postfix(infix.left_limit):
+                        self._reduce_before(infix)
+                        self.pending.append((token, infix))
+                        expect_operand = True
+                        continue
                     raise ParseError('expected a digit, got %r' % token)
                 self.operands.append((int(token), 0))
                 expect_operand = False
@@ -106,12 +112,12 @@ class Parser(object):
             raise ParseError('expected a digit at end of input')
         return self._finish()
 
-    def _reinterpret_infix_as_postfix(self):
+    def _reinterpret_infix_as_postfix(self, context_precedence=1201):
         if self.pending:
             name, operator = self.pending[-1]
             if operator.kind == 'infix':
                 postfix = self.operators.get((name, 'postfix'))
-                if postfix:
+                if postfix and context_precedence > operator.right_limit:
                     self.pending.pop()
                     self.pending.append((name, postfix))
                     return True
@@ -181,6 +187,28 @@ def test_infix_reinterpreted_as_postfix_at_end():
         ('@', 'postfix'): Operator(400, 'yf'),
     }
     assert parse('1@', operators) == ('@', 1)
+
+
+def test_infix_reinterpreted_before_another_operator():
+    operators = {
+        ('@', 'infix'): Operator(500, 'yfx'),
+        ('@', 'postfix'): Operator(400, 'yf'),
+        ('#', 'infix'): Operator(600, 'yfx'),
+    }
+    assert parse('1@#2', operators) == ('#', ('@', 1), 2)
+
+
+def test_infix_reinterpretation_requires_greater_context_precedence():
+    import pytest
+    operators = {
+        ('@', 'infix'): Operator(500, 'yfx'),
+        ('@', 'postfix'): Operator(400, 'yf'),
+        ('#', 'infix'): Operator(500, 'xfx'),
+    }
+    # Both limits are 499: equality must not trigger reinterpretation.
+    # The postfix tree would otherwise fit, so reduction alone won't reject it.
+    with pytest.raises(ParseError):
+        parse('1@#2', operators)
 
 
 def test_infix_reinterpreted_as_postfix_before_close():
