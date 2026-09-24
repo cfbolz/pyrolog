@@ -66,11 +66,12 @@ class Parser(object):
     def parse(self):
         expect_operand = True
         for token in self.tokens:
+            if token == ')':
+                self._complete_operand(expect_operand, "before ')'")
+                self._close_parenthesis()
+                expect_operand = False
+                continue
             if expect_operand:
-                if token == ')' and self._reinterpret_infix_as_postfix():
-                    self._close_parenthesis()
-                    expect_operand = False
-                    continue
                 if token == '(':
                     self.pending.append(('(', OPEN_PAREN))
                     continue
@@ -91,9 +92,6 @@ class Parser(object):
                 self.operands.append((int(token), 0))
                 expect_operand = False
             else:
-                if token == ')':
-                    self._close_parenthesis()
-                    continue
                 incoming = self.operators.get((token, 'infix'))
                 if incoming is None:
                     incoming = self.operators.get((token, 'postfix'))
@@ -102,12 +100,12 @@ class Parser(object):
                 self._push_operator(token, incoming)
                 expect_operand = incoming.kind == 'infix'
                 
-        if expect_operand:
-            # maybe we have ended with an infix that could be a postfix
-            if self._reinterpret_infix_as_postfix():
-                return self._finish()
-            raise ParseError('expected a digit at end of input')
+        self._complete_operand(expect_operand, 'at end of input')
         return self._finish()
+
+    def _complete_operand(self, expect_operand, context):
+        if expect_operand and not self._reinterpret_infix_as_postfix():
+            raise ParseError('expected a digit %s' % context)
 
     def _push_operator(self, token, incoming):
         self._reduce_before(incoming)
@@ -181,6 +179,20 @@ def parse(source, operators=None):
 
 
 # Inline tests: these compare tree shapes, not arithmetic results.
+
+def test_equal_precedence_prefix_postfix():
+    # fy/yf follows newer SWI and ISO: postfix binds inside prefix.
+    for prefix_form, postfix_form, expected in (
+        ('fx', 'yf', ('!', ('~', 1))),
+        ('fy', 'xf', ('~', ('!', 1))),
+        ('fy', 'yf', ('~', ('!', 1))),
+    ):
+        operators = {
+            ('~', 'prefix'): Operator(500, prefix_form),
+            ('!', 'postfix'): Operator(500, postfix_form),
+        }
+        assert parse('~1!', operators) == expected
+
 
 def test_infix_reinterpreted_as_postfix_at_end():
     operators = {
