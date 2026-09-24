@@ -57,7 +57,7 @@ class Parser(object):
             name = current.source
             if name.startswith("'"):
                 name = self._unescape(name[1:-1], current)
-            args = self._parse_args()
+            args = self._parse_args(current)
             return term.Callable.build(name, args)
         return self._parse_expr()
 
@@ -127,10 +127,12 @@ class Parser(object):
             self._error("float overflow", current)
         return term.Float(value)
 
-    def _parse_args(self):
+    def _parse_args(self, functor):
         # ( arg1 , ..., argn )
         next = self._peek()
         if next.name != "(":
+            return []
+        if next.source_pos.i != functor.source_pos.i + len(functor.source):
             return []
         self._get_next()
         res = []

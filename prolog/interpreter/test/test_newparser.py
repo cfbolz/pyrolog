@@ -332,3 +332,22 @@ def test_braces_variable_sharing():
 def test_invalid_braces_without_operators(source):
     with pytest.raises(ParseError):
         parse(source)
+
+
+@pytest.mark.parametrize("functor, expected", [
+    ("f", "f"), ("'hello world'", "hello world"),
+    ("'can''t'", "can't"), (r"'\u00e9'", "\xc3\xa9"),
+    ("'\xc3\xa9'", "\xc3\xa9"), ("\xc3\xa9", "\xc3\xa9"),
+])
+def test_compound_parenthesis_adjacency(functor, expected):
+    result = parse(functor + "( a ).")
+    assert result.name() == expected
+    assert result.argument_count() == 1
+    assert result.argument_at(0).name() == "a"
+
+
+@pytest.mark.parametrize("functor", ["f", "'hello world'", "'\xc3\xa9'"])
+@pytest.mark.parametrize("gap", [" ", "\t", "\n", "/*comment*/", "%comment\n"])
+def test_compound_parenthesis_requires_adjacency(functor, gap):
+    with pytest.raises(ParseError):
+        parse(functor + gap + "(a).")
