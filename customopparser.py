@@ -79,13 +79,15 @@ class Parser(object):
                     self.pending.append((token, prefix))
                     continue
                 if len(token) != 1 or token not in '0123456789':
-                    infix = self.operators.get((token, 'infix'))
-                    if infix and self._reinterpret_infix_as_postfix(infix.left_limit):
-                        self._reduce_before(infix)
-                        self.pending.append((token, infix))
-                        expect_operand = True
-                        continue
-                    raise ParseError('expected a digit, got %r' % token)
+                    for kind in ('infix', 'postfix'):
+                        incoming = self.operators.get((token, kind))
+                        if incoming and self._reinterpret_infix_as_postfix(incoming.left_limit):
+                            self._push_operator(token, incoming)
+                            expect_operand = incoming.kind == 'infix'
+                            break
+                    else:
+                        raise ParseError('expected a digit, got %r' % token)
+                    continue
                 self.operands.append((int(token), 0))
                 expect_operand = False
             else:
@@ -93,17 +95,12 @@ class Parser(object):
                     self._close_parenthesis()
                     continue
                 incoming = self.operators.get((token, 'infix'))
-                if incoming is not None:
-                    self._reduce_before(incoming)
-                    self.pending.append((token, incoming))
-                    expect_operand = True
-                    continue
-                incoming = self.operators.get((token, 'postfix'))
+                if incoming is None:
+                    incoming = self.operators.get((token, 'postfix'))
                 if incoming is None:
                     raise ParseError('expected an operator, got %r' % token)
-                self._reduce_before(incoming)
-                self.pending.append((token, incoming))
-                expect_operand = False
+                self._push_operator(token, incoming)
+                expect_operand = incoming.kind == 'infix'
                 
         if expect_operand:
             # maybe we have ended with an infix that could be a postfix
@@ -111,6 +108,10 @@ class Parser(object):
                 return self._finish()
             raise ParseError('expected a digit at end of input')
         return self._finish()
+
+    def _push_operator(self, token, incoming):
+        self._reduce_before(incoming)
+        self.pending.append((token, incoming))
 
     def _reinterpret_infix_as_postfix(self, context_precedence=1201):
         if self.pending:
@@ -196,6 +197,15 @@ def test_infix_reinterpreted_before_another_operator():
         ('#', 'infix'): Operator(600, 'yfx'),
     }
     assert parse('1@#2', operators) == ('#', ('@', 1), 2)
+
+
+def test_infix_reinterpreted_before_postfix():
+    operators = {
+        ('@', 'infix'): Operator(500, 'yfx'),
+        ('@', 'postfix'): Operator(400, 'yf'),
+        ('!', 'postfix'): Operator(600, 'yf'),
+    }
+    assert parse('1@!', operators) == ('!', ('@', 1))
 
 
 def test_infix_reinterpretation_requires_greater_context_precedence():
