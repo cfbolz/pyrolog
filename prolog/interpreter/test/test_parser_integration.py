@@ -78,4 +78,6 @@ def test_file_error_keeps_location():
     assert exc.value.file_name == 'example.pl'
     assert exc.value.line_number == 1
     assert 'bad (x).' in exc.value.message
-    assert '^' in exc.value.message
+    assert '[example.pl:2:5]' in exc.value.message
+    assert 'whitespace before this parenthesis' in exc.value.message
+    assert 'functor name here' in exc.value.message

@@ -385,3 +385,13 @@ def test_separator_error_keeps_utf8_and_multiline_positions():
     assert position(exc.primary.end) == (9, 1, 3)
     assert position(exc.secondary.start) == (2, 0, 2)
     assert position(exc.secondary.end) == (4, 0, 3)
+
+
+def test_file_uses_diagnostic_renderer():
+    from prolog.interpreter import parsing, error
+    from prolog.interpreter.diagnostics import format_syntax_error
+    source = 'f(a b).'
+    with pytest.raises(error.PrologParseError) as caught:
+        parsing.parse_file(source, file_name='example.pl')
+    exc = caught.value
+    assert exc.message + '\n' == format_syntax_error(source, 'example.pl', exc.parse_error)

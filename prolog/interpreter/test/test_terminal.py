@@ -147,3 +147,12 @@ def test_plain_input_does_not_touch_history(monkeypatch, tmpdir):
     monkeypatch.setenv('PYROLOG_HISTORY', str(path))
     translatedmain.run_console(Engine())
     assert not path.check()
+
+
+def test_console_uses_labeled_syntax_diagnostics(monkeypatch):
+    from prolog.interpreter.diagnostics import format_syntax_error
+    from prolog.interpreter.test.test_parser_diagnostics import diagnostic
+    source = 'f(a b).\n'
+    output = terminal_input(monkeypatch, source + 'halt.\n')
+    translatedmain.run_console(Engine())
+    assert format_syntax_error(source, '<stdin>', diagnostic(source)) in ''.join(output)

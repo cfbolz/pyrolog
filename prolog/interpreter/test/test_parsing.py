@@ -270,7 +270,7 @@ def test_parse_error():
     info = pytest.raises(error.PrologParseError, parse_file, s)
     assert "SyntaxError" in info.value.message
     assert " f(b) :- `%." in info.value.message
-    assert "line 3" in info.value.message
+    assert "[<unknown>:3:" in info.value.message
 
     s = """
     f(a).
@@ -279,4 +279,4 @@ def test_parse_error():
     info = pytest.raises(error.PrologParseError, parse_file, s)
     assert "SyntaxError: expected an operator" in info.value.message
     assert " f(b) :- a a b c." in info.value.message
-    assert "line 3" in info.value.message
+    assert "[<unknown>:3:" in info.value.message
