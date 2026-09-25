@@ -252,3 +252,15 @@ def test_console_hook_runs_once_and_restores_source(monkeypatch, capfd):
     assert 'ERROR' not in text
     out, err = capfd.readouterr()
     assert out == 'projecting\nprojecting\n'
+
+
+def test_deep_answer_through_repl_continuation():
+    from prolog.interpreter.term import Callable
+    value = Callable.build('a')
+    for i in range(3000):
+        value = Callable.build('f', [value])
+    engine = Engine()
+    output = []
+    display = translatedmain.ContinueContinuation(engine, {'X': value}, output.append)
+    engine.run_query_in_current(Callable.build('true'), display)
+    assert ''.join(output) == 'yes\nX = ' + 'f(' * 20 + '...' + ')' * 20 + '\n\n'

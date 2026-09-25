@@ -35,16 +35,23 @@ class ContinueContinuation(Continuation):
         self.write = write
 
     def activate(self, fcont, heap):
-        from prolog.builtin.attvars import impl_copy_term_3
+        from prolog.builtin.attvars import attributed_variables, copy_term_with_attributes
         from prolog.interpreter.helper import wrap_list
         names = self.var_to_pos.keys()
         values = wrap_list([self.var_to_pos[name] for name in names])
+        variables = attributed_variables(self.engine, heap, values)
+        if not variables:
+            # Formatting is read-only. Avoid the recursive copier for ordinary
+            # answers, including deep terms that the formatter will truncate.
+            display = DisplayAnswerContinuation(self.engine, names, values,
+                                                wrap_list([]), self.write)
+            return display, fcont, heap
         copied = heap.newvar()
         goals = heap.newvar()
         display = DisplayAnswerContinuation(self.engine, names, copied,
                                             goals, self.write)
-        return impl_copy_term_3(self.engine, heap, values, copied, goals,
-                               display, fcont)
+        return copy_term_with_attributes(self.engine, heap, values, copied,
+                                         goals, variables, display, fcont)
 
 
 class DisplayAnswerContinuation(Continuation):

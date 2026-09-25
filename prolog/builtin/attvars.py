@@ -148,12 +148,19 @@ class AttributeGoalsContinuation(continuation.Continuation):
                 handles_continuation=True)
 def impl_copy_term_3(engine, heap, prolog_term, copy, goals, scont, fcont):
     from prolog.interpreter.memo import CopyMemo
-    from prolog.builtin.allsolution import FindallContinuation, DoneWithFindallContinuation
     variables = attributed_variables(engine, heap, prolog_term)
     if not variables:
         prolog_term.copy(heap, CopyMemo()).unify(copy, heap)
         goals.unify(wrap_list([]), heap)
         return scont, fcont, heap
+    return copy_term_with_attributes(engine, heap, prolog_term, copy, goals,
+                                     variables, scont, fcont)
+
+
+def copy_term_with_attributes(engine, heap, prolog_term, copy, goals,
+                              variables, scont, fcont):
+    """Project and copy using an already discovered list of attributed variables."""
+    from prolog.builtin.allsolution import FindallContinuation, DoneWithFindallContinuation
     residuals = heap.newvar()
     template = Callable.build('-', [prolog_term, residuals])
     bag = heap.newvar()
