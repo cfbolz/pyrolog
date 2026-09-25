@@ -253,3 +253,41 @@ def test_long_operator_chain():
         assert result.argument_at(0).num == 1
         result = result.argument_at(1)
     assert result.num == 1
+
+
+@pytest.mark.parametrize('literal', ['-1', '-0xff', "-0'a"])
+def test_negative_integer_literal(literal):
+    value = parse(literal + '.', OperatorTable())
+    assert isinstance(value, term.Number)
+    assert value.num == {'-1': -1, '-0xff': -255, "-0'a": -97}[literal]
+
+
+def test_negative_integer_boundaries():
+    import sys
+    value = parse(str(-sys.maxint - 1) + '.', OperatorTable())
+    assert isinstance(value, term.Number)
+    assert value.num == -sys.maxint - 1
+    value = parse(str(-(2 ** 100)) + '.', OperatorTable())
+    assert isinstance(value, term.BigInt)
+    assert value.value.str() == str(-(2 ** 100))
+
+
+def test_negative_float_literal():
+    import math
+    value = parse('-1.5.', OperatorTable())
+    assert isinstance(value, term.Float)
+    assert value.floatval == -1.5
+    zero = parse('-0.0.', OperatorTable())
+    assert math.copysign(1.0, zero.floatval) == -1.0
+
+
+@pytest.mark.parametrize('source, expected', [
+    ('- 1.', ('-', 1)), ('-(1).', ('-', 1)), ('- (1).', ('-', 1)),
+    ('+1.', ('+', 1)), ('- -1.', ('-', -1)),
+    ('-1^2.', ('^', -1, 2)), ('1 - -2.', ('-', 1, -2)),
+])
+def test_numeric_sign_vs_prefix_operator(source, expected):
+    table = infix_table()
+    table.add('-', 200, 'fy')
+    table.add('+', 200, 'fy')
+    assert shape(parse(source, table)) == expected

@@ -194,6 +194,16 @@ class Parser(object):
                     current.name == 'ATOM' and current.source == ',' and ',' in stops):
                 break
             if expect_operand:
+                if (current.name == 'ATOM' and current.source == '-' and
+                        self.position + 1 < len(self.tokens)):
+                    number = self.tokens[self.position + 1]
+                    if (number.name in ('NUMBER', 'FLOAT') and
+                            number.source_pos.i == current.source_pos.i + 1):
+                        self._get_next()
+                        self._get_next()
+                        state.push_operand(self._parse_negative_number(number))
+                        expect_operand = False
+                        continue
                 if (current.name == 'ATOM' and not current.source.startswith("'")
                         and not self._starts_compound(current)):
                     prefix = self.operators.prefix_ops.get(current.source)
@@ -308,6 +318,20 @@ class Parser(object):
         if math.isinf(value):
             self._error("float overflow", current)
         return term.Float(value)
+
+    def _parse_negative_number(self, current):
+        if current.name == 'FLOAT':
+            value = self._parse_float(current)
+            return term.Float(-value.floatval)
+        value = self._parse_number(current)
+        if isinstance(value, term.Number):
+            return term.Number(-value.num)
+        assert isinstance(value, term.BigInt)
+        negative = value.value.neg()
+        try:
+            return term.Number(negative.toint())
+        except OverflowError:
+            return term.BigInt(negative)
 
     def _parse_args(self, functor):
         # ( arg1 , ..., argn )
