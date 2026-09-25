@@ -198,6 +198,7 @@ class Parser(object):
         self.tokens = tokens
         self.operators = operators
         self.position = 0
+        self.open_delimiters = []
 
         self.varname_to_var = {}
 
@@ -211,8 +212,31 @@ class Parser(object):
 
     def _peek(self):
         if self.position == len(self.tokens):
+            self._check_delimiter(self.eof)
             self._error("unexpected end of input", None)
-        return self.tokens[self.position]
+        token = self.tokens[self.position]
+        self._check_delimiter(token)
+        return token
+
+    def _check_delimiter(self, token):
+        if token.name not in (')', ']', '}', '.', 'EOF'):
+            return
+        if not self.open_delimiters:
+            if token.name in (')', ']', '}'):
+                raise ParseError('unexpected closing delimiter %s' % token.name,
+                                 token, self, 'unexpected_closing_delimiter',
+                                 found=token.name)
+            return
+        opening = self.open_delimiters[-1]
+        expected = {'(': ')', '[': ']', '{': '}'}[opening.name]
+        if token.name in ('.', 'EOF'):
+            raise ParseError('unclosed %s: expected %s' % (opening.name, expected),
+                             opening, self, 'unclosed_delimiter', token,
+                             expected, token.name)
+        if token.name != expected:
+            raise ParseError('expected %s, found %s' % (expected, token.name),
+                             token, self, 'mismatched_delimiter', opening,
+                             expected, token.name)
 
     def _error(self, msg, tok):
         raise ParseError(msg, tok, self)
@@ -223,6 +247,8 @@ class Parser(object):
             self._error("expected %s got %s" % (name, tok.name), tok)
         if source is not None and tok.source != source:
             self._error("expected %s got %s" % (source, tok.name), tok)
+        if name in (')', ']', '}'):
+            self.open_delimiters.pop()
 
     def _parse_toplevel(self):
         res = self._parse_op_expr(1200, '.')
@@ -268,6 +294,8 @@ class Parser(object):
             state.push_operator(current, incoming)
             expect_operand = incoming.kind == 'infix'
         current = self.tokens[self.position] if self.position < len(self.tokens) else None
+        if current is None:
+            self._check_delimiter(self.eof)
         state.complete_operand(expect_operand, current)
         return state.finish()
 
@@ -310,6 +338,7 @@ class Parser(object):
         if current.name == "STRING":
             return self._parse_string(current)
         if current.name == "(":
+            self.open_delimiters.append(current)
             res = self._parse_op_expr(1200, ')')
             self._expect(")")
             return res
@@ -323,10 +352,12 @@ class Parser(object):
             self.varname_to_var[varname] = res
             return res
         if current.name == "[":
+            self.open_delimiters.append(current)
             return self._parse_list()
         if current.name == "{":
+            self.open_delimiters.append(current)
             if self._peek().name == "}":
-                self._get_next()
+                self._expect('}')
                 return term.Callable.build("{}")
             res = self._parse_op_expr(1200, '}')
             self._expect("}")
@@ -391,6 +422,7 @@ class Parser(object):
         if next.source_pos.i != functor.source_pos.i + len(functor.source):
             return []
         self._get_next()
+        self.open_delimiters.append(next)
         res = []
         while 1:
             # Like SWI's default mode, allow all operator priorities here;
@@ -398,7 +430,7 @@ class Parser(object):
             res.append(self._parse_op_expr(1200, ',)'))
             next = self._peek()
             if next.name == ')':
-                self._get_next()
+                self._expect(')')
                 # Callable arguments must be a list that is never resized.
                 return res[:]
             self._expect('ATOM', ',')
@@ -407,14 +439,14 @@ class Parser(object):
         # The opening bracket has already been consumed.
         tail = term.Callable.build("[]")
         if self._peek().name == "]":
-            self._get_next()
+            self._expect(']')
             return tail
         elements = []
         while True:
             elements.append(self._parse_op_expr(1200, ',|]'))
             next = self._peek()
             if next.name == "]":
-                self._get_next()
+                self._expect(']')
                 break
             if next.name == "|":
                 self._get_next()
