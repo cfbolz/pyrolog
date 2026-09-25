@@ -66,9 +66,12 @@ class ExpressionState(object):
         self.precedences.append(precedence)
 
     def push_operator(self, token, incoming):
+        self._reduce_before(incoming)
+        self.push_pending(token, incoming)
+
+    def push_pending(self, token, incoming):
         if incoming.precedence > self.max_precedence:
             self.parser._error('operator precedence exceeds expression limit', token)
-        self._reduce_before(incoming)
         self.pending_tokens.append(token)
         self.pending_operators.append(incoming)
 
@@ -82,14 +85,29 @@ class ExpressionState(object):
     def _reduce(self):
         operator = self.pending_operators.pop()
         token = self.pending_tokens.pop()
-        right = self.terms.pop()
-        right_precedence = self.precedences.pop()
-        left = self.terms.pop()
-        left_precedence = self.precedences.pop()
-        if (left_precedence > operator.left_limit or
-                right_precedence > operator.right_limit):
-            self.parser._error('operand precedence clash', token)
-        self.push_operand(term.Callable.build(operator.name, [left, right]),
+        if operator.kind == 'infix':
+            right = self.terms.pop()
+            right_precedence = self.precedences.pop()
+            left = self.terms.pop()
+            left_precedence = self.precedences.pop()
+            if (left_precedence > operator.left_limit or
+                    right_precedence > operator.right_limit):
+                self.parser._error('operand precedence clash', token)
+            args = [left, right]
+        elif operator.kind == 'prefix':
+            right = self.terms.pop()
+            right_precedence = self.precedences.pop()
+            if right_precedence > operator.right_limit:
+                self.parser._error('operand precedence clash', token)
+            args = [right]
+        else:
+            assert operator.kind == 'postfix'
+            left = self.terms.pop()
+            left_precedence = self.precedences.pop()
+            if left_precedence > operator.left_limit:
+                self.parser._error('operand precedence clash', token)
+            args = [left]
+        self.push_operand(term.Callable.build(operator.name, args),
                           operator.precedence)
 
     def finish(self):
@@ -146,21 +164,37 @@ class Parser(object):
                     current.name == 'ATOM' and current.source == ',' and ',' in stops):
                 break
             if expect_operand:
+                if (current.name == 'ATOM' and not current.source.startswith("'")
+                        and not self._starts_compound(current)):
+                    prefix = self.operators.prefix_ops.get(current.source)
+                    if prefix is not None:
+                        self._get_next()
+                        state.push_pending(current, prefix)
+                        continue
                 state.push_operand(self._parse_expr())
                 expect_operand = False
                 continue
             incoming = None
             if current.name == 'ATOM' and not current.source.startswith("'"):
                 incoming = self.operators.infix_ops.get(current.source)
+                if incoming is None:
+                    incoming = self.operators.postfix_ops.get(current.source)
             if incoming is None:
                 self._error('expected an operator', current)
             self._get_next()
             state.push_operator(current, incoming)
-            expect_operand = True
+            expect_operand = incoming.kind == 'infix'
         if expect_operand:
             current = self.tokens[self.position] if self.position < len(self.tokens) else None
             self._error('expected a term', current)
         return state.finish()
+
+    def _starts_compound(self, token):
+        if self.position + 1 == len(self.tokens):
+            return False
+        opening = self.tokens[self.position + 1]
+        return (opening.name == '(' and
+                opening.source_pos.i == token.source_pos.i + len(token.source))
 
     def _parse_expr(self):
         current = self._get_next()

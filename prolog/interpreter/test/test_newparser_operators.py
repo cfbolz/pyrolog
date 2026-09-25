@@ -100,3 +100,57 @@ def test_variables_shared_across_expressions():
     assert left.argument_at(0) is right.argument_at(1)
     assert left.argument_at(1) is right.argument_at(0)
     assert left.argument_at(0) is parser.varname_to_var['X']
+
+
+@pytest.mark.parametrize('source, definitions, expected', [
+    ('~ 1.', [('~', 500, 'fx')], ('~', 1)),
+    ('~ ~ 1.', [('~', 500, 'fy')], ('~', ('~', 1))),
+    ('~ 1*2+3.', [('~', 450, 'fy')], ('+', ('~', ('*', 1, 2)), 3)),
+    ('1+ ~ 2*3.', [('~', 450, 'fy')], ('+', 1, ('~', ('*', 2, 3)))),
+    ('~ 1+2.', [('~', 500, 'fx')], ('+', ('~', 1), 2)),
+    ('~ 1+2.', [('~', 500, 'fy')], ('~', ('+', 1, 2))),
+    ('1 ! !.', [('!', 500, 'yf')], ('!', ('!', 1))),
+    ('1 ! ? .', [('!', 400, 'xf'), ('?', 500, 'xf')], ('?', ('!', 1))),
+    ('1+2 !.', [('!', 300, 'yf')], ('+', 1, ('!', 2))),
+    ('1+2 !.', [('!', 600, 'yf')], ('!', ('+', 1, 2))),
+    ('1 ! +2.', [('!', 300, 'yf')], ('+', ('!', 1), 2)),
+    ('~ (~ 1).', [('~', 500, 'fx')], ('~', ('~', 1))),
+    ('(1 !) !.', [('!', 500, 'xf')], ('!', ('!', 1))),
+    ('f(~ a, [b !]).', [('~', 500, 'fy'), ('!', 500, 'yf')],
+     ('f', ('~', 'a'), ('.', ('!', 'b'), '[]'))),
+    ('~(a,b).', [('~', 500, 'fy')], ('~', 'a', 'b')),
+    ('~ (a,b).', [('~', 500, 'fy')], ('~', (',', 'a', 'b'))),
+    ('p a p p b.', [('p', 200, 'fy'), ('p', 500, 'yfx')],
+     ('p', ('p', 'a'), ('p', 'b'))),
+])
+def test_prefix_postfix(source, definitions, expected):
+    table = infix_table()
+    for definition in definitions:
+        table.add(*definition)
+    assert shape(parse(source, table)) == expected
+
+
+@pytest.mark.parametrize('prefix, postfix, expected', [
+    ('fx', 'yf', ('!', ('~', 1))),
+    ('fy', 'xf', ('~', ('!', 1))),
+    ('fy', 'yf', ('~', ('!', 1))),
+])
+def test_equal_precedence_prefix_postfix(prefix, postfix, expected):
+    table = operator_table([('~', 500, prefix), ('!', 500, postfix)])
+    assert shape(parse('~ 1 !.', table)) == expected
+
+
+@pytest.mark.parametrize('source, definitions', [
+    ('~ ~ 1.', [('~', 500, 'fx')]),
+    ('1 ! !.', [('!', 500, 'xf')]),
+    ('~ 1 !.', [('~', 500, 'fx'), ('!', 500, 'xf')]),
+    ('1 + ~ 2.', [('~', 500, 'fy')]),
+    ('1 ~ 2.', [('~', 500, 'fy')]),
+    ('1+2 !.', [('!', 500, 'xf')]),
+])
+def test_invalid_prefix_postfix(source, definitions):
+    table = infix_table()
+    for definition in definitions:
+        table.add(*definition)
+    with pytest.raises(ParseError):
+        parse(source, table)
