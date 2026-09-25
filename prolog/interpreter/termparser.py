@@ -312,6 +312,14 @@ class Parser(object):
                         and state.operand_tokens[-1] is previous):
                     self._error("expected an operator; '(' must immediately follow a functor name",
                                 current, 'functor_whitespace', previous)
+                if context == 'argument':
+                    self._error("expected an operator or ',' between arguments",
+                                current, 'missing_separator', previous,
+                                expected="operator or ','")
+                if context == 'list_element':
+                    self._error("expected an operator, ',' or '|' between list elements",
+                                current, 'missing_separator', previous,
+                                expected="operator, ',' or '|'")
                 self._error('expected an operator between terms', current,
                             'missing_operator', previous, expected='operator')
             self._get_next()

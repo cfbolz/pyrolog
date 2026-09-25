@@ -314,3 +314,38 @@ def test_file_location_uses_precise_escape_span():
         parsing.parse_file("'first\nxy\\q'.", file_name='example.pl')
     assert caught.value.line_number == 1
     assert position(caught.value.parse_error.primary.start) == (9, 1, 2)
+
+
+@pytest.mark.parametrize('source, primary, secondary, expected', [
+    ('f(a b).', 4, 2, "operator or ','"),
+    ('f(g(a) h(b)).', 7, 5, "operator or ','"),
+    ('f(a+1 b).', 6, 4, "operator or ','"),
+    ('f(a /* gap */ b).', 14, 2, "operator or ','"),
+    ('[a b].', 3, 1, "operator, ',' or '|'"),
+    ('[f(a) g(b)].', 6, 4, "operator, ',' or '|'"),
+    ('f([a b]).', 5, 3, "operator, ',' or '|'"),
+    ('[f(a b)].', 5, 3, "operator or ','"),
+])
+def test_missing_separator_context(source, primary, secondary, expected):
+    exc = diagnostic(source)
+    assert exc.kind == 'missing_separator'
+    assert exc.primary.start.i == primary
+    assert exc.secondary.start.i == secondary
+    assert exc.expected == expected
+    assert expected in exc.msg
+
+
+@pytest.mark.parametrize('source', ['a b.', '(a b).', '{a b}.', '[a|b c].'])
+def test_no_comma_hint_in_single_expression_context(source):
+    exc = diagnostic(source)
+    assert exc.kind == 'missing_operator'
+    assert exc.expected == 'operator'
+
+
+def test_separator_error_keeps_utf8_and_multiline_positions():
+    exc = diagnostic('f(\xc3\xa9\n  \xce\xb2).')
+    assert exc.kind == 'missing_separator'
+    assert position(exc.primary.start) == (7, 1, 2)
+    assert position(exc.primary.end) == (9, 1, 3)
+    assert position(exc.secondary.start) == (2, 0, 2)
+    assert position(exc.secondary.end) == (4, 0, 3)
