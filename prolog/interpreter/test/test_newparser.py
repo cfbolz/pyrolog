@@ -1,14 +1,14 @@
 import pytest
 
 from prolog.interpreter.lexer import UnicodeLexer
-from prolog.interpreter.newparser import Parser, ParseError
+from prolog.interpreter.newparser import Parser, ParseError, OperatorTable
 from prolog.interpreter.term import Atom, Number, BigInt, Float, Var
 
 
 def parse(source):
     tokens = UnicodeLexer().tokenize(source)
     # Start with no operators; commas still separate compound arguments.
-    return Parser(tokens, []).parse()
+    return Parser(tokens, OperatorTable()).parse()
 
 
 def test_atom():
@@ -125,7 +125,7 @@ def test_parentheses():
 
 
 def test_named_variables():
-    parser = Parser(UnicodeLexer().tokenize("f(X, g(X, Y), Y)."), [])
+    parser = Parser(UnicodeLexer().tokenize("f(X, g(X, Y), Y)."), OperatorTable())
     result = parser.parse()
     x = result.argument_at(0)
     y = result.argument_at(2)
@@ -141,7 +141,7 @@ def test_named_variables():
 
 
 def test_anonymous_variables():
-    parser = Parser(UnicodeLexer().tokenize("f(_, _, _X, _X)."), [])
+    parser = Parser(UnicodeLexer().tokenize("f(_, _, _X, _X)."), OperatorTable())
     result = parser.parse()
     first = result.argument_at(0)
     second = result.argument_at(1)
@@ -158,8 +158,8 @@ def test_anonymous_variables():
 
 
 def test_variable_scope():
-    first_parser = Parser(UnicodeLexer().tokenize("X."), [])
-    second_parser = Parser(UnicodeLexer().tokenize("X."), [])
+    first_parser = Parser(UnicodeLexer().tokenize("X."), OperatorTable())
+    second_parser = Parser(UnicodeLexer().tokenize("X."), OperatorTable())
     first = first_parser.parse()
     second = second_parser.parse()
     assert isinstance(first, Var)
@@ -250,7 +250,7 @@ def test_improper_list():
 
 
 def test_list_variable_sharing():
-    parser = Parser(UnicodeLexer().tokenize("f(X, [X, a | T], T)."), [])
+    parser = Parser(UnicodeLexer().tokenize("f(X, [X, a | T], T)."), OperatorTable())
     result = parser.parse()
     first, rest = list_cell(result.argument_at(1))
     second, tail = list_cell(rest)
@@ -318,7 +318,7 @@ def test_nested_braces():
 
 
 def test_braces_variable_sharing():
-    parser = Parser(UnicodeLexer().tokenize("f(X, {X})."), [])
+    parser = Parser(UnicodeLexer().tokenize("f(X, {X})."), OperatorTable())
     result = parser.parse()
     braces = result.argument_at(1)
     assert braces.name() == "{}"

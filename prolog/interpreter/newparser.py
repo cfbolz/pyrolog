@@ -11,11 +11,98 @@ class ParseError(Exception):
         self.parser = parser
 
 
+class Operator(object):
+    def __init__(self, name, precedence, form):
+        assert 1 <= precedence <= 1200
+        self.name = name
+        self.precedence = precedence
+        self.form = form
+        self.left_limit = self.right_limit = -1
+        if form in ('yfx', 'xfy', 'xfx'):
+            self.left_limit = precedence if form[0] == 'y' else precedence - 1
+            self.right_limit = precedence if form[2] == 'y' else precedence - 1
+            self.kind = 'infix'
+        elif form in ('fx', 'fy'):
+            self.right_limit = precedence if form[1] == 'y' else precedence - 1
+            self.kind = 'prefix'
+        elif form in ('xf', 'yf'):
+            self.left_limit = precedence if form[0] == 'y' else precedence - 1
+            self.kind = 'postfix'
+        else:
+            assert False, 'wrong form'
+
+    def __repr__(self):
+        return 'Operator(%r, %d, %r)' % (self.name, self.precedence, self.form)
+
+
+class OperatorTable(object):
+    def __init__(self):
+        self.prefix_ops = {}
+        self.infix_ops = {}
+        self.postfix_ops = {}
+
+    def add(self, name, precedence, form):
+        operator = Operator(name, precedence, form)
+        if operator.kind == 'prefix':
+            self.prefix_ops[name] = operator
+        elif operator.kind == 'infix':
+            self.infix_ops[name] = operator
+        else:
+            self.postfix_ops[name] = operator
+
+
+class ExpressionState(object):
+    """Stacks for one expression; nested syntax gets a fresh instance."""
+    def __init__(self, parser, max_precedence):
+        self.parser = parser
+        self.max_precedence = max_precedence
+        self.terms = []
+        self.precedences = []
+        self.pending_tokens = []
+        self.pending_operators = []
+
+    def push_operand(self, value, precedence=0):
+        self.terms.append(value)
+        self.precedences.append(precedence)
+
+    def push_operator(self, token, incoming):
+        if incoming.precedence > self.max_precedence:
+            self.parser._error('operator precedence exceeds expression limit', token)
+        self._reduce_before(incoming)
+        self.pending_tokens.append(token)
+        self.pending_operators.append(incoming)
+
+    def _reduce_before(self, incoming):
+        while self.pending_operators:
+            previous = self.pending_operators[-1]
+            if incoming.precedence <= previous.right_limit:
+                break
+            self._reduce()
+
+    def _reduce(self):
+        operator = self.pending_operators.pop()
+        token = self.pending_tokens.pop()
+        right = self.terms.pop()
+        right_precedence = self.precedences.pop()
+        left = self.terms.pop()
+        left_precedence = self.precedences.pop()
+        if (left_precedence > operator.left_limit or
+                right_precedence > operator.right_limit):
+            self.parser._error('operand precedence clash', token)
+        self.push_operand(term.Callable.build(operator.name, [left, right]),
+                          operator.precedence)
+
+    def finish(self):
+        while self.pending_operators:
+            self._reduce()
+        assert len(self.terms) == len(self.precedences) == 1
+        return self.terms[0]
+
+
 class Parser(object):
     def __init__(self, tokens, operators):
         self.tokens = tokens
         self.operators = operators
-        assert not operators
         self.position = 0
 
         self.varname_to_var = {}
@@ -44,25 +131,47 @@ class Parser(object):
             self._error("expected %s got %s" % (source, tok.name), tok)
 
     def _parse_toplevel(self):
-        res = self._parse_toplevel_op_expr()
+        res = self._parse_op_expr(1200, '.')
         self._expect(".")
         if self.position != len(self.tokens):
             self._error("unexpected token after full stop", self._peek())
         return res
 
-    def _parse_toplevel_op_expr(self):
-        current = self._peek()
-        if current.name == "ATOM":
+    def _parse_op_expr(self, max_precedence, stops):
+        state = ExpressionState(self, max_precedence)
+        expect_operand = True
+        while self.position < len(self.tokens):
+            current = self._peek()
+            if (current.name in stops or
+                    current.name == 'ATOM' and current.source == ',' and ',' in stops):
+                break
+            if expect_operand:
+                state.push_operand(self._parse_expr())
+                expect_operand = False
+                continue
+            incoming = None
+            if current.name == 'ATOM' and not current.source.startswith("'"):
+                incoming = self.operators.infix_ops.get(current.source)
+            if incoming is None:
+                self._error('expected an operator', current)
             self._get_next()
+            state.push_operator(current, incoming)
+            expect_operand = True
+        if expect_operand:
+            current = self.tokens[self.position] if self.position < len(self.tokens) else None
+            self._error('expected a term', current)
+        return state.finish()
+
+    def _parse_expr(self):
+        current = self._get_next()
+        if current.name == "ATOM":
+            if current.source == ',':
+                self._error('expected a term', current)
             name = current.source
             if name.startswith("'"):
                 name = self._unescape(name[1:-1], current)
             args = self._parse_args(current)
             return term.Callable.build(name, args)
-        return self._parse_expr()
-
-    def _parse_expr(self):
-        current = self._get_next()
         if current.name == "NUMBER":
             return self._parse_number(current)
         if current.name == "FLOAT":
@@ -70,7 +179,7 @@ class Parser(object):
         if current.name == "STRING":
             return self._parse_string(current)
         if current.name == "(":
-            res = self._parse_toplevel_op_expr()
+            res = self._parse_op_expr(1200, ')')
             self._expect(")")
             return res
         if current.name == "VAR":
@@ -88,7 +197,7 @@ class Parser(object):
             if self._peek().name == "}":
                 self._get_next()
                 return term.Callable.build("{}")
-            res = self._parse_toplevel_op_expr()
+            res = self._parse_op_expr(1200, '}')
             self._expect("}")
             return term.Callable.build("{}", [res])
         self._error("expected a term", current)
@@ -137,7 +246,7 @@ class Parser(object):
         self._get_next()
         res = []
         while 1:
-            res.append(self._parse_toplevel_op_expr())
+            res.append(self._parse_op_expr(999, ',)'))
             next = self._peek()
             if next.name == ')':
                 self._get_next()
@@ -152,14 +261,14 @@ class Parser(object):
             return tail
         elements = []
         while True:
-            elements.append(self._parse_toplevel_op_expr())
+            elements.append(self._parse_op_expr(999, ',|]'))
             next = self._peek()
             if next.name == "]":
                 self._get_next()
                 break
             if next.name == "|":
                 self._get_next()
-                tail = self._parse_toplevel_op_expr()
+                tail = self._parse_op_expr(999, ']')
                 self._expect("]")
                 break
             self._expect("ATOM", ",")
