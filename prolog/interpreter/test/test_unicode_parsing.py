@@ -27,7 +27,7 @@ def test_unicode_syntax(query):
 
 @pytest.mark.parametrize('source', ["'\xff'.", '"\xc0\x80".', "'\\uD800'.", "'\\U00110000'.", "'\\u12'."])
 def test_invalid_unicode_source(source):
-    with pytest.raises((error.CatchableError, parsing.LexerError)):
+    with pytest.raises(error.CatchableError):
         parsing.parse_query_term(source)
 
 
@@ -41,11 +41,11 @@ def test_lexer_byte_offsets_and_character_columns():
 
 def test_invalid_utf8_position():
     prefix = 'é.\n 😀('
-    with pytest.raises(parsing.LexerError) as exc:
+    with pytest.raises(parsing.SyntaxError) as exc:
         parsing.lexer.tokenize(prefix + '\xff')
-    assert exc.value.source_pos.i == len(prefix)
-    assert exc.value.source_pos.lineno == 1
-    assert exc.value.source_pos.columnno == 3
+    assert exc.value.primary.start.i == len(prefix)
+    assert exc.value.primary.start.lineno == 1
+    assert exc.value.primary.start.columnno == 3
 
 
 @pytest.mark.parametrize('literal', ["0'''", "0''", "0'\\'"])

@@ -28,7 +28,7 @@ def run_log(tmpdir, source, queries, jit_options="threshold=40", send_halt=True)
     assert process.returncode == 0, stderr
     assert not stderr
     assert 'ERROR' not in stdout, stdout
-    assert 'ParseError' not in stdout, stdout
+    assert 'SyntaxError' not in stdout, stdout
     rawlog = logparser.parse_log_file(str(logfile))
     log = Log(logparser.extract_category(rawlog, 'jit-log-opt-'))
     log.result = stdout

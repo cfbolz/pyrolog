@@ -332,8 +332,8 @@ def impl_write_term_2(engine, heap, module, term, options):
             term, options)
 
 def read_till_next_dot(stream):
-    from prolog.interpreter.parsing import lexer, LexerError
-    from prolog.interpreter.lexer import IncompleteTokenError
+    from prolog.interpreter.parsing import lexer
+    from prolog.interpreter.syntaxerror import SyntaxError
     from prolog.interpreter.utf8 import layout
     chars = []
     while True:
@@ -343,8 +343,8 @@ def read_till_next_dot(stream):
             try:
                 if not lexer.tokenize(source):
                     return "end_of_file."
-            except LexerError:
-                pass
+            except SyntaxError as exc:
+                error.throw_syntax_error(exc.msg, exc)
             error.throw_syntax_error("Unexpected end of file")
         chars.append(char)
         if char != '.':
@@ -356,10 +356,10 @@ def read_till_next_dot(stream):
         source = "".join(chars)
         try:
             tokens = lexer.tokenize(source)
-        except IncompleteTokenError:
-            continue  # The dot is inside an unfinished quote or comment.
-        except LexerError:
-            raise error.throw_syntax_error("Invalid token")
+        except SyntaxError as exc:
+            if exc.incomplete:
+                continue  # The dot is inside an unfinished quote or comment.
+            raise error.throw_syntax_error(exc.msg, exc)
         if tokens and tokens[-1].name == '.' and tokens[-1].source_pos.i == len(source) - 1:
             return source
 

@@ -1,6 +1,6 @@
 """Tolerant editor highlighting using the parser's existing lexer."""
 from rpython.rlib import rutf8
-from rpython.rlib.parsing.deterministic import LexerError
+from prolog.interpreter.syntaxerror import SyntaxError
 from rpyrepl.highlight import Highlighter, ColorSpan, Span, delimiter_colors
 from prolog.interpreter import parsing
 
@@ -23,7 +23,7 @@ class PrologHighlighter(Highlighter):
                 break
             try:
                 token = runner.find_next_token()
-            except LexerError:
+            except SyntaxError:
                 if text[start] in ("'", '"'):
                     spans.append(ColorSpan(Span(start, len(text)), 'STRING'))
                     break

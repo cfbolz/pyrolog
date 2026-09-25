@@ -1,7 +1,8 @@
 import pytest
 
 from prolog.interpreter.lexer import UnicodeLexer
-from prolog.interpreter.termparser import OperatorTable, Parser, SyntaxError
+from prolog.interpreter.termparser import OperatorTable, Parser
+from prolog.interpreter.syntaxerror import SyntaxError
 from prolog.interpreter import term
 
 

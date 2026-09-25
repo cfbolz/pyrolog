@@ -2,7 +2,8 @@ import pytest
 
 from prolog.interpreter.lexer import UnicodeLexer
 from prolog.interpreter.parsing import default_operator_table
-from prolog.interpreter.termparser import Parser, SyntaxError
+from prolog.interpreter.termparser import Parser
+from prolog.interpreter.syntaxerror import SyntaxError
 
 
 def diagnostic(source):
@@ -144,11 +145,11 @@ def test_query_eof_preserves_trailing_layout_position():
     assert position(exc.secondary.start) == (6, 1, 2)
 
 
-def test_file_lexer_error_has_no_parser_diagnostic():
+def test_file_lexer_error_preserves_syntax_diagnostic():
     from prolog.interpreter import parsing, error
     with pytest.raises(error.PrologParseError) as caught:
         parsing.parse_file('` .')
-    assert caught.value.parse_error is None
+    assert caught.value.parse_error.kind == 'invalid_token'
 
 
 @pytest.mark.parametrize('source, primary, secondary', [

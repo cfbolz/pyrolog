@@ -268,7 +268,7 @@ def test_parse_error():
     f(b) :- `%.
     """
     info = pytest.raises(error.PrologParseError, parse_file, s)
-    assert "LexerError" in info.value.message
+    assert "SyntaxError" in info.value.message
     assert " f(b) :- `%." in info.value.message
     assert "line 3" in info.value.message
 

@@ -170,14 +170,14 @@ class TermFormatter(object):
             return '?'
 
     def format_atom(self, s):
-        from rpython.rlib.parsing.deterministic import LexerError
+        from prolog.interpreter.syntaxerror import SyntaxError
         if self.quoted:
             try:
                 tokens = parsing.lexer.tokenize(s)
                 if (len(tokens) == 1 and tokens[0].name == 'ATOM' and
                     tokens[0].source == s and s != ',' and not s.startswith("'")):
                     return s
-            except LexerError:
+            except SyntaxError:
                 pass
             parts = []
             for code in rutf8.Utf8StringIterator(s):
