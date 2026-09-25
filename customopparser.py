@@ -86,7 +86,7 @@ class Parser(object):
             incoming = self._select_operator(token, expect_operand)
             self._push_operator(token, incoming)
             expect_operand = incoming.kind == 'infix'
-                
+
         self._complete_operand(expect_operand, 'at end of input')
         return self._finish()
 
