@@ -1,0 +1,25 @@
+from rpython.translator.translator import TranslationContext
+from prolog.interpreter.lexer import UnicodeLexer
+from prolog.interpreter.newparser import Parser, OperatorTable, ParseError
+from prolog.interpreter import term
+
+
+def test_parser_is_rpython():
+    operators = OperatorTable()
+    operators.add('+', 500, 'yfx')
+    operators.add('~', 500, 'fy')
+    operators.add('!', 500, 'yf')
+
+    def entry(source):
+        try:
+            result = Parser(UnicodeLexer().tokenize(source), operators).parse()
+        except ParseError:
+            return -1
+        if isinstance(result, term.Number):
+            return result.num
+        return result.argument_count()
+
+    context = TranslationContext()
+    context.config.translation.list_comprehension_operations = True
+    context.buildannotator().build_types(entry, [str])
+    context.buildrtyper().specialize()

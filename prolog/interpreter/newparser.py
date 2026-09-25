@@ -232,7 +232,7 @@ class Parser(object):
             return None
         infix = self.operators.infix_ops.get(token.source)
         postfix = self.operators.postfix_ops.get(token.source)
-        for incoming in (infix, postfix):
+        for incoming in [infix, postfix]:
             if incoming is not None:
                 if not expect_operand or state.reinterpret_pending(incoming.left_limit):
                     return incoming
@@ -252,7 +252,9 @@ class Parser(object):
                 self._error('expected a term', current)
             name = current.source
             if name.startswith("'"):
-                name = self._unescape(name[1:-1], current)
+                end = len(name) - 1
+                assert end >= 1
+                name = self._unescape(name[1:end], current)
             args = self._parse_args(current)
             return term.Callable.build(name, args)
         if current.name == "NUMBER":
@@ -292,7 +294,9 @@ class Parser(object):
             self._error("invalid character escape", current)
 
     def _parse_string(self, current):
-        text = self._unescape(current.source[1:-1], current, '"')
+        end = len(current.source) - 1
+        assert end >= 1
+        text = self._unescape(current.source[1:end], current, '"')
         codes = [term.Number(code) for code in rutf8.Utf8StringIterator(text)]
         return helper.wrap_list(codes)
 
@@ -312,9 +316,9 @@ class Parser(object):
         try:
             value = float(current.source)
         except ValueError:
-            self._error("invalid float literal", current)
+            raise self._error("invalid float literal", current)
         except OverflowError:
-            self._error("float overflow", current)
+            raise self._error("float overflow", current)
         if math.isinf(value):
             self._error("float overflow", current)
         return term.Float(value)
@@ -347,7 +351,8 @@ class Parser(object):
             next = self._peek()
             if next.name == ')':
                 self._get_next()
-                return res
+                # Callable arguments must be a list that is never resized.
+                return res[:]
             self._expect('ATOM', ',')
 
     def _parse_list(self):
