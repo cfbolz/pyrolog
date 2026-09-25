@@ -28,7 +28,6 @@ class TermedError(PrologError):
         errorsig = signature.Signature.getsignature("error", 1)
 
         f = formatting.TermFormatter(engine, quoted=True, max_depth=20)
-        f._make_reverse_op_mapping()
 
         t = self.term
         if not isinstance(t, term.Callable) or not t.signature().eq(errorsig):
