@@ -148,7 +148,7 @@ class ExpressionState(object):
         start = len(self.terms) - count
         assert start >= 0
         # Check left before right, preserving which clash gets diagnosed when
-        # both operands are invalid. Only then remove all three stack slices.
+        # both operands are invalid. Only then pop from all three stacks.
         if operator.kind != 'prefix':
             self._check_precedence(operator, token, self.precedences[start],
                                    operator.left_limit, self.operand_tokens[start], 'left')
@@ -156,9 +156,10 @@ class ExpressionState(object):
             self._check_precedence(operator, token, self.precedences[-1],
                                    operator.right_limit, self.operand_tokens[-1], 'right')
         args = self.terms[start:]
-        del self.terms[start:]
-        del self.precedences[start:]
-        del self.operand_tokens[start:]
+        for unused in range(count):
+            self.terms.pop()
+            self.precedences.pop()
+            self.operand_tokens.pop()
         return args
 
     def _check_precedence(self, operator, token, precedence, limit, operand_token, side):
