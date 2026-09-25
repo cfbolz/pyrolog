@@ -18,15 +18,23 @@ ESCAPES = {
 }
 
 
+def integer_literal_base(s):
+    start = 0
+    if s and s[0] in '+-':
+        start = 1
+    prefix = s[start:start + 2]
+    if prefix == '0x':
+        return 16
+    if prefix == '0o':
+        return 8
+    if prefix == '0b':
+        return 2
+    return 10
+
+
 def parse_integer_literal(s):
     from prolog.interpreter.term import Number, BigInt
-    base = 10
-    if s.startswith('0x'):
-        base = 16
-    elif s.startswith('0o'):
-        base = 8
-    elif s.startswith('0b'):
-        base = 2
+    base = integer_literal_base(s)
     try:
         return Number(string_to_int(s, base))
     except ParseStringOverflowError:
