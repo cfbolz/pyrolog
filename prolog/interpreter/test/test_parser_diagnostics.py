@@ -371,11 +371,28 @@ def test_missing_separator_context(source, primary, secondary, expected):
     assert expected in exc.msg
 
 
-@pytest.mark.parametrize('source', ['a b.', '(a b).', '{a b}.', '[a|b c].'])
-def test_no_comma_hint_in_single_expression_context(source):
+@pytest.mark.parametrize('source', ['(a b).', '{a b}.', '[a|b c].', 'f((a b)).'])
+def test_no_separator_hint_in_nested_single_expression_context(source):
     exc = diagnostic(source)
     assert exc.kind == 'missing_operator'
     assert exc.expected == 'operator'
+
+
+@pytest.mark.parametrize('source', [
+    'a b.',
+    'f :-\n    g,\n    h\n\ng :- throw(error).',
+    'f(a) g(b).',
+    '(a) b.',
+    '[a] b.',
+    '{a} b.',
+])
+def test_full_stop_hint_between_outermost_terms(source):
+    exc = diagnostic(source)
+    assert exc.kind == 'missing_operator'
+    assert exc.expected == "operator or '.'"
+    assert exc.msg == "expected an operator or '.' between terms"
+    assert exc.primary_label == 'unexpected term'
+    assert exc.secondary_label == 'preceding term ends here'
 
 
 def test_separator_error_keeps_utf8_and_multiline_positions():

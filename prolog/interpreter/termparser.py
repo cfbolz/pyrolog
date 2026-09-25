@@ -337,8 +337,11 @@ class Parser(object):
                                 current, 'missing_separator', previous,
                                 expected="operator, ',' or '|'", primary_label='unexpected term',
                                 secondary_label='preceding list element ends here')
-                self._error('expected an operator between terms', current,
-                            'missing_operator', previous, expected='operator',
+                expected = 'operator'
+                if not self.open_delimiters:
+                    expected = "operator or '.'"
+                self._error('expected an %s between terms' % expected, current,
+                            'missing_operator', previous, expected=expected,
                             primary_label='unexpected term', secondary_label='preceding term ends here')
             self._get_next()
             state.push_operator(current, incoming)
