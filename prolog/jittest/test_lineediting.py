@@ -346,6 +346,31 @@ def test_traceback_colors_and_file_links(console_factory, tmpdir, color):
 
 
 @pytest.mark.parametrize('color', [False, True])
+def test_undefined_predicate_suggestions(console_factory, color):
+    child = console_factory(color=color)
+    prompt = '\x1b[1;35m>?- \x1b[0m' if color else '>?- '
+    child.expect_exact(prompt)
+    child.send('lenght([], N).\r')
+    child.expect_exact('Undefined procedure: lenght/2')
+    child.expect_exact('help: a similarly named predicate is available: length/2')
+    child.expect_exact(prompt)
+    child.send('length([]).\r')
+    child.expect_exact('help: a predicate with this name exists at another arity: length/2')
+    child.expect_exact(prompt)
+    child.send('catch(lenght([], N), error(existence_error(procedure, lenght/2)), true).\r')
+    child.expect_exact('yes\r\n')
+    output = child.before
+    child.expect_exact(prompt)
+    output += child.before
+    assert 'help:' not in output
+    assert 'ERROR:' not in output
+    child.send('\x04')
+    child.expect(pexpect.EOF)
+    child.close()
+    assert child.exitstatus == 0
+
+
+@pytest.mark.parametrize('color', [False, True])
 def test_no_more_solutions_color(console_factory, color):
     child = console_factory(color=color)
     prompt = '\x1b[1;35m>?- \x1b[0m' if color else '>?- '

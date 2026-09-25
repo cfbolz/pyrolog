@@ -2,7 +2,29 @@
 from rpython.rlib import rutf8
 from prolog.interpreter.syntaxerror import SyntaxError
 from rpyrepl.highlight import Highlighter, ColorSpan, Span, delimiter_colors
+from rpyrepl.color import can_colorize, THEME, RESET
 from prolog.interpreter import parsing
+
+
+def highlight_source(text, output_fd=1):
+    """Render syntax colours without the editor's cursor-dependent overlays."""
+    if not can_colorize(output_fd):
+        return text
+    out = []
+    end = 0
+    for color in PrologHighlighter().gen_colors(text):
+        start = color.span.start
+        out.append(text[end:start])
+        # Reset at line boundaries so traceback indentation stays uncoloured,
+        # including within multiline strings and block comments.
+        lines = text[start:color.span.end].split('\n')
+        for i in range(len(lines)):
+            if lines[i]:
+                lines[i] = THEME[color.tag] + lines[i] + RESET
+        out.append('\n'.join(lines))
+        end = color.span.end
+    out.append(text[end:])
+    return ''.join(out)
 
 
 class PrologHighlighter(Highlighter):

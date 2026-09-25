@@ -1,6 +1,12 @@
 from rpython.rlib import rstring
 from rpyrepl.color import styled, filelink, can_colorize
 
+def _format_source(source, output_fd):
+    # The highlighter uses the parser, which imports this module.
+    from prolog.interpreter.highlighting import highlight_source
+    return '    ' + rstring.replace(highlight_source(source, output_fd),
+                                    '\n', '\n    ')
+
 class EndOfInput(Exception):
     """Terminal EOF, including while choosing an answer or debugging."""
 
@@ -46,6 +52,8 @@ class TermedError(PrologError):
         self.term = term
         self.sig_context = sig_context
         self.parse_error = None
+        self.missing_signature = None
+        self.lookup_module = None
 
     def get_errstr(self, engine):
         from prolog.builtin import formatting
@@ -117,8 +125,7 @@ class UncaughtError(TermedError):
             out.append('  File "%s" in %s' % (
                 styled('<stdin>', 'SOURCE_LOCATION', output_fd),
                 styled('toplevel', 'SOURCE_LOCATION', output_fd)))
-            out.append('    ' + rstring.replace(query_source.rstrip('\n'),
-                                                '\n', '\n    '))
+            out.append(_format_source(query_source.rstrip('\n'), output_fd))
         if self.traceback is not None:
             self.traceback._format(out, output_fd, query_source is not None)
         context = ""
@@ -132,6 +139,27 @@ class UncaughtError(TermedError):
         context = styled(context, 'ERROR_LABEL', output_fd)
         message = styled(message, 'ERROR_MESSAGE', output_fd)
         out.append("%s%s" % (context, message))
+        if self.missing_signature is not None and self.lookup_module is not None:
+            from prolog.interpreter.suggestions import predicate_suggestions
+            from prolog.builtin.formatting import TermFormatter
+            from prolog.interpreter.term import Callable, Number
+            arities, spellings = predicate_suggestions(
+                engine, self.lookup_module, self.missing_signature)
+            formatter = TermFormatter(engine, quoted=True)
+            for candidates, singular, plural in [
+                    (arities, 'a predicate with this name exists at another arity',
+                     'predicates with this name exist at other arities'),
+                    (spellings, 'a similarly named predicate is available',
+                     'similarly named predicates are available')]:
+                if candidates:
+                    description = singular if len(candidates) == 1 else plural
+                    indicators = []
+                    for candidate in candidates:
+                        indicator = Callable.build('/', [
+                            Callable.build(candidate.name), Number(candidate.numargs)])
+                        indicators.append(formatter.format(indicator))
+                    out.append(styled('help: ' + description + ': ' +
+                                      ', '.join(indicators), 'ERROR_MESSAGE', output_fd))
         return "\n".join(out)
 
 
@@ -165,8 +193,7 @@ class TraceFrame(object):
         out.append("  File \"%s\" %sin %s" % (filename, lines, predicate))
         source = rule.source
         if source is not None:
-            # poor man's indent
-            out.append("    " + rstring.replace(source, "\n", "\n    "))
+            out.append(_format_source(source, output_fd))
         if self.next is not None:
             self.next._format(out, output_fd, skip_toplevel)
 
@@ -202,10 +229,13 @@ def throw_import_error(modulename, signature):
             term.Callable.build(signature.string())])
     raise wrap_error(t)
 
-def throw_existence_error(object_type, obj):
+def throw_existence_error(object_type, obj, missing_signature=None, lookup_module=None):
     from prolog.interpreter import term
     t = term.Callable.build("existence_error", [term.Callable.build(object_type), obj])
-    raise wrap_error(t)
+    exc = wrap_error(t)
+    exc.missing_signature = missing_signature
+    exc.lookup_module = lookup_module
+    raise exc
 
 def throw_instantiation_error(obj = None):
     from prolog.interpreter import term

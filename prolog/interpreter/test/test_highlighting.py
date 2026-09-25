@@ -25,6 +25,20 @@ def test_tokens_comments_and_operators():
         ('/* block */', 'COMMENT')]
 
 
+def test_source_highlighting_obeys_output_fd(monkeypatch):
+    from prolog.interpreter.highlighting import highlight_source
+    from rpyrepl import color
+    monkeypatch.delenv('NO_COLOR', raising=False)
+    monkeypatch.delenv('FORCE_COLOR', raising=False)
+    monkeypatch.setenv('TERM', 'xterm')
+    monkeypatch.setattr(color.os, 'isatty', lambda fd: fd == 17)
+    text = 'f(X, 42).'
+    assert highlight_source(text, 17) == (
+        'f(' + color.CYAN + 'X' + color.RESET + ', ' +
+        color.YELLOW + '42' + color.RESET + ').')
+    assert highlight_source(text, 18) == text
+
+
 @pytest.mark.parametrize('suffix, role', [
     ('"unfinished', 'STRING'), ("'unfinished\ntext", 'STRING'),
     ('/* unfinished\nX = 12.', 'COMMENT'), ('/**', 'COMMENT'),

@@ -83,6 +83,22 @@ def test_caught_exception_keeps_outer_frame():
         ('Call', 3), ('Exit', 3), ('Exit', 2), ('Exit', 1)]
 
 
+@pytest.mark.parametrize('tracing', [False, True])
+@pytest.mark.parametrize('query, expected', [
+    ('catch(catch(throw(first), _, throw(second)), second, X = caught).',
+     ['caught']),
+    ('(catch(throw(ball), _, fail); X = fallback).', ['fallback']),
+    ('catch((X = discarded, throw(ball)), _, (X = a; X = b)).', ['a', 'b']),
+])
+def test_recovery_uses_normal_exception_and_failure_handling(tracing, query, expected):
+    if tracing:
+        e, events = traced_engine()
+    else:
+        e = get_engine('')
+    answers = collect_all(e, query)
+    assert [answer['X'].name() for answer in answers] == expected
+
+
 @pytest.mark.parametrize('body, expected', [
     ('(X = a; X = b)', ['a', 'b']),
     ('(X = a; X = b), !', ['a']),
