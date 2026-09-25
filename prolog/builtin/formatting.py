@@ -290,6 +290,9 @@ class TermFormatter(object):
             return (0, "".join(result))
         if (term.argument_count(), term.name()) not in self.op_mapping:
             return (0, self.format_term_normally(term, depth))
+        if self.quoted and self.format_atom(term.name()) != term.name():
+            # Quoted names are functors, never operators, in the parser.
+            return (0, self.format_term_normally(term, depth))
         form, prec = self.op_mapping[(term.argument_count(), term.name())]
         result = []
         assert 0 <= term.argument_count() <= 2

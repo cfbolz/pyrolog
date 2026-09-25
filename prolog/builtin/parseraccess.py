@@ -43,11 +43,12 @@ def impl_op(engine, heap, module, precedence, typ, names):
     priority = _priority(precedence, 0)
     form = _form(typ)
     module, names = _qualified_names(engine, heap, module, names)
-    if isinstance(names, term.Callable) and (names.name() == '.' and
-            names.argument_count() == 2 or names.name() == '[]'):
-        values = helper.unwrap_list(names)
-    else:
+    if isinstance(names, term.Var):
+        error.throw_instantiation_error()
+    if isinstance(names, term.Atom) and names.name() != '[]':
         values = [names]
+    else:
+        values = helper.unwrap_list(names)
     for value in values:
         value = value.dereference(heap)
         name = _atom(value)

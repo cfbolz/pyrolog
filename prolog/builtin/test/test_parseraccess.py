@@ -112,6 +112,18 @@ def test_bar_operator_outside_lists():
     assert_true('T = [a|b], T = [a|b].', e)
 
 
+def test_quoted_operator_name_prints_as_functor():
+    from prolog.builtin.formatting import TermFormatter
+    from prolog.interpreter.parsing import parse_query_term
+    e = Engine()
+    assert_true("op(450,xfy,'has space').", e)
+    value = parse_query_term("'has space'(a,b).")
+    rendered = TermFormatter(e, quoted=True).format(value)
+    result = parse_query_term(rendered + '.', e.modulewrapper.current_module.operators)
+    assert result.name() == 'has space'
+    assert result.argument_count() == 2
+
+
 @pytest.mark.parametrize('query, expected', [
     ('op(_,xfx,a)', 'instantiation_error'),
     ('op(1,_,a)', 'instantiation_error'),
@@ -120,8 +132,14 @@ def test_bar_operator_outside_lists():
     ('op(-1,xfx,a)', 'domain_error(operator_priority,-1)'),
     ('op(1201,xfx,a)', 'domain_error(operator_priority,1201)'),
     ('op(1,bad,a)', 'domain_error(operator_specifier,bad)'),
-    ('op(1,xfx,42)', 'type_error(atom,42)'),
+    ('op(1,xfx,42)', 'type_error(list,42)'),
+    ('op(1,xfx,f(a))', 'type_error(list,f(a))'),
+    ('op(1,xfx,[a,_])', 'instantiation_error'),
+    ('op(1,xfx,[42])', 'type_error(atom,42)'),
+    ('op(999999999999999999999999,xfx,a)',
+     'domain_error(operator_priority,999999999999999999999999)'),
     ("op(1,xfx,',')", "permission_error(modify,operator,',')"),
+    ("op(0,fx,'|')", "permission_error(create,operator,'|')"),
     ('current_op(0,_,_)', 'domain_error(operator_priority,0)'),
     ('current_op(_,bad,_)', 'domain_error(operator_specifier,bad)'),
     ('current_op(_,_,42)', 'type_error(atom,42)'),
