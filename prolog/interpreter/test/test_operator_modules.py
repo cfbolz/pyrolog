@@ -1,7 +1,7 @@
 import pytest
 
 from prolog.interpreter.continuation import Engine
-from prolog.interpreter.test.tool import assert_true, assert_false
+from prolog.interpreter.test.tool import assert_true, assert_false, prolog_raises
 
 
 @pytest.fixture
@@ -56,3 +56,51 @@ def test_empty_import_list_does_not_import_operators(operator_library):
     assert_true("use_module('%s', [])." % operator_library, engine)
     assert_false('current_op(_, _, likes).', engine)
     assert_true('current_op(500, xfx, relations:likes).', engine)
+
+
+def test_selective_operator_and_predicate_import(operator_library):
+    engine = Engine()
+    engine.runstring("""
+        :- use_module('%s', [op(500, xfx, likes), pair/1]).
+        example(alice likes bob).
+    """ % operator_library)
+    assert_true('pair(X), example(X).', engine)
+    assert_false('current_op(_, _, secret).', engine)
+
+
+def test_predicate_only_import_does_not_import_operators(operator_library):
+    engine = Engine()
+    assert_true("use_module('%s', [pair/1]), pair(likes(alice,bob))." %
+                operator_library, engine)
+    assert_false('current_op(_, _, likes).', engine)
+
+
+def test_operator_only_import_does_not_import_predicates(operator_library):
+    engine = Engine()
+    assert_true("use_module('%s', [op(500,xfx,likes)])." % operator_library, engine)
+    assert_true('current_op(500,xfx,likes).', engine)
+    prolog_raises('existence_error(procedure,_)', 'pair(_)', engine)
+
+
+@pytest.mark.parametrize('pattern', ['op(P,F,likes)', 'op(P,xfx,N)', 'op(P,F,N)'])
+def test_operator_import_patterns_do_not_bind_variables(operator_library, pattern):
+    engine = Engine()
+    assert_true("use_module('%s', [%s]), var(P), var(F), var(N)." %
+                (operator_library, pattern), engine)
+    assert_true('current_op(500,xfx,likes).', engine)
+
+
+@pytest.mark.parametrize('pattern', ['op(P,P,likes)', 'op(600,F,likes)',
+                                     'op(P,F,missing)'])
+def test_nonmatching_operator_import_patterns(operator_library, pattern):
+    engine = Engine()
+    assert_true("use_module('%s', [%s]), var(P), var(F)." %
+                (operator_library, pattern), engine)
+    assert_false('current_op(_,_,likes).', engine)
+
+
+def test_ground_operator_import_can_override_export(operator_library, capfd):
+    engine = Engine()
+    assert_true("use_module('%s', [op(600,xfy,likes)])." % operator_library, engine)
+    assert_true('current_op(600,xfy,likes).', engine)
+    assert 'not exported' in capfd.readouterr()[1]
