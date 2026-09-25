@@ -472,7 +472,7 @@ def test_impl_use_module():
     m = e.modulewrapper
     create_file("blub.pl", filecontent)
     try:
-        impl_use_module(e, m.user_module, h,
+        impl_use_module(e, h, m.user_module,
                 term.Callable.build("blub.pl"))
         assert "blub" in e.modulewrapper.modules.keys()
     finally:
@@ -482,7 +482,7 @@ def test_impl_use_module():
     m.modules = {}
     m.seen_modules = {}
     try:
-        impl_use_module(e, m.user_module, h, term.Callable.build("blub"))
+        impl_use_module(e, h, m.user_module, term.Callable.build("blub"))
         assert "blub" in m.modules.keys()
     finally:
         delete_file("blub")

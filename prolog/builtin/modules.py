@@ -3,8 +3,9 @@ from prolog.interpreter.term import Atom, Callable, Var, Term, Number
 from prolog.interpreter import error
 from prolog.builtin.sourcehelper import get_source
 from prolog.interpreter import continuation
-from prolog.interpreter.helper import is_term, unwrap_predicate_indicator
+from prolog.interpreter.helper import is_term
 from prolog.interpreter.signature import Signature
+from prolog.interpreter.module import ImportList
 
 meta_args = list("0123456789:?+-")
 libsig = Signature.getsignature("library", 1)
@@ -64,7 +65,8 @@ def handle_use_module(engine, heap, module, path, imports=None):
                     error.throw_import_error(modulename, sig)
         finally:
             m.current_module = current_module
-        module = current_module
+        # Restore the parser's context above, but import into the caller's
+        # module, which can differ for an explicitly qualified use_module/2.
         # XXX should use name argument of module here like SWI
     try:
         imported_module = m.modules[modulename]
@@ -82,10 +84,7 @@ def impl_use_module(engine, heap, module, path):
 
 @expose_builtin("use_module", unwrap_spec=["callable", "list"], needs_module=True)
 def impl_use_module_with_importlist(engine, heap, module, path, imports):
-    importlist = []
-    for sigatom in imports:
-        importlist.append(Signature.getsignature(
-                *unwrap_predicate_indicator(sigatom))) 
+    importlist = ImportList(imports)
     if isinstance(path, Atom):
         handle_use_module(engine, heap, module, path, importlist)
     else:

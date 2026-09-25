@@ -50,3 +50,25 @@ def test_module_operators(tmpdir, jit_options):
         "current_op(350,yfx,joins), write(operators_passed), nl.\n" % (path,path))
     log = run_log(tmpdir, source, query, jit_options)
     assert 'operators_passed\n' in log.result
+
+
+@pytest.mark.parametrize('jit_options', ['off', 'threshold=40'])
+def test_exported_operators(tmpdir, jit_options):
+    library = tmpdir.join('relations.pl')
+    library.write('''
+        :- module(relations, [op(500,xfx,likes), pair/1]).
+        pair(alice likes bob).
+    ''')
+    source = """
+        :- module(client, []).
+        :- use_module('%s', [op(_,_,likes), pair/1]).
+        example(alice likes bob).
+    """ % library
+    query = (
+        "pair(X), example(X), X == likes(alice,bob), "
+        "\\+ current_op(_,_,user:likes), "
+        "use_module('%s', [op(500,xfx,likes)]), "
+        "op(700,xfy,relations:likes), current_op(500,xfx,likes), "
+        "write(operator_exports_passed), nl.\n" % library)
+    log = run_log(tmpdir, source, query, jit_options)
+    assert 'operator_exports_passed\n' in log.result

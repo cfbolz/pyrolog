@@ -8,6 +8,26 @@ from prolog.interpreter.helper import unwrap_predicate_indicator
 class VersionTag(object):
     pass
 
+
+def is_operator_declaration(value):
+    return (isinstance(value, Callable) and value.name() == 'op' and
+            value.argument_count() == 3)
+
+
+class ImportList(object):
+    def __init__(self, declarations):
+        self.predicates = []
+        self.operators = []
+        for declaration in declarations:
+            declaration = declaration.dereference(None)
+            if is_operator_declaration(declaration):
+                assert isinstance(declaration, Callable)
+                self.operators.append(declaration)
+            else:
+                self.predicates.append(Signature.getsignature(
+                    *unwrap_predicate_indicator(declaration)))
+
+
 class ModuleWrapper(object):
     _immutable_fields_ = ["version?"]
 
@@ -48,10 +68,17 @@ class ModuleWrapper(object):
         return self.modules.get(name, None)
 
     def add_module(self, name, exports = []):
+        from prolog.builtin.parseraccess import declare_exported_operator
         mod = Module(name)
         for export in exports:
-            mod.exports.append(Signature.getsignature(
-                    *unwrap_predicate_indicator(export)))
+            export = export.dereference(None)
+            if is_operator_declaration(export):
+                assert isinstance(export, Callable)
+                mod.operator_exports.append(
+                    declare_exported_operator(mod.operators, export))
+            else:
+                mod.exports.append(Signature.getsignature(
+                        *unwrap_predicate_indicator(export)))
         self.current_module = mod
         self.modules[name] = mod
         self.version = VersionTag()
@@ -68,6 +95,7 @@ class Module(object):
         self.version = VersionTag()
         self.meta_predicates = {}
         self.exports = []
+        self.operator_exports = []
         self._toplevel_rule = _make_toplevel_rule(self)
 
     def add_meta_predicate(self, signature, arglist):
@@ -85,13 +113,18 @@ class Module(object):
         return self.functions.get(signature, None)
 
     def use_module(self, module, imports=None):
+        from prolog.builtin.parseraccess import declare_exported_operator
         if imports is None:
             importlist = module.exports
+            for declaration in module.operator_exports:
+                declare_exported_operator(self.operators, declaration)
         else:
             importlist = []
-            for pred in imports:
+            for pred in imports.predicates:
                 if pred in module.exports:
                     importlist.append(pred)
+            for pattern in imports.operators:
+                self._import_operator(module, pattern)
         for sig in importlist:
             try:
                 function = module.functions[sig]
@@ -101,6 +134,30 @@ class Module(object):
                 if self.functions.get(sig, None) is not function:
                     self.functions[sig] = function
                     self.version = VersionTag()
+
+    def _import_operator(self, module, pattern):
+        from prolog.builtin.parseraccess import declare_exported_operator
+        from prolog.builtin.type import impl_ground
+        from prolog.builtin.unifiable import Unifier
+        from prolog.builtin.unify import identical
+        try:
+            impl_ground(None, None, pattern)
+        except error.UnificationFailed:
+            # Match without binding the import pattern or invoking hooks.
+            for declaration in module.operator_exports:
+                try:
+                    Unifier().unify(pattern, declaration)
+                except error.UnificationFailed:
+                    continue
+                declare_exported_operator(self.operators, declaration)
+        else:
+            declare_exported_operator(self.operators, pattern)
+            for declaration in module.operator_exports:
+                if identical(pattern, declaration):
+                    return
+            import os
+            os.write(2, 'Warning: operator declaration not exported by module ' +
+                     module.name + ' (still defined)\n')
 
     def __repr__(self):
         return "Module('%s')" % self.name
