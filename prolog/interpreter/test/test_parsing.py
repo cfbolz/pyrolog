@@ -1,7 +1,7 @@
 import pytest
 from prolog.interpreter.signature import Signature
 from prolog.interpreter.parsing import parse_file
-from prolog.interpreter.parsing import parse_query_term, ParseError
+from prolog.interpreter.parsing import parse_query_term, SyntaxError
 from prolog.interpreter.heap import Heap
 from prolog.interpreter import error
 
@@ -260,7 +260,7 @@ def test_many_block_comments():
 
 def test_missing_dot():
     info = pytest.raises(error.PrologParseError, parse_file, "g. f(X)")
-    assert "ParseError: expected ." in info.value.message
+    assert "SyntaxError: expected ." in info.value.message
 
 def test_parse_error():
     s = """
@@ -277,6 +277,6 @@ def test_parse_error():
     f(b) :- a a b c.
     """
     info = pytest.raises(error.PrologParseError, parse_file, s)
-    assert "ParseError: expected an operator" in info.value.message
+    assert "SyntaxError: expected an operator" in info.value.message
     assert " f(b) :- a a b c." in info.value.message
     assert "line 3" in info.value.message

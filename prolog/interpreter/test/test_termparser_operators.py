@@ -1,7 +1,7 @@
 import pytest
 
 from prolog.interpreter.lexer import UnicodeLexer
-from prolog.interpreter.termparser import OperatorTable, Parser, ParseError
+from prolog.interpreter.termparser import OperatorTable, Parser, SyntaxError
 from prolog.interpreter import term
 
 
@@ -68,15 +68,15 @@ def test_infix(source, expected):
 @pytest.mark.parametrize('source', ['1=2=3.', '1+.', 'f(a,,b).',
                                    '[a|b,c].', '1 2.'])
 def test_invalid_infix(source):
-    with pytest.raises(ParseError):
+    with pytest.raises(SyntaxError):
         parse(source)
 
 
 def test_precedence_clash_keeps_operator_token():
-    with pytest.raises(ParseError) as exc:
+    with pytest.raises(SyntaxError) as exc:
         parse('1=2=3.')
-    assert exc.value.tok.source == '='
-    assert exc.value.tok.source_pos.i == 3
+    assert exc.value.primary.start.i == 3
+    assert exc.value.primary.end.i == 4
 
 
 def test_operator_override():
@@ -93,7 +93,7 @@ def test_relaxed_argument_precedence():
 
 def test_high_precedence_prefix_name_in_predicate_indicator():
     table = operator_table([('block', 1050, 'fx'), ('/', 400, 'yfx')])
-    with pytest.raises(ParseError):
+    with pytest.raises(SyntaxError):
         parse('f(block/1).', table)
     assert shape(parse("f('block'/1).", table)) == ('f', ('/', 'block', 1))
 
@@ -169,7 +169,7 @@ def test_invalid_prefix_postfix(source, definitions):
     table = infix_table()
     for definition in definitions:
         table.add(*definition)
-    with pytest.raises(ParseError):
+    with pytest.raises(SyntaxError):
         parse(source, table)
 
 
@@ -199,7 +199,7 @@ def test_infix_postfix_reinterpretation(source, expected):
 def test_reinterpretation_requires_greater_left_limit(form, precedence):
     table = ambiguous_table()
     table.add('#', precedence, form)
-    with pytest.raises(ParseError):
+    with pytest.raises(SyntaxError):
         parse('1 @ # 2.', table)
 
 
@@ -212,7 +212,7 @@ def test_reinterpretation_can_choose_incoming_postfix():
 def test_reinterpreted_postfix_still_checks_operand():
     table = ambiguous_table()
     table.add('+', 450, 'yfx')
-    with pytest.raises(ParseError):
+    with pytest.raises(SyntaxError):
         parse('1+2 @ .', table)
 
 
@@ -247,7 +247,7 @@ def test_operator_names_as_atoms_and_functors(source, expected):
 def test_quoted_names_do_not_act_as_operators(source):
     table = infix_table()
     table.add('~', 500, 'fy')
-    with pytest.raises(ParseError):
+    with pytest.raises(SyntaxError):
         parse(source, table)
 
 
@@ -255,11 +255,11 @@ def test_unicode_operator_name_and_error_position():
     name = '\xe2\x89\xa4'  # U+2264
     table = operator_table([(name, 700, 'xfx')])
     assert shape(parse('a' + name + 'b.', table)) == (name, 'a', 'b')
-    with pytest.raises(ParseError) as exc:
+    with pytest.raises(SyntaxError) as exc:
         parse('a' + name + 'b' + name + 'c.', table)
-    assert exc.value.tok.source == name
-    assert exc.value.tok.source_pos.i == 5
-    assert exc.value.tok.source_pos.columnno == 3
+    assert exc.value.primary.end.i - exc.value.primary.start.i == len(name)
+    assert exc.value.primary.start.i == 5
+    assert exc.value.primary.start.columnno == 3
 
 
 def test_long_operator_chain():

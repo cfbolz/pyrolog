@@ -134,7 +134,7 @@ class TestInteraction:
         child.expect("  File <stdin>, line 1")
         child.expect(re.escape("X = a b c."))
         child.expect(re.escape("      ^"))
-        child.expect(re.escape("ParseError: expected an operator"))
+        child.expect(re.escape("SyntaxError: expected an operator"))
 
     def test_traceback(self):
         child = self.spawn([])

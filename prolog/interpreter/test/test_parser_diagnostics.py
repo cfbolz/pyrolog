@@ -2,12 +2,12 @@ import pytest
 
 from prolog.interpreter.lexer import UnicodeLexer
 from prolog.interpreter.parsing import default_operator_table
-from prolog.interpreter.termparser import Parser, ParseError
+from prolog.interpreter.termparser import Parser, SyntaxError
 
 
 def diagnostic(source):
     tokens = UnicodeLexer().tokenize(source, eof=True)
-    with pytest.raises(ParseError) as exc:
+    with pytest.raises(SyntaxError) as exc:
         Parser(tokens, default_operator_table).parse()
     return exc.value
 
@@ -42,6 +42,9 @@ def test_empty_input_position():
     exc = diagnostic('')
     assert position(exc.primary.start) == (0, 0, 0)
     assert position(exc.primary.end) == (0, 0, 0)
+    assert exc.incomplete
+    assert not hasattr(exc, 'parser')
+    assert not hasattr(exc, 'tok')
 
 
 @pytest.mark.parametrize('source, closing, opening, expected, found', [
@@ -60,6 +63,7 @@ def test_mismatched_delimiter(source, closing, opening, expected, found):
     assert (exc.secondary.start.i, exc.secondary.end.i) == (opening, opening + 1)
     assert exc.expected == expected
     assert exc.found == found
+    assert not exc.incomplete
 
 
 @pytest.mark.parametrize('source, opening, expected', [
@@ -74,6 +78,7 @@ def test_unclosed_delimiter_at_eof(source, opening, expected):
     assert exc.secondary.start.i == exc.secondary.end.i == len(source)
     assert exc.expected == expected
     assert exc.found == 'EOF'
+    assert exc.incomplete
 
 
 def test_unclosed_delimiter_at_full_stop():
@@ -223,7 +228,7 @@ def test_postfix_precedence_clash():
     from prolog.interpreter.termparser import OperatorTable
     table = OperatorTable()
     table.add('@', 400, 'xf')
-    with pytest.raises(ParseError) as caught:
+    with pytest.raises(SyntaxError) as caught:
         Parser(UnicodeLexer().tokenize('a @ @ .'), table).parse()
     exc = caught.value
     assert exc.kind == 'precedence_clash'
@@ -235,7 +240,7 @@ def test_postfix_precedence_clash():
 
 def test_expression_precedence_limit_reports_actual_and_limit():
     parser = Parser(UnicodeLexer().tokenize('1+2.'), default_operator_table)
-    with pytest.raises(ParseError) as caught:
+    with pytest.raises(SyntaxError) as caught:
         parser._parse_op_expr(400, '.')
     exc = caught.value
     assert exc.kind == 'precedence_limit'
@@ -284,7 +289,7 @@ def test_defensive_literal_errors(name, source, kind):
     from rpython.rlib.parsing.lexer import Token, SourcePos
     tokens = [Token(name, source, SourcePos(0, 0, 0)),
               Token('.', '.', SourcePos(len(source), 0, len(source)))]
-    with pytest.raises(ParseError) as caught:
+    with pytest.raises(SyntaxError) as caught:
         Parser(tokens, default_operator_table).parse()
     assert caught.value.kind == kind
     assert caught.value.primary.start.i == 0
@@ -293,7 +298,7 @@ def test_defensive_literal_errors(name, source, kind):
 
 def test_expected_separator_reports_spelling_not_token_class():
     parser = Parser(UnicodeLexer().tokenize('foo.'), default_operator_table)
-    with pytest.raises(ParseError) as caught:
+    with pytest.raises(SyntaxError) as caught:
         parser._expect('ATOM', ',')
     exc = caught.value
     assert exc.kind == 'unexpected_token'

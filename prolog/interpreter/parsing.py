@@ -1,7 +1,7 @@
 """Public parsing entry points, using the handwritten UTF-8 term parser."""
 from rpython.rlib.parsing.deterministic import LexerError
 from prolog.interpreter.lexer import UnicodeLexer
-from prolog.interpreter.termparser import Parser, OperatorTable, ParseError
+from prolog.interpreter.termparser import Parser, OperatorTable, SyntaxError
 from prolog.interpreter import error
 
 
@@ -62,7 +62,7 @@ def parse_file_with_vars(s, operators=None, callback=_dummyfunc, arg=None, file_
         tokens = lexer.tokenize(s, eof=True)
         eof = tokens.pop()
         return _parse_file(tokens, eof, operators, callback, arg, s, file_name)
-    except ParseError as exc:
+    except SyntaxError as exc:
         parse_error = exc
         pos = exc.primary.start
         lines = s.split('\n')
@@ -114,7 +114,7 @@ def get_query_and_vars(s, operators=None):
     parser = Parser(lexer.tokenize(s, eof=True), operators)
     try:
         query = parser.parse()
-    except ParseError as exc:
+    except SyntaxError as exc:
         reason = 'float_overflow' if exc.kind == 'float_overflow' else exc.msg
         raise error.throw_syntax_error(reason, exc)
     return query, parser.varname_to_var

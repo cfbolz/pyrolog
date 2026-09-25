@@ -1,7 +1,7 @@
 import pytest
 
 from prolog.interpreter.lexer import UnicodeLexer
-from prolog.interpreter.termparser import Parser, ParseError, OperatorTable
+from prolog.interpreter.termparser import Parser, SyntaxError, OperatorTable
 from prolog.interpreter.term import Atom, Number, BigInt, Float, Var
 
 
@@ -45,9 +45,10 @@ def test_quoted_functor():
 
 @pytest.mark.parametrize("source", [r"'\q'.", r"'\uD800'.", r"'\U00110000'."])
 def test_invalid_quoted_escape(source):
-    with pytest.raises(ParseError) as exc:
+    with pytest.raises(SyntaxError) as exc:
         parse(source)
-    assert exc.value.tok.source == source[:-1]
+    assert exc.value.primary.start.i == 1
+    assert exc.value.primary.end.i == len(source) - 2
 
 
 def test_integer():
@@ -94,7 +95,7 @@ def test_float_literal(literal, expected):
     r"0'\q", r"0'\uD800", r"0'\U00110000",
 ])
 def test_invalid_numeric_literal(literal):
-    with pytest.raises(ParseError):
+    with pytest.raises(SyntaxError):
         parse(literal + ".")
 
 
@@ -172,7 +173,7 @@ def test_variable_scope():
 @pytest.mark.parametrize("source", ["", "f(a", "f().", "f(a,).", "(a.",
                                    "a. b.", "a + b."])
 def test_invalid_syntax(source):
-    with pytest.raises(ParseError):
+    with pytest.raises(SyntaxError):
         parse(source)
 
 
@@ -217,9 +218,10 @@ def test_double_quoted_codes_in_compound():
 
 @pytest.mark.parametrize("literal", [r'"\q"', r'"\uD800"', r'"\U00110000"'])
 def test_invalid_double_quoted_escape(literal):
-    with pytest.raises(ParseError) as exc:
+    with pytest.raises(SyntaxError) as exc:
         parse(literal + ".")
-    assert exc.value.tok.source == literal
+    assert exc.value.primary.start.i == 1
+    assert exc.value.primary.end.i == len(literal) - 1
 
 
 @pytest.mark.parametrize("source", ["[].", "[ ]."])
@@ -284,7 +286,7 @@ def test_nested_list():
     "[a b].", "[a.", "[a",
 ])
 def test_invalid_list(source):
-    with pytest.raises(ParseError):
+    with pytest.raises(SyntaxError):
         parse(source)
 
 
@@ -330,7 +332,7 @@ def test_braces_variable_sharing():
 
 @pytest.mark.parametrize("source", ["{a", "{a.", "{a).", "{a b}.", "{a, b}."])
 def test_invalid_braces_without_operators(source):
-    with pytest.raises(ParseError):
+    with pytest.raises(SyntaxError):
         parse(source)
 
 
@@ -349,5 +351,5 @@ def test_compound_parenthesis_adjacency(functor, expected):
 @pytest.mark.parametrize("functor", ["f", "'hello world'", "'\xc3\xa9'"])
 @pytest.mark.parametrize("gap", [" ", "\t", "\n", "/*comment*/", "%comment\n"])
 def test_compound_parenthesis_requires_adjacency(functor, gap):
-    with pytest.raises(ParseError):
+    with pytest.raises(SyntaxError):
         parse(functor + gap + "(a).")

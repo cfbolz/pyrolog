@@ -562,7 +562,7 @@ def test_parser_access():
     assert_true("op(450, xfy, foo).", e)
     assert_true("a foo b.", e)
     assert_true("op(0, xfy, foo).", e)
-    # XXX really a ParseError
+    # XXX really a SyntaxError
     pytest.raises(Exception, assert_false, "a foo b.", e)
     # change precedence of + for funny results :-)
     assert_true("14 is 2 + 3 * 4.", e)

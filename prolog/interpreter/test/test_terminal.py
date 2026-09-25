@@ -37,7 +37,7 @@ def test_console_recovers_from_float_literal_overflow(monkeypatch):
     output = terminal_input(monkeypatch, 'X is 1.0e999.\ntrue.\nhalt.\n')
     translatedmain.run_console(Engine())
     text = ''.join(output)
-    assert "ParseError: float overflow" in text
+    assert "SyntaxError: float overflow" in text
     assert 'yes' in text
 
 

@@ -3,46 +3,10 @@ from rpython.rlib import rutf8
 from rpython.rlib.rstring import ParseStringError
 from rpython.rlib.parsing.lexer import Token, SourcePos
 from prolog.interpreter import helper, term
+from prolog.interpreter.syntaxerror import SyntaxError, SourceSpan, token_span, token_position
 from prolog.interpreter.parsing_helpers import unescape_literal, EscapeError, parse_integer_literal
 
 CLOSING_DELIMITERS = {'(': ')', '[': ']', '{': '}'}
-
-class SourceSpan(object):
-    """Half-open byte range with zero-based lines and code-point columns."""
-    def __init__(self, start, end):
-        self.start = start
-        self.end = end
-
-
-def token_position(token, offset):
-    assert offset >= 0
-    start = token.source_pos
-    line, column = start.lineno, start.columnno
-    for code in rutf8.Utf8StringIterator(token.source[:offset]):
-        if code == 10:
-            line += 1
-            column = 0
-        else:
-            column += 1
-    return SourcePos(start.i + offset, line, column)
-
-
-def token_span(token):
-    return SourceSpan(token.source_pos, token_position(token, len(token.source)))
-
-
-class ParseError(Exception):
-    def __init__(self, msg, tok, parser, kind='syntax_error', secondary=None,
-                 expected='', found=''):
-        self.msg = msg
-        self.tok = tok
-        self.parser = parser
-        self.kind = kind
-        self.primary = token_span(tok if tok is not None else parser.eof)
-        self.secondary = token_span(secondary) if secondary is not None else None
-        self.expected = expected
-        self.found = found
-
 
 class Operator(object):
     def __init__(self, name, precedence, form):
@@ -258,25 +222,31 @@ class Parser(object):
             return
         if not self.open_delimiters:
             if token.name in (')', ']', '}'):
-                raise ParseError('unexpected closing delimiter %s' % token.name,
-                                 token, self, 'unexpected_closing_delimiter',
+                self._error('unexpected closing delimiter %s' % token.name,
+                                 token, 'unexpected_closing_delimiter',
                                  found=token.name)
             return
         opening = self.open_delimiters[-1]
         expected = CLOSING_DELIMITERS[opening.name]
         if token.name in ('.', 'EOF'):
-            raise ParseError('unclosed %s: expected %s' % (opening.name, expected),
-                             opening, self, 'unclosed_delimiter', token,
+            self._error('unclosed %s: expected %s' % (opening.name, expected),
+                             opening, 'unclosed_delimiter', token,
                              expected, token.name)
         if token.name != expected:
-            raise ParseError('expected %s, found %s' % (expected, token.name),
-                             token, self, 'mismatched_delimiter', opening,
+            self._error('expected %s, found %s' % (expected, token.name),
+                             token, 'mismatched_delimiter', opening,
                              expected, token.name)
 
     def _error(self, msg, tok, kind='syntax_error', secondary=None, expected='', found=''):
         if not found:
             found = 'EOF' if tok is None or tok.name == 'EOF' else tok.source
-        raise ParseError(msg, tok, self, kind, secondary, expected, found)
+        primary_span = token_span(tok if tok is not None else self.eof)
+        secondary_span = token_span(secondary) if secondary is not None else None
+        incomplete = (kind in ('unclosed_delimiter', 'missing_operand') and
+                      secondary is not None and secondary.name == 'EOF' or
+                      found == 'EOF' and kind in ('missing_full_stop', 'unexpected_eof',
+                                                 'missing_term'))
+        raise SyntaxError(msg, primary_span, kind, secondary_span, expected, found, incomplete)
 
     def _missing_term(self, token, context='term'):
         opening = self.open_delimiters[-1] if self.open_delimiters else None
@@ -427,7 +397,7 @@ class Parser(object):
             if exc.reason == 'character_code':
                 kind = 'invalid_character_code'
                 message = 'escape does not denote a Unicode scalar value'
-            diagnostic = ParseError(message, current, self, kind)
+            diagnostic = SyntaxError(message, token_span(current), kind)
             diagnostic.primary = SourceSpan(token_position(current, offset + exc.start),
                                             token_position(current, offset + exc.end))
             raise diagnostic

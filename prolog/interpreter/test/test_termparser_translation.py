@@ -1,6 +1,6 @@
 from rpython.translator.translator import TranslationContext
 from prolog.interpreter.lexer import UnicodeLexer
-from prolog.interpreter.termparser import Parser, OperatorTable, ParseError
+from prolog.interpreter.termparser import Parser, OperatorTable, SyntaxError
 from prolog.interpreter import term
 
 
@@ -13,7 +13,7 @@ def test_parser_is_rpython():
     def entry(source):
         try:
             result = Parser(UnicodeLexer().tokenize(source, eof=True), operators).parse()
-        except ParseError as exc:
+        except SyntaxError as exc:
             offset = exc.primary.start.i
             if exc.secondary is not None:
                 offset += exc.secondary.start.i
