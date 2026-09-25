@@ -56,6 +56,28 @@ class _SourceLine(object):
         self.text = ''.join(parts)
 
 
+class _SourceLines(object):
+    """Index line starts cheaply; prepare display columns only on demand."""
+    def __init__(self, source):
+        self.raw = source.split('\n')
+        self.starts = []
+        self.prepared = {}
+        offset = 0
+        for raw in self.raw:
+            self.starts.append(offset)
+            offset += len(raw) + 1
+
+    def get(self, index):
+        line = self.prepared.get(index)
+        if line is None:
+            raw = self.raw[index]
+            # Preserve byte offsets while treating CRLF as one line ending.
+            visible = raw[:-1] if raw.endswith('\r') else raw
+            line = _SourceLine(visible, self.starts[index])
+            self.prepared[index] = line
+        return line
+
+
 class _Annotation(object):
     def __init__(self, start, end, label, primary):
         self.start = start
@@ -117,36 +139,34 @@ def _annotation_rows(annotations, margin, color):
 
 def format_syntax_error(source, filename, error, color=False):
     """Return a complete diagnostic, with the exception message last."""
-    lines = []
-    offset = 0
-    for raw in source.split('\n'):
-        # Treat CRLF as one line ending while preserving byte offsets.
-        visible = raw[:-1] if raw.endswith('\r') else raw
-        lines.append(_SourceLine(visible, offset))
-        offset += len(raw) + 1
+    lines = _SourceLines(source)
+    count = len(lines.raw)
     primary_line = 0
-    for i in range(len(lines)):
-        if lines[i].start <= error.primary.start.i:
+    for i in range(count):
+        if lines.starts[i] <= error.primary.start.i:
             primary_line = i
-    first = lines[primary_line]
+    first = lines.get(primary_line)
     primary_column = first.character_columns[min(first.size, max(0, error.primary.start.i - first.start))]
-    width = len(str(len(lines)))
+    width = len(str(count))
     margin = ' ' * (width + 2) + '│ '
     rows = [' ' * (width + 2) + '╭─[%s:%d:%d]' %
             (filename, primary_line + 1, primary_column + 1), margin.rstrip()]
     last_shown = -1
-    for i in range(len(lines)):
-        line = lines[i]
+    for i in range(count):
+        line = None
+        line_start = lines.starts[i]
         annotations = []
-        next_start = lines[i + 1].start if i + 1 < len(lines) else len(source) + 1
+        next_start = lines.starts[i + 1] if i + 1 < count else len(source) + 1
         for secondary in [False, True]:
             location = error.secondary if secondary else error.primary
             if location is None:
                 continue
             start = location.start.i
             end = location.end.i
-            if start >= next_start or (end <= line.start and start != line.start):
+            if start >= next_start or (end <= line_start and start != line_start):
                 continue
+            if line is None:
+                line = lines.get(i)
             label = error.secondary_label if secondary else error.primary_label
             if end > next_start:
                 label = ''
@@ -156,9 +176,10 @@ def format_syntax_error(source, filename, error, color=False):
                                            label, not secondary))
         if not annotations:
             continue
+        assert line is not None
         if last_shown >= 0:
             if i - last_shown == 2:
-                rows.append(' ' + (' ' * (width - len(str(i))) + str(i)) + ' │ ' + lines[i - 1].text)
+                rows.append(' ' + (' ' * (width - len(str(i))) + str(i)) + ' │ ' + lines.get(i - 1).text)
             elif i - last_shown > 2:
                 rows.append(' ' * (width + 2) + '⋮')
         rows.append(' ' + (' ' * (width - len(str(i + 1))) + str(i + 1)) + ' │ ' + line.text)
