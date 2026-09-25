@@ -1,5 +1,7 @@
 import py
 import math
+from prolog.interpreter.parsing_helpers import unescape, parse_integer_literal
+from prolog.interpreter.newparser import Parser, OperatorTable, ParseError as NewParseError
 from rpython.rlib.parsing.deterministic import LexerError
 from rpython.rlib.parsing.tree import Nonterminal, Symbol, RPythonVisitor
 from rpython.rlib.parsing.parsing import PackratParser, LazyParseTable, Rule
@@ -76,6 +78,18 @@ def make_default_operations():
     return operations
 
 default_operations = make_default_operations()
+
+
+def make_operator_table(operations):
+    table = OperatorTable()
+    for precedence, groups in operations:
+        for form, names in groups:
+            for name in names:
+                table.add(name, precedence, form)
+    return table
+
+
+default_operator_table = make_operator_table(default_operations)
 
 import sys
 sys.setrecursionlimit(10000)
@@ -196,18 +210,21 @@ def _parse_file(s, parser, callback, arg, file_name):
     return trees
 
 def parse_query(s):
-    tokens = lexer.tokenize(s, eof=True)
-    s = parser_query.parse(tokens, lazy=False)
+    return parse_query_term(s)
+
 
 def parse_query_term(s):
     return get_query_and_vars(s)[0]
 
+
 def get_query_and_vars(s):
-    tokens = lexer.tokenize(s, eof=True)
-    s = parser_query.parse(tokens, lazy=False)
-    builder = TermBuilder()
-    query = builder.build_query(s)
-    return query, builder.varname_to_var
+    parser = Parser(lexer.tokenize(s), default_operator_table)
+    try:
+        query = parser.parse()
+    except NewParseError as exc:
+        reason = 'float_overflow' if exc.msg == 'float overflow' else exc.msg
+        raise error.throw_syntax_error(reason)
+    return query, parser.varname_to_var
 
 class OrderTransformer(object):
     def transform(self, node):
@@ -421,92 +438,6 @@ class TermBuilder(RPythonVisitor):
             curr = Callable.build(".", [elt, curr])
         return curr
 
-
-ESCAPES = {
-    "\\a": "\a",
-    "\\b": "\b",
-    "\\f": "\f",
-    "\\n": "\n",
-    "\\r": "\r",
-    "\\t": "\t",
-    "\\v": "\v",
-    "\\\\":  "\\"
-}
-
-
-def parse_integer_literal(s):
-    from prolog.interpreter.term import Number, BigInt
-    base = 10
-    if s.startswith('0x'):
-        base = 16
-    elif s.startswith('0o'):
-        base = 8
-    elif s.startswith('0b'):
-        base = 2
-    try:
-        return Number(string_to_int(s, base))
-    except ParseStringOverflowError:
-        return BigInt(rbigint.fromstr(s, base))
-
-
-def unescape(s, quote="'"):
-    result = []
-    i = 0
-    while i < len(s):
-        c = s[i]
-        i += 1
-        if c == quote and i < len(s) and s[i] == quote:
-            result.append(c)
-            i += 1
-        elif c != "\\":
-            result.append(c)
-        else:
-            if i == len(s):
-                error.throw_syntax_error("character_escape")
-            c = s[i]
-            i += 1
-            if c in 'uU':
-                count = 4 if c == 'u' else 8
-                if i + count > len(s):
-                    error.throw_syntax_error("character_escape")
-                value = 0
-                for j in range(count):
-                    digit = s[i + j].lower()
-                    if digit not in '0123456789abcdef':
-                        error.throw_syntax_error("character_escape")
-                    value = value * 16 + '0123456789abcdef'.find(digit)
-                i += count
-                try:
-                    result.append(rutf8.unichr_as_utf8(value))
-                except rutf8.OutOfRange:
-                    error.throw_syntax_error("character_code")
-            elif c == 'x' or '0' <= c <= '7':
-                base = 16 if c == 'x' else 8
-                value = 0 if c == 'x' else ord(c) - 48
-                digits = 0 if c == 'x' else 1
-                while i < len(s) and s[i] != "\\":
-                    digit = '0123456789abcdef'.find(s[i].lower())
-                    if digit < 0 or digit >= base or value > 0x10ffff:
-                        error.throw_syntax_error("character_escape")
-                    value = value * base + digit
-                    digits += 1
-                    i += 1
-                if i == len(s) or digits == 0:
-                    error.throw_syntax_error("character_escape")
-                i += 1
-                try:
-                    result.append(rutf8.unichr_as_utf8(value))
-                except rutf8.OutOfRange:
-                    error.throw_syntax_error("character_code")
-            elif c == "\n":
-                pass
-            elif c in "'\"":
-                result.append(c)
-            elif "\\" + c in ESCAPES:
-                result.append(ESCAPES["\\" + c])
-            else:
-                error.throw_syntax_error("character_escape")
-    return "".join(result)
 
 
 def get_engine(source, create_files=False, load_system=False, **modules):

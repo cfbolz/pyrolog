@@ -2,7 +2,7 @@ import math
 from rpython.rlib import rutf8
 from rpython.rlib.rstring import ParseStringError
 from prolog.interpreter import error, helper, term
-from prolog.interpreter.parsing import unescape, parse_integer_literal
+from prolog.interpreter.parsing_helpers import unescape, parse_integer_literal
 
 class ParseError(Exception):
     def __init__(self, msg, tok, parser):

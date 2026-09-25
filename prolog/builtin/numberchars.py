@@ -35,7 +35,7 @@ def parse_number(chars):
         start = rutf8.next_codepoint_pos(text, start)
     text = text[start:]
     if text.startswith("0'"):
-        from prolog.interpreter.parsing import unescape
+        from prolog.interpreter.parsing_helpers import unescape
         char = unescape(text[2:])
         if rutf8.codepoints_in_utf8(char) != 1:
             error.throw_syntax_error("Illegal number")
