@@ -1,4 +1,4 @@
-:- module(coroutines, [freeze/2, when/2, frozen/2, block/1, dif/2]).
+:- module(coroutines, [freeze/2, when/2, frozen/2, 'block'/1, dif/2]).
 :- meta_predicate freeze('?', :), when('?', :), block(:).
 
 % *****************************************************

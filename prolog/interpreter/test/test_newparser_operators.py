@@ -85,16 +85,28 @@ def test_operator_override():
     assert shape(parse('1+2*3.', table)) == ('*', ('+', 1, 2), 3)
 
 
-def test_argument_maximum_precedence():
+def test_relaxed_argument_precedence():
     table = operator_table([('then', 1100, 'xfy')])
-    with pytest.raises(ParseError):
-        parse('f(a then b).', table)
+    assert shape(parse('f(a then b).', table)) == ('f', ('then', 'a', 'b'))
     assert shape(parse('f((a then b)).', table)) == ('f', ('then', 'a', 'b'))
 
 
 def test_high_precedence_prefix_name_in_predicate_indicator():
     table = operator_table([('block', 1050, 'fx'), ('/', 400, 'yfx')])
-    assert shape(parse('f(block/1).', table)) == ('f', ('/', 'block', 1))
+    with pytest.raises(ParseError):
+        parse('f(block/1).', table)
+    assert shape(parse("f('block'/1).", table)) == ('f', ('/', 'block', 1))
+
+
+def test_relaxed_prefix_and_list_precedence():
+    table = operator_table([('p', 1100, 'fy'), ('then', 1100, 'xfy')])
+    assert shape(parse('f(p a,b).', table)) == ('f', ('p', 'a'), 'b')
+    assert shape(parse('[a then b,c|d then e].', table)) == (
+        '.', ('then', 'a', 'b'), ('.', 'c', ('then', 'd', 'e')))
+
+
+def test_parenthesized_comma_in_list_tail():
+    assert shape(parse('[a|(b,c)].')) == ('.', 'a', (',', 'b', 'c'))
 
 
 def test_variables_shared_across_expressions():
@@ -204,11 +216,10 @@ def test_reinterpreted_postfix_still_checks_operand():
         parse('1+2 @ .', table)
 
 
-def test_reinterpreted_postfix_still_checks_expression_limit():
+def test_reinterpreted_postfix_in_relaxed_argument():
     table = ambiguous_table()
     table.add('@', 1100, 'yf')
-    with pytest.raises(ParseError):
-        parse('f(1 @).', table)
+    assert shape(parse('f(1 @).', table)) == ('f', ('@', 1))
 
 
 @pytest.mark.parametrize('source, expected', [

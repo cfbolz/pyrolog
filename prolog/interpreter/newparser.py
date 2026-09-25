@@ -347,7 +347,9 @@ class Parser(object):
         self._get_next()
         res = []
         while 1:
-            res.append(self._parse_op_expr(999, ',)'))
+            # Like SWI's default mode, allow all operator priorities here;
+            # the unparenthesized comma still separates arguments.
+            res.append(self._parse_op_expr(1200, ',)'))
             next = self._peek()
             if next.name == ')':
                 self._get_next()
@@ -363,14 +365,14 @@ class Parser(object):
             return tail
         elements = []
         while True:
-            elements.append(self._parse_op_expr(999, ',|]'))
+            elements.append(self._parse_op_expr(1200, ',|]'))
             next = self._peek()
             if next.name == "]":
                 self._get_next()
                 break
             if next.name == "|":
                 self._get_next()
-                tail = self._parse_op_expr(999, ']')
+                tail = self._parse_op_expr(1200, ',|]')
                 self._expect("]")
                 break
             self._expect("ATOM", ",")
