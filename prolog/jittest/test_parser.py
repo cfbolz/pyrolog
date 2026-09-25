@@ -25,3 +25,28 @@ def test_parser_entry_points(tmpdir, jit_options):
         "write(parser_passed), nl.\n" % (path, comma_path, comma_path))
     log = run_log(tmpdir, source, query, jit_options)
     assert 'parser_passed\n' in log.result
+
+
+@pytest.mark.parametrize('jit_options', ['off', 'threshold=40'])
+def test_module_operators(tmpdir, jit_options):
+    source = """
+        :- module(left, []).
+        :- op(450, xfy, joins).
+        chain(a joins b joins c).
+        read_it(S,T) :- read(S,T).
+        write_it(S,T) :- write_term(S,T,[]).
+        :- module(right, []).
+        :- op(350, yfx, joins).
+    """
+    path = tmpdir.join('operators.pl')
+    query = (
+        "left:chain(joins(a,joins(b,c))), "
+        "T = a joins b joins c, T = joins(joins(a,b),c), "
+        "findall(F,left:current_op(_,F,joins),[xfy]), "
+        "open('%s',write,W), left:write_it(W,joins(a,b)), "
+        "put_char(W,'.'), close(W), open('%s',read,R), "
+        "left:read_it(R,joins(a,b)), close(R), "
+        "op(0,xfy,left:joins), \\+ left:current_op(_,_,joins), "
+        "current_op(350,yfx,joins), write(operators_passed), nl.\n" % (path,path))
+    log = run_log(tmpdir, source, query, jit_options)
+    assert 'operators_passed\n' in log.result
