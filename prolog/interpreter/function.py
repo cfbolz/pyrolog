@@ -58,21 +58,7 @@ class Rule(object):
 
         self._does_contain_cut()
 
-    def _init_source_info(self, tree, source_info):
-        from rpython.rlib.parsing.tree import Nonterminal, Symbol
-        start_source_pos = tree.getsourcepos()
-        end_source_pos = None
-        parts = [tree]
-        while parts:
-            first = parts.pop()
-            if isinstance(first, Nonterminal):
-                parts.extend(first.children)
-            else:
-                assert isinstance(first, Symbol)
-                end_source_pos = first.getsourcepos()
-                break
-        if end_source_pos is None:
-            end_source_pos = start_source_pos
+    def _init_source_info(self, start_source_pos, end_source_pos, source_info):
         self.line_range = [start_source_pos.lineno, end_source_pos.lineno + 1]
         start = start_source_pos.i
         stop = end_source_pos.i + 1

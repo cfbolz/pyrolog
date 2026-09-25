@@ -207,7 +207,7 @@ class Parser(object):
                 if (current.name == 'ATOM' and not current.source.startswith("'")
                         and not self._starts_compound(current)):
                     prefix = self.operators.prefix_ops.get(current.source)
-                    if prefix is not None:
+                    if prefix is not None and prefix.precedence <= max_precedence:
                         self._get_next()
                         state.push_pending(current, prefix)
                         continue

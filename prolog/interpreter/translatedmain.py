@@ -7,7 +7,6 @@ from prolog.interpreter.replpolicy import PrologInputPolicy
 from prolog.interpreter.highlighting import PrologHighlighter
 from prolog.interpreter.completion import PrologCompleter
 from rpython.rlib.listsort import TimSort
-from rpython.rlib.parsing.parsing import ParseError
 from rpython.rlib.parsing.deterministic import LexerError
 from prolog.interpreter.parsing import get_query_and_vars
 from prolog.interpreter.parsing import get_engine

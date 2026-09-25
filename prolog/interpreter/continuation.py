@@ -164,18 +164,15 @@ class Engine(object):
     # _____________________________________________________
     # parsing-related functionality
 
-    def _build_and_run(self, tree, source_string, file_name):
+    def _build_and_run(self, term, source_string, file_name, start, end):
         assert self is not None # for the annotator (!)
-        from prolog.interpreter.parsing import TermBuilder
-        builder = TermBuilder()
-        term = builder.build_query(tree)
         if isinstance(term, Callable) and term.signature().eq(callsig):
             self.run_query_in_current(term.argument_at(0))
         else:
             term = self._term_expand(term)
             rule = self.add_rule(term)
             rule.file_name = file_name
-            rule._init_source_info(tree, source_string)
+            rule._init_source_info(start, end, source_string)
 
     def _term_expand(self, term):
         if self.modulewrapper.system is not None:
@@ -195,11 +192,8 @@ class Engine(object):
         parse_file(s, None, Engine._build_and_run, self, file_name=file_name)
 
     def parse(self, s, file_name=None):
-        from prolog.interpreter.parsing import parse_file, TermBuilder
-        builder = TermBuilder()
-        trees = parse_file(s, None, file_name=file_name)
-        terms = builder.build_many(trees)
-        return terms, builder.varname_to_var
+        from prolog.interpreter.parsing import parse_file_with_vars
+        return parse_file_with_vars(s, file_name=file_name)
 
     def getoperations(self):
         from prolog.interpreter.parsing import default_operations

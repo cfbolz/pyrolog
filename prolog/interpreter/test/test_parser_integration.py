@@ -32,3 +32,42 @@ def test_read_uses_new_parser(tmpdir):
     assert_true("open('%s',read,S), read(S,T), functor(T,f,1), "
                 "catch(read(S,_),error(syntax_error(_)),Caught=yes), "
                 "Caught==yes,close(S)." % path)
+
+
+def test_file_returns_terms_with_separate_variable_scopes():
+    first, second = parsing.parse_file('f(X,X). g(X).')
+    assert first.name() == 'f'
+    assert first.argument_at(0) is first.argument_at(1)
+    assert first.argument_at(0) is not second.argument_at(0)
+
+
+def test_engine_parse_uses_new_parser():
+    from prolog.interpreter.continuation import Engine
+    terms, variables = Engine().parse('f((a,b), X).')
+    assert terms[0].argument_count() == 2
+    assert terms[0].argument_at(1) is variables['X']
+    with pytest.raises(error.PrologParseError):
+        Engine().parse('f (a).')
+
+
+def test_consult_runs_directives_between_terms():
+    engine = parsing.get_engine('first. :- assert(second). third.')
+    assert_true('first, second, third.', engine)
+
+
+def test_rule_source_spans_with_utf8():
+    from prolog.interpreter.signature import Signature
+    source = '% comment\n\xc3\xa9(X) :-\n    X = a.\n\nnext.\n'
+    engine = parsing.get_engine(source)
+    rule = engine.modulewrapper.current_module.lookup(Signature.getsignature('\xc3\xa9', 1)).rulechain
+    assert rule.source == '\xc3\xa9(X) :-\n    X = a.'
+    assert rule.line_range == [1, 3]
+
+
+def test_file_error_keeps_location():
+    with pytest.raises(error.PrologParseError) as exc:
+        parsing.parse_file('good.\nbad (x).', file_name='example.pl')
+    assert exc.value.file_name == 'example.pl'
+    assert exc.value.line_number == 1
+    assert 'bad (x).' in exc.value.message
+    assert '^' in exc.value.message

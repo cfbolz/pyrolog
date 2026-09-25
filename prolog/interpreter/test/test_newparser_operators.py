@@ -92,6 +92,11 @@ def test_argument_maximum_precedence():
     assert shape(parse('f((a then b)).', table)) == ('f', ('then', 'a', 'b'))
 
 
+def test_high_precedence_prefix_name_in_predicate_indicator():
+    table = operator_table([('block', 1050, 'fx'), ('/', 400, 'yfx')])
+    assert shape(parse('f(block/1).', table)) == ('f', ('/', 'block', 1))
+
+
 def test_variables_shared_across_expressions():
     parser = Parser(UnicodeLexer().tokenize('f(X+Y, [Y*X]).'), infix_table())
     result = parser.parse()

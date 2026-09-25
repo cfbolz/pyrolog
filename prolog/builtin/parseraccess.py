@@ -53,6 +53,6 @@ def impl_op(engine, heap, precedence, typ, name):
                     break
             else:
                 operations.append((precedence, [(typ, [name])]))
-    engine.parser = parsing.make_parser_at_runtime(engine.operations)
+    engine.parser = parsing.make_operator_table(engine.operations)
 
 
