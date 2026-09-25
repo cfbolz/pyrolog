@@ -204,3 +204,52 @@ def test_reinterpreted_postfix_still_checks_expression_limit():
     table.add('@', 1100, 'yf')
     with pytest.raises(ParseError):
         parse('f(1 @).', table)
+
+
+@pytest.mark.parametrize('source, expected', [
+    ('~ .', '~'),
+    ('~ ~ .', ('~', '~')),
+    ('~ = a.', ('=', '~', 'a')),
+    ('f(~, p, +).', ('f', '~', 'p', '+')),
+    ('[~,p].', ('.', '~', ('.', 'p', '[]'))),
+    ("'~'.", '~'),
+    ("'~'(a,b).", ('~', 'a', 'b')),
+    ("f(',', '+').", ('f', ',', '+')),
+    ('a + p(b,c).', ('+', 'a', ('p', 'b', 'c'))),
+    ('a + @(b,c).', ('+', 'a', ('@', 'b', 'c'))),
+])
+def test_operator_names_as_atoms_and_functors(source, expected):
+    table = infix_table()
+    table.add('~', 500, 'fy')
+    table.add('p', 1100, 'fy')
+    table.add('@', 500, 'yfx')
+    table.add('@', 400, 'yf')
+    assert shape(parse(source, table)) == expected
+
+
+@pytest.mark.parametrize('source', ["a '+' b.", "'~' a."])
+def test_quoted_names_do_not_act_as_operators(source):
+    table = infix_table()
+    table.add('~', 500, 'fy')
+    with pytest.raises(ParseError):
+        parse(source, table)
+
+
+def test_unicode_operator_name_and_error_position():
+    name = '\xe2\x89\xa4'  # U+2264
+    table = operator_table([(name, 700, 'xfx')])
+    assert shape(parse('a' + name + 'b.', table)) == (name, 'a', 'b')
+    with pytest.raises(ParseError) as exc:
+        parse('a' + name + 'b' + name + 'c.', table)
+    assert exc.value.tok.source == name
+    assert exc.value.tok.source_pos.i == 5
+    assert exc.value.tok.source_pos.columnno == 3
+
+
+def test_long_operator_chain():
+    result = parse('^'.join(['1'] * 2000) + '.')
+    for unused in range(1999):
+        assert result.name() == '^'
+        assert result.argument_at(0).num == 1
+        result = result.argument_at(1)
+    assert result.num == 1

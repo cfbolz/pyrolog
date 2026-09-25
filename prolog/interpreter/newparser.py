@@ -70,8 +70,6 @@ class ExpressionState(object):
         self.push_pending(token, incoming)
 
     def push_pending(self, token, incoming):
-        if incoming.precedence > self.max_precedence:
-            self.parser._error('operator precedence exceeds expression limit', token)
         self.pending_tokens.append(token)
         self.pending_operators.append(incoming)
 
@@ -82,26 +80,41 @@ class ExpressionState(object):
                 break
             self._reduce()
 
-    def reinterpret_infix_as_postfix(self, context_precedence):
+    def reinterpret_pending(self, context_precedence):
         if self.pending_operators:
             operator = self.pending_operators[-1]
+            if context_precedence <= operator.right_limit:
+                return False
+            if operator.kind == 'prefix':
+                self._prefix_as_atom()
+                return True
             if operator.kind == 'infix':
                 postfix = self.parser.operators.postfix_ops.get(operator.name)
-                if postfix is not None and context_precedence > operator.right_limit:
-                    if postfix.precedence > self.max_precedence:
-                        self.parser._error('operator precedence exceeds expression limit',
-                                           self.pending_tokens[-1])
+                if postfix is not None:
                     self.pending_operators[-1] = postfix
                     return True
         return False
 
+    def _prefix_as_atom(self):
+        operator = self.pending_operators.pop()
+        self.pending_tokens.pop()
+        self.push_operand(term.Callable.build(operator.name))
+
     def complete_operand(self, expect_operand, token):
-        if expect_operand and not self.reinterpret_infix_as_postfix(self.max_precedence + 1):
-            self.parser._error('expected a term', token)
+        if expect_operand:
+            # A lone operator name is an atom even in a restricted argument
+            # context, e.g. f(p) where p is a prefix operator of priority 1100.
+            if (not self.terms and len(self.pending_operators) == 1 and
+                    self.pending_operators[0].kind == 'prefix'):
+                self._prefix_as_atom()
+            elif not self.reinterpret_pending(self.max_precedence + 1):
+                self.parser._error('expected a term', token)
 
     def _reduce(self):
         operator = self.pending_operators.pop()
         token = self.pending_tokens.pop()
+        if operator.precedence > self.max_precedence:
+            self.parser._error('operator precedence exceeds expression limit', token)
         if operator.kind == 'infix':
             right = self.terms.pop()
             right_precedence = self.precedences.pop()
@@ -205,11 +218,13 @@ class Parser(object):
     def _select_operator(self, token, state, expect_operand):
         if token.name != 'ATOM' or token.source.startswith("'"):
             return None
+        if expect_operand and self._starts_compound(token):
+            return None
         infix = self.operators.infix_ops.get(token.source)
         postfix = self.operators.postfix_ops.get(token.source)
         for incoming in (infix, postfix):
             if incoming is not None:
-                if not expect_operand or state.reinterpret_infix_as_postfix(incoming.left_limit):
+                if not expect_operand or state.reinterpret_pending(incoming.left_limit):
                     return incoming
         return None
 
