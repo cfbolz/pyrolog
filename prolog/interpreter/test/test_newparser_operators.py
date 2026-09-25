@@ -154,3 +154,53 @@ def test_invalid_prefix_postfix(source, definitions):
         table.add(*definition)
     with pytest.raises(ParseError):
         parse(source, table)
+
+
+def ambiguous_table():
+    return operator_table([('@', 500, 'yfx'), ('@', 400, 'yf'),
+                           ('#', 600, 'yfx'), ('!', 600, 'yf'),
+                           ('~', 200, 'fy')])
+
+
+@pytest.mark.parametrize('source, expected', [
+    ('1 @ 2.', ('@', 1, 2)),
+    ('1 @ .', ('@', 1)),
+    ('(1 @).', ('@', 1)),
+    ('1 @ # 2.', ('#', ('@', 1), 2)),
+    ('1 @ ! .', ('!', ('@', 1))),
+    ('1 @ @ 2.', ('@', ('@', 1), 2)),
+    ('1 @ ~ 2.', ('@', 1, ('~', 2))),
+    ('f(1 @, 2).', ('f', ('@', 1), 2)),
+    ('[1 @ | []].', ('.', ('@', 1), '[]')),
+    ('{1 @}.', ('{}', ('@', 1))),
+])
+def test_infix_postfix_reinterpretation(source, expected):
+    assert shape(parse(source, ambiguous_table())) == expected
+
+
+@pytest.mark.parametrize('form, precedence', [('xfx', 500), ('yfx', 400)])
+def test_reinterpretation_requires_greater_left_limit(form, precedence):
+    table = ambiguous_table()
+    table.add('#', precedence, form)
+    with pytest.raises(ParseError):
+        parse('1 @ # 2.', table)
+
+
+def test_reinterpretation_can_choose_incoming_postfix():
+    table = ambiguous_table()
+    table.add('!', 400, 'yfx')  # left limit too small for reinterpretation
+    assert shape(parse('1 @ ! .', table)) == ('!', ('@', 1))
+
+
+def test_reinterpreted_postfix_still_checks_operand():
+    table = ambiguous_table()
+    table.add('+', 450, 'yfx')
+    with pytest.raises(ParseError):
+        parse('1+2 @ .', table)
+
+
+def test_reinterpreted_postfix_still_checks_expression_limit():
+    table = ambiguous_table()
+    table.add('@', 1100, 'yf')
+    with pytest.raises(ParseError):
+        parse('f(1 @).', table)

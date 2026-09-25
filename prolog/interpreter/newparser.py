@@ -82,6 +82,23 @@ class ExpressionState(object):
                 break
             self._reduce()
 
+    def reinterpret_infix_as_postfix(self, context_precedence):
+        if self.pending_operators:
+            operator = self.pending_operators[-1]
+            if operator.kind == 'infix':
+                postfix = self.parser.operators.postfix_ops.get(operator.name)
+                if postfix is not None and context_precedence > operator.right_limit:
+                    if postfix.precedence > self.max_precedence:
+                        self.parser._error('operator precedence exceeds expression limit',
+                                           self.pending_tokens[-1])
+                    self.pending_operators[-1] = postfix
+                    return True
+        return False
+
+    def complete_operand(self, expect_operand, token):
+        if expect_operand and not self.reinterpret_infix_as_postfix(self.max_precedence + 1):
+            self.parser._error('expected a term', token)
+
     def _reduce(self):
         operator = self.pending_operators.pop()
         token = self.pending_tokens.pop()
@@ -171,23 +188,30 @@ class Parser(object):
                         self._get_next()
                         state.push_pending(current, prefix)
                         continue
+            incoming = self._select_operator(current, state, expect_operand)
+            if incoming is None and expect_operand:
                 state.push_operand(self._parse_expr())
                 expect_operand = False
                 continue
-            incoming = None
-            if current.name == 'ATOM' and not current.source.startswith("'"):
-                incoming = self.operators.infix_ops.get(current.source)
-                if incoming is None:
-                    incoming = self.operators.postfix_ops.get(current.source)
             if incoming is None:
                 self._error('expected an operator', current)
             self._get_next()
             state.push_operator(current, incoming)
             expect_operand = incoming.kind == 'infix'
-        if expect_operand:
-            current = self.tokens[self.position] if self.position < len(self.tokens) else None
-            self._error('expected a term', current)
+        current = self.tokens[self.position] if self.position < len(self.tokens) else None
+        state.complete_operand(expect_operand, current)
         return state.finish()
+
+    def _select_operator(self, token, state, expect_operand):
+        if token.name != 'ATOM' or token.source.startswith("'"):
+            return None
+        infix = self.operators.infix_ops.get(token.source)
+        postfix = self.operators.postfix_ops.get(token.source)
+        for incoming in (infix, postfix):
+            if incoming is not None:
+                if not expect_operand or state.reinterpret_infix_as_postfix(incoming.left_limit):
+                    return incoming
+        return None
 
     def _starts_compound(self, token):
         if self.position + 1 == len(self.tokens):
