@@ -169,7 +169,7 @@ class TermFormatter(object):
             try:
                 tokens = parsing.lexer.tokenize(s)
                 if (len(tokens) == 1 and tokens[0].name == 'ATOM' and
-                    tokens[0].source == s and not s.startswith("'")):
+                    tokens[0].source == s and s != ',' and not s.startswith("'")):
                     return s
             except LexerError:
                 pass

@@ -15,6 +15,14 @@ def test_query_entry_point_enforces_functor_adjacency():
         parsing.parse_query_term('f (a).')
 
 
+def test_quoted_comma_atom_roundtrip():
+    from prolog.builtin.formatting import TermFormatter
+    from prolog.interpreter.continuation import Engine
+    rendered = TermFormatter(Engine(), quoted=True).format(term.Callable.build(','))
+    assert rendered == "','"
+    assert parsing.parse_query_term(rendered + '.').name() == ','
+
+
 def test_query_variables_and_default_operators():
     result, variables = parsing.get_query_and_vars('X = f(X, _, _), Y is 1+2*3.')
     first = result.argument_at(0)
