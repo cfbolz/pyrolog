@@ -1,7 +1,7 @@
 """Public parsing entry points, using the handwritten UTF-8 term parser."""
 from rpython.rlib.parsing.deterministic import LexerError
 from prolog.interpreter.lexer import UnicodeLexer
-from prolog.interpreter.newparser import Parser, OperatorTable, ParseError
+from prolog.interpreter.termparser import Parser, OperatorTable, ParseError
 from prolog.interpreter import error
 
 

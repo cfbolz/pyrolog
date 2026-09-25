@@ -1,6 +1,6 @@
 from rpython.translator.translator import TranslationContext
 from prolog.interpreter.lexer import UnicodeLexer
-from prolog.interpreter.newparser import Parser, OperatorTable, ParseError
+from prolog.interpreter.termparser import Parser, OperatorTable, ParseError
 from prolog.interpreter import term
 
 
