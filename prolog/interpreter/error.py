@@ -1,6 +1,12 @@
 from rpython.rlib import rstring
 from rpyrepl.color import styled, filelink
 
+def _format_source(source, output_fd):
+    # The highlighter uses the parser, which imports this module.
+    from prolog.interpreter.highlighting import highlight_source
+    return '    ' + rstring.replace(highlight_source(source, output_fd),
+                                    '\n', '\n    ')
+
 class EndOfInput(Exception):
     """Terminal EOF, including while choosing an answer or debugging."""
 
@@ -93,8 +99,7 @@ class UncaughtError(TermedError):
             out.append('  File "%s" in %s' % (
                 styled('<stdin>', 'SOURCE_LOCATION', output_fd),
                 styled('toplevel', 'SOURCE_LOCATION', output_fd)))
-            out.append('    ' + rstring.replace(query_source.rstrip('\n'),
-                                                '\n', '\n    '))
+            out.append(_format_source(query_source.rstrip('\n'), output_fd))
         if self.traceback is not None:
             self.traceback._format(out, output_fd, query_source is not None)
         context = ""
@@ -141,8 +146,7 @@ class TraceFrame(object):
         out.append("  File \"%s\" %sin %s" % (filename, lines, predicate))
         source = rule.source
         if source is not None:
-            # poor man's indent
-            out.append("    " + rstring.replace(source, "\n", "\n    "))
+            out.append(_format_source(source, output_fd))
         if self.next is not None:
             self.next._format(out, output_fd, skip_toplevel)
 

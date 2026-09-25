@@ -232,6 +232,27 @@ def test_colored_traceback_omits_links_for_unknown_source(monkeypatch):
     assert '\x1b]8;' not in colored
 
 
+def test_traceback_highlights_query_and_clause_source(monkeypatch):
+    import re
+    from rpyrepl.color import CYAN, GREEN, YELLOW, RED, RESET
+    e = get_engine('f(X) :-\n /* first\nsecond */ X = 42, throw(oops).')
+    query = u"Label = 'caf\xe9',\n f(X).\n".encode('utf-8')
+    exc = get_uncaught_error(query, e)
+    plain = exc.format_traceback(e, query_source=query)
+    monkeypatch.delenv('NO_COLOR')
+    monkeypatch.setenv('FORCE_COLOR', '1')
+    colored = exc.format_traceback(e, query_source=query)
+    assert '    ' + CYAN + 'Label' + RESET + ' = ' in colored
+    assert GREEN + u"'caf\xe9'".encode('utf-8') + RESET in colored
+    assert '\n     f(' + CYAN + 'X' + RESET + ').\n' in colored
+    assert '    f(' + CYAN + 'X' + RESET + ') :-\n' in colored
+    assert RED + '/* first' + RESET + '\n    ' + RED + 'second */' + RESET in colored
+    assert YELLOW + '42' + RESET in colored
+    assert re.sub('\x1b\\[[0-9;]*m', '', colored) == plain
+    monkeypatch.setenv('NO_COLOR', '1')
+    assert exc.format_traceback(e, query_source=query) == plain
+
+
 def test_traceback_without_frames():
     from prolog.interpreter.term import Callable
     e = get_engine('')
