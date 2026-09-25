@@ -306,8 +306,10 @@ class Engine(object):
             except error.UnificationFailed:
                 scont = scont.nextcont
             else:
-                return self.call(
-                    scont.recover, scont.rule, scont.nextcont, scont.fcont, heap)
+                # Run recovery in the driver so its errors and failures go
+                # through normal handling, including enclosing catch/3 calls.
+                return (BodyContinuation(self, scont.rule, scont.nextcont,
+                                         scont.recover), scont.fcont, heap)
         uncaught = error.UncaughtError(exc_term, exc.sig_context, rule_likely_source, orig_scont)
         uncaught.missing_signature = exc.missing_signature
         uncaught.lookup_module = exc.lookup_module

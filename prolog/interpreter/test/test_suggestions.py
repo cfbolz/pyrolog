@@ -154,3 +154,29 @@ def test_suggestions_work_with_tracing(monkeypatch):
     e.debugger.observer = TraceObserver()
     e.debugger.enable()
     assert 'foobar/0' in render(e, 'foobra.')[1]
+
+
+@pytest.mark.parametrize('tracing', [False, True])
+def test_recovery_error_suggestions_only_when_uncaught(monkeypatch, tracing):
+    from prolog.interpreter.trace import TraceObserver
+    monkeypatch.setenv('NO_COLOR', '1')
+    e = get_engine('foobar. unrelated.')
+    if tracing:
+        e.debugger.observer = TraceObserver()
+        e.debugger.enable()
+    calls = []
+    original = suggestions.predicate_suggestions
+    def record(*args):
+        calls.append(args)
+        return original(*args)
+    monkeypatch.setattr(suggestions, 'predicate_suggestions', record)
+    assert_true('catch(catch(foobra, _, unrelate), '
+                'error(existence_error(procedure, unrelate/0)), true).', e)
+    assert calls == []
+    goal = e.parse('catch(foobra, _, unrelate).')[0][0]
+    exc = pytest.raises(UncaughtError, e.run_query_in_current, goal).value
+    assert calls == []
+    assert exc.get_errstr(e) == 'Undefined procedure: unrelate/0'
+    assert exc.format_traceback(e).endswith(
+        'help: a similarly named predicate is available: unrelated/0')
+    assert len(calls) == 1
