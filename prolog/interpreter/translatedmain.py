@@ -58,7 +58,9 @@ class DisplayAnswerContinuation(Continuation):
     def activate(self, fcont, heap):
         from prolog.interpreter.helper import unwrap_list
         values = unwrap_list(self.copied)
-        variables = dict(zip(self.names, values))
+        variables = {}
+        for i in range(len(self.names)):
+            variables[self.names[i]] = values[i]
         goals = unwrap_list(self.goals)
         answer = format_answer(variables, goals, self.engine)
         self.write("yes\n")
