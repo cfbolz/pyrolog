@@ -24,7 +24,8 @@ class PrologParseError(PrologError):
         # only when displaying the diagnostic, just as for runtime tracebacks.
         if self.parse_error is not None and self.source is not None and can_colorize(output_fd):
             from prolog.interpreter.diagnostics import format_syntax_error
-            return format_syntax_error(self.source, self.file_name, self.parse_error,
+            filename = filelink(self.file_name, output_fd)
+            return format_syntax_error(self.source, filename, self.parse_error,
                                        color=True).rstrip('\n')
         return self.message
 
