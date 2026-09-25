@@ -43,12 +43,24 @@ class OperatorTable(object):
 
     def add(self, name, precedence, form):
         operator = Operator(name, precedence, form)
-        if operator.kind == 'prefix':
-            self.prefix_ops[name] = operator
-        elif operator.kind == 'infix':
-            self.infix_ops[name] = operator
-        else:
-            self.postfix_ops[name] = operator
+        self._table_for_form(form)[name] = operator
+
+    def _table_for_form(self, form):
+        if form in ('fx', 'fy'):
+            return self.prefix_ops
+        if form in ('xfx', 'xfy', 'yfx'):
+            return self.infix_ops
+        assert form in ('xf', 'yf')
+        return self.postfix_ops
+
+    def remove(self, name, form):
+        table = self._table_for_form(form)
+        if name in table:
+            del table[name]
+
+    def all_operators(self):
+        return (self.prefix_ops.values() + self.infix_ops.values() +
+                self.postfix_ops.values())
 
 
 class ExpressionState(object):
