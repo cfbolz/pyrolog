@@ -1,14 +1,40 @@
 import math
 from rpython.rlib import rutf8
 from rpython.rlib.rstring import ParseStringError
+from rpython.rlib.parsing.lexer import Token, SourcePos
 from prolog.interpreter import error, helper, term
 from prolog.interpreter.parsing_helpers import unescape, parse_integer_literal
 
+class SourceSpan(object):
+    """Half-open byte range with zero-based lines and code-point columns."""
+    def __init__(self, start, end):
+        self.start = start
+        self.end = end
+
+
+def token_span(token):
+    start = token.source_pos
+    line, column = start.lineno, start.columnno
+    for code in rutf8.Utf8StringIterator(token.source):
+        if code == 10:
+            line += 1
+            column = 0
+        else:
+            column += 1
+    return SourceSpan(start, SourcePos(start.i + len(token.source), line, column))
+
+
 class ParseError(Exception):
-    def __init__(self, msg, tok, parser):
+    def __init__(self, msg, tok, parser, kind='syntax_error', secondary=None,
+                 expected='', found=''):
         self.msg = msg
         self.tok = tok
         self.parser = parser
+        self.kind = kind
+        self.primary = token_span(tok if tok is not None else parser.eof)
+        self.secondary = token_span(secondary) if secondary is not None else None
+        self.expected = expected
+        self.found = found
 
 
 class Operator(object):
@@ -161,6 +187,14 @@ class ExpressionState(object):
 
 class Parser(object):
     def __init__(self, tokens, operators):
+        # Supplying the lexer's EOF token preserves trailing layout positions.
+        # Token-only callers otherwise get the end of their last token.
+        if tokens and tokens[-1].name == 'EOF':
+            self.eof = tokens[-1]
+            tokens = tokens[:len(tokens) - 1]
+        else:
+            end = token_span(tokens[-1]).end if tokens else SourcePos(0, 0, 0)
+            self.eof = Token('EOF', '', end)
         self.tokens = tokens
         self.operators = operators
         self.position = 0
