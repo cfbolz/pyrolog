@@ -12,9 +12,12 @@ def test_parser_is_rpython():
 
     def entry(source):
         try:
-            result = Parser(UnicodeLexer().tokenize(source), operators).parse()
-        except ParseError:
-            return -1
+            result = Parser(UnicodeLexer().tokenize(source, eof=True), operators).parse()
+        except ParseError as exc:
+            offset = exc.primary.start.i
+            if exc.secondary is not None:
+                offset += exc.secondary.start.i
+            return -1 - offset
         if isinstance(result, term.Number):
             return result.num
         return result.argument_count()

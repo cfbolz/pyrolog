@@ -5,6 +5,8 @@ from rpython.rlib.parsing.lexer import Token, SourcePos
 from prolog.interpreter import error, helper, term
 from prolog.interpreter.parsing_helpers import unescape, parse_integer_literal
 
+CLOSING_DELIMITERS = {'(': ')', '[': ']', '{': '}'}
+
 class SourceSpan(object):
     """Half-open byte range with zero-based lines and code-point columns."""
     def __init__(self, start, end):
@@ -191,7 +193,9 @@ class Parser(object):
         # Token-only callers otherwise get the end of their last token.
         if tokens and tokens[-1].name == 'EOF':
             self.eof = tokens[-1]
-            tokens = tokens[:len(tokens) - 1]
+            end_index = len(tokens) - 1
+            assert end_index >= 0
+            tokens = tokens[:end_index]
         else:
             end = token_span(tokens[-1]).end if tokens else SourcePos(0, 0, 0)
             self.eof = Token('EOF', '', end)
@@ -228,7 +232,7 @@ class Parser(object):
                                  found=token.name)
             return
         opening = self.open_delimiters[-1]
-        expected = {'(': ')', '[': ']', '{': '}'}[opening.name]
+        expected = CLOSING_DELIMITERS[opening.name]
         if token.name in ('.', 'EOF'):
             raise ParseError('unclosed %s: expected %s' % (opening.name, expected),
                              opening, self, 'unclosed_delimiter', token,
@@ -242,6 +246,9 @@ class Parser(object):
         raise ParseError(msg, tok, self)
 
     def _expect(self, name, source=None):
+        if self.position == len(self.tokens):
+            self._check_delimiter(self.eof)
+            self._error('expected %s' % name, self.eof)
         tok = self._get_next()
         if tok.name != name:
             self._error("expected %s got %s" % (name, tok.name), tok)
@@ -416,6 +423,8 @@ class Parser(object):
 
     def _parse_args(self, functor):
         # ( arg1 , ..., argn )
+        if self.position == len(self.tokens):
+            return []
         next = self._peek()
         if next.name != "(":
             return []

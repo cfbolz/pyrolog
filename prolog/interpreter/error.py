@@ -12,15 +12,17 @@ class UncatchableError(PrologError):
         self.message = message
 
 class PrologParseError(PrologError):
-    def __init__(self, file_name, line_number, message):
+    def __init__(self, file_name, line_number, message, parse_error=None):
         self.file_name = file_name
         self.line_number = line_number
         self.message = message
+        self.parse_error = parse_error
 
 class TermedError(PrologError):
     def __init__(self, term, sig_context=None):
         self.term = term
         self.sig_context = sig_context
+        self.parse_error = None
 
     def get_errstr(self, engine):
         from prolog.builtin import formatting
@@ -164,10 +166,12 @@ def wrap_error(t):
 class UnificationFailed(PrologError):
     pass
 
-def throw_syntax_error(msg):
+def throw_syntax_error(msg, parse_error=None):
     from prolog.interpreter import term
     t = term.Callable.build("syntax_error", [term.Callable.build(msg)])
-    raise wrap_error(t)
+    exc = wrap_error(t)
+    exc.parse_error = parse_error
+    raise exc
 
 def throw_import_error(modulename, signature):
     from prolog.interpreter import term

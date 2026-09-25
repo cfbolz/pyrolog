@@ -57,11 +57,13 @@ def parse_file_with_vars(s, operators=None, callback=_dummyfunc, arg=None, file_
     if operators is None:
         operators = default_operator_table
     eof = None
+    parse_error = None
     try:
         tokens = lexer.tokenize(s, eof=True)
         eof = tokens.pop()
         return _parse_file(tokens, eof, operators, callback, arg, s, file_name)
     except ParseError as exc:
+        parse_error = exc
         token = exc.tok
         if token is None:
             assert eof is not None
@@ -75,7 +77,7 @@ def parse_file_with_vars(s, operators=None, callback=_dummyfunc, arg=None, file_
     except LexerError as exc:
         message = exc.nice_error_message(file_name)
         lineno = exc.source_pos.lineno
-    raise error.PrologParseError(file_name, lineno, message)
+    raise error.PrologParseError(file_name, lineno, message, parse_error)
 
 
 def _parse_file(tokens, eof, operators, callback, arg, source, file_name):
@@ -96,7 +98,9 @@ def _parse_file(tokens, eof, operators, callback, arg, source, file_name):
             terms.append(value)
             line = []
     if line:
-        raise ParseError('expected .', eof, Parser(line, operators))
+        # Diagnose the final unfinished term too, using the true source EOF.
+        Parser(line + [eof], operators).parse()
+        assert False, 'a term without a full stop cannot parse successfully'
     return terms, variables
 
 
@@ -111,12 +115,12 @@ def parse_query_term(s, operators=None):
 def get_query_and_vars(s, operators=None):
     if operators is None:
         operators = default_operator_table
-    parser = Parser(lexer.tokenize(s), operators)
+    parser = Parser(lexer.tokenize(s, eof=True), operators)
     try:
         query = parser.parse()
     except ParseError as exc:
         reason = 'float_overflow' if exc.msg == 'float overflow' else exc.msg
-        raise error.throw_syntax_error(reason)
+        raise error.throw_syntax_error(reason, exc)
     return query, parser.varname_to_var
 
 

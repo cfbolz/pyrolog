@@ -105,3 +105,42 @@ def test_delimiter_locations_across_utf8_and_lines():
 def test_quoted_and_commented_delimiters_are_not_syntax():
     tokens = UnicodeLexer().tokenize("f(']', /* } */ [')'], {'('}).", eof=True)
     assert Parser(tokens, default_operator_table).parse().name() == 'f'
+
+
+def test_file_preserves_diagnostic_for_unterminated_last_term():
+    from prolog.interpreter import parsing, error
+    source = 'good.\nf(x % trailing comment\n  '
+    with pytest.raises(error.PrologParseError) as caught:
+        parsing.parse_file(source, file_name='example.pl')
+    exc = caught.value.parse_error
+    assert exc.kind == 'unclosed_delimiter'
+    assert position(exc.primary.start) == (7, 1, 1)
+    assert position(exc.secondary.start) == (len(source), 2, 2)
+    assert caught.value.file_name == 'example.pl'
+    assert caught.value.line_number == 1
+
+
+def test_query_preserves_diagnostic():
+    from prolog.interpreter import parsing, error
+    with pytest.raises(error.CatchableError) as caught:
+        parsing.parse_query_term('f(x].')
+    exc = caught.value.parse_error
+    assert exc.kind == 'mismatched_delimiter'
+    assert exc.primary.start.i == 3
+    assert exc.secondary.start.i == 1
+    assert caught.value.term.argument_at(0).name() == 'syntax_error'
+
+
+def test_query_eof_preserves_trailing_layout_position():
+    from prolog.interpreter import parsing, error
+    with pytest.raises(error.CatchableError) as caught:
+        parsing.parse_query_term('f(x\n  ')
+    exc = caught.value.parse_error
+    assert position(exc.secondary.start) == (6, 1, 2)
+
+
+def test_file_lexer_error_has_no_parser_diagnostic():
+    from prolog.interpreter import parsing, error
+    with pytest.raises(error.PrologParseError) as caught:
+        parsing.parse_file('` .')
+    assert caught.value.parse_error is None
