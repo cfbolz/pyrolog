@@ -16,15 +16,19 @@ tuplesig = Signature.getsignature(",", 2)
 
 
 def join_operator_parts(parts):
-    """Separate adjacent graphic tokens so printing cannot merge them."""
+    """Separate adjacent tokens that the lexer would otherwise merge."""
     result = []
     previous = ''
     for part in parts:
         if not part:
             continue
-        if (previous and utf8.ascii_graphic(ord(previous[-1])) and
-                utf8.ascii_graphic(ord(part[0]))):
-            result.append(' ')
+        if previous:
+            last = rutf8.codepoint_at_pos(previous,
+                        rutf8.prev_codepoint_pos(previous, len(previous)))
+            first = rutf8.codepoint_at_pos(part, 0)
+            if (utf8.ascii_graphic(last) and utf8.ascii_graphic(first) or
+                    utf8.identifier_continue(last) and utf8.identifier_continue(first)):
+                result.append(' ')
         result.append(part)
         previous = part
     return ''.join(result)
@@ -83,18 +87,20 @@ class CycleFactorizer(object):
 
 class TermFormatter(object):
     def __init__(self, engine, quoted=False, max_depth=0,
-                 ignore_ops=False, cycles=True):
+                 ignore_ops=False, cycles=True, module=None):
         self.engine = engine
         self.quoted = quoted
         self.max_depth = max_depth
         self.ignore_ops = ignore_ops
         self.cycles = cycles
-        self._make_reverse_op_mapping()
+        if module is None:
+            module = engine.modulewrapper.current_module
+        self._make_reverse_op_mapping(module.operators)
         self.var_to_number = {}
         self.variable_names = {}
         self.active_attvars = {}
     
-    def from_option_list(engine, options):
+    def from_option_list(engine, options, module=None):
         # XXX add numbervars support
         quoted = False
         max_depth = 0
@@ -118,7 +124,7 @@ class TermFormatter(object):
                 ignore_ops = arg.name()== "true"
             elif option.name()== "cycles":
                 cycles = arg.name()== "true"
-        return TermFormatter(engine, quoted, max_depth, ignore_ops, cycles)
+        return TermFormatter(engine, quoted, max_depth, ignore_ops, cycles, module)
     from_option_list = staticmethod(from_option_list)
 
     def format(self, term, depth=1):
@@ -305,10 +311,12 @@ class TermFormatter(object):
         assert curr_index == term.argument_count()
         return (prec, join_operator_parts(result))
 
-    def _make_reverse_op_mapping(self):
+    def _make_reverse_op_mapping(self, operators):
         m = {}
-        for prec, allops in self.engine.getoperations():
-            for form, ops in allops:
-                for op in ops:
-                    m[len(form) - 1, op] = (form, prec)
+        for operator in operators.all_operators():
+            key = (len(operator.form) - 1, operator.name)
+            # Preserve the formatter's preference for tighter unary operators
+            # when a name has both prefix and postfix declarations.
+            if key not in m or operator.precedence <= m[key][1]:
+                m[key] = (operator.form, operator.precedence)
         self.op_mapping = m

@@ -108,7 +108,6 @@ class Engine(object):
     def __init__(self, load_system=False):
         from prolog.interpreter.trace import Debugger
         self.debugger = Debugger()
-        self.operations = None
         self.modulewrapper = ModuleWrapper(self)
         if load_system:
             self.modulewrapper.init_system_module()
@@ -197,12 +196,6 @@ class Engine(object):
         from prolog.interpreter.parsing import parse_file_with_vars
         return parse_file_with_vars(s, self.modulewrapper.current_module.operators,
                                     file_name=file_name)
-
-    def getoperations(self):
-        from prolog.interpreter.parsing import default_operations
-        if self.operations is None:
-            return default_operations
-        return self.operations
 
     # _____________________________________________________
     # Prolog execution
