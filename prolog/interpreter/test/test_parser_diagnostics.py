@@ -275,6 +275,14 @@ def test_postfix_precedence_clash():
     assert exc.found == '400'
 
 
+def test_left_precedence_clash_takes_priority_when_both_operands_clash():
+    exc = diagnostic('a=b= \\+ c.')
+    assert exc.kind == 'precedence_clash'
+    assert exc.primary.start.i == 3
+    assert exc.secondary.start.i == 1
+    assert 'left operand' in exc.msg
+
+
 def test_expression_precedence_limit_reports_actual_and_limit():
     parser = Parser(UnicodeLexer().tokenize('1+2.'), default_operator_table)
     with pytest.raises(SyntaxError) as caught:

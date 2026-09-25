@@ -139,35 +139,27 @@ class ExpressionState(object):
                                token, 'precedence_limit',
                                expected='at most %d' % self.max_precedence,
                                found=str(operator.precedence))
-        if operator.kind == 'infix':
-            right = self.terms.pop()
-            right_precedence = self.precedences.pop()
-            right_token = self.operand_tokens.pop()
-            left = self.terms.pop()
-            left_precedence = self.precedences.pop()
-            left_token = self.operand_tokens.pop()
-            self._check_precedence(operator, token, left_precedence,
-                                   operator.left_limit, left_token, 'left')
-            self._check_precedence(operator, token, right_precedence,
-                                   operator.right_limit, right_token, 'right')
-            args = [left, right]
-        elif operator.kind == 'prefix':
-            right = self.terms.pop()
-            right_precedence = self.precedences.pop()
-            right_token = self.operand_tokens.pop()
-            self._check_precedence(operator, token, right_precedence,
-                                   operator.right_limit, right_token, 'right')
-            args = [right]
-        else:
-            assert operator.kind == 'postfix'
-            left = self.terms.pop()
-            left_precedence = self.precedences.pop()
-            left_token = self.operand_tokens.pop()
-            self._check_precedence(operator, token, left_precedence,
-                                   operator.left_limit, left_token, 'left')
-            args = [left]
+        args = self._pop_operands(operator, token)
         self.push_operand(term.Callable.build(operator.name, args),
                           operator.precedence, token)
+
+    def _pop_operands(self, operator, token):
+        count = 2 if operator.kind == 'infix' else 1
+        start = len(self.terms) - count
+        assert start >= 0
+        # Check left before right, preserving which clash gets diagnosed when
+        # both operands are invalid. Only then remove all three stack slices.
+        if operator.kind != 'prefix':
+            self._check_precedence(operator, token, self.precedences[start],
+                                   operator.left_limit, self.operand_tokens[start], 'left')
+        if operator.kind != 'postfix':
+            self._check_precedence(operator, token, self.precedences[-1],
+                                   operator.right_limit, self.operand_tokens[-1], 'right')
+        args = self.terms[start:]
+        del self.terms[start:]
+        del self.precedences[start:]
+        del self.operand_tokens[start:]
+        return args
 
     def _check_precedence(self, operator, token, precedence, limit, operand_token, side):
         if precedence > limit:
