@@ -128,7 +128,7 @@ def test_color_preserves_plain_layout():
 
 def test_renderer_is_rpython():
     from rpython.translator.translator import TranslationContext
-    from prolog.interpreter.diagnostics import format_syntax_error
+    from prolog.interpreter.error import PrologParseError
     from prolog.interpreter.lexer import UnicodeLexer
     from prolog.interpreter.termparser import Parser, OperatorTable
     operators = OperatorTable()
@@ -137,7 +137,11 @@ def test_renderer_is_rpython():
         try:
             Parser(UnicodeLexer().tokenize(source, eof=True), operators).parse()
         except SyntaxError as exc:
-            return format_syntax_error(source, '<query>', exc, color)
+            wrapped = PrologParseError('<query>', exc.primary.start.lineno,
+                                       parse_error=exc, source=source)
+            if color:
+                return wrapped.format_message()
+            return wrapped.message
         return ''
 
     context = TranslationContext()

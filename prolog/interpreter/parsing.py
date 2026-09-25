@@ -63,12 +63,10 @@ def parse_file_with_vars(s, operators=None, callback=_dummyfunc, arg=None, file_
         eof = tokens.pop()
         return _parse_file(tokens, eof, operators, callback, arg, s, file_name)
     except SyntaxError as exc:
-        from prolog.interpreter.diagnostics import format_syntax_error
         parse_error = exc
         pos = exc.primary.start
-        message = format_syntax_error(s, file_name, exc).rstrip('\n')
         lineno = pos.lineno
-    raise error.PrologParseError(file_name, lineno, message, parse_error, s)
+    raise error.PrologParseError(file_name, lineno, parse_error=parse_error, source=s)
 
 
 def _parse_file(tokens, eof, operators, callback, arg, source, file_name):

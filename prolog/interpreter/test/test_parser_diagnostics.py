@@ -420,3 +420,29 @@ def test_file_uses_diagnostic_renderer():
         parsing.parse_file(source, file_name='example.pl')
     exc = caught.value
     assert exc.message + '\n' == format_syntax_error(source, 'example.pl', exc.parse_error)
+
+
+@pytest.mark.parametrize('color', [False, True])
+def test_file_diagnostic_is_rendered_only_when_requested(monkeypatch, color):
+    from prolog.interpreter import parsing, diagnostics, error
+    original = diagnostics.format_syntax_error
+    renders = []
+
+    def render(source, filename, exc, color=False):
+        renders.append(color)
+        return original(source, filename, exc, color)
+
+    monkeypatch.setattr(diagnostics, 'format_syntax_error', render)
+    monkeypatch.setattr(error, 'can_colorize', lambda fd: color)
+    with pytest.raises(error.PrologParseError) as caught:
+        parsing.parse_file('f(a b).', file_name='<query>')
+    assert renders == []
+    text = caught.value.format_message()
+    assert renders == [color]
+    assert ('\x1b[31m' in text) == color
+    assert 'SyntaxError:' in text
+    plain = caught.value.message
+    assert '\x1b' not in plain
+    assert renders == ([True, False] if color else [False])
+    assert caught.value.message == plain
+    assert renders == ([True, False] if color else [False])

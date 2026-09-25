@@ -12,12 +12,24 @@ class UncatchableError(PrologError):
         self.message = message
 
 class PrologParseError(PrologError):
-    def __init__(self, file_name, line_number, message, parse_error=None, source=None):
+    def __init__(self, file_name, line_number, message=None, parse_error=None, source=None):
         self.file_name = file_name
         self.line_number = line_number
-        self.message = message
+        self._message = message
         self.parse_error = parse_error
         self.source = source
+
+    @property
+    def message(self):
+        message = self._message
+        if message is None:
+            from prolog.interpreter.diagnostics import format_syntax_error
+            assert self.parse_error is not None
+            assert self.source is not None
+            message = format_syntax_error(self.source, self.file_name,
+                                          self.parse_error).rstrip('\n')
+            self._message = message
+        return message
 
     def format_message(self, output_fd=1):
         # Keep .message plain for programmatic callers. Select terminal colour
