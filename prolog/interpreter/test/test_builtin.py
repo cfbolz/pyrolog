@@ -1,5 +1,4 @@
 import pytest
-from prolog.interpreter.parsing import TermBuilder
 from prolog.interpreter.parsing import parse_query_term, get_engine
 from prolog.interpreter.error import UnificationFailed
 from prolog.interpreter.continuation import Heap, Engine
@@ -553,7 +552,6 @@ def test_between():
 def test_is():
     assert_true("5 is 1 + 1 + 1 + 1 + 1.")
 
-@pytest.mark.xfail
 def test_parser_access():
     assert_true("current_op(200, xfx, **).")
     f = collect_all(Engine(), "current_op(200, Form, X).")
@@ -564,7 +562,7 @@ def test_parser_access():
     assert_true("op(450, xfy, foo).", e)
     assert_true("a foo b.", e)
     assert_true("op(0, xfy, foo).", e)
-    # XXX really a ParseError
+    # XXX really a SyntaxError
     pytest.raises(Exception, assert_false, "a foo b.", e)
     # change precedence of + for funny results :-)
     assert_true("14 is 2 + 3 * 4.", e)

@@ -108,7 +108,6 @@ class Engine(object):
     def __init__(self, load_system=False):
         from prolog.interpreter.trace import Debugger
         self.debugger = Debugger()
-        self.operations = None
         self.modulewrapper = ModuleWrapper(self)
         if load_system:
             self.modulewrapper.init_system_module()
@@ -164,18 +163,16 @@ class Engine(object):
     # _____________________________________________________
     # parsing-related functionality
 
-    def _build_and_run(self, tree, source_string, file_name):
+    def _build_and_run(self, term, source_string, file_name, start, end):
         assert self is not None # for the annotator (!)
-        from prolog.interpreter.parsing import TermBuilder
-        builder = TermBuilder()
-        term = builder.build_query(tree)
         if isinstance(term, Callable) and term.signature().eq(callsig):
             self.run_query_in_current(term.argument_at(0))
         else:
             term = self._term_expand(term)
             rule = self.add_rule(term)
             rule.file_name = file_name
-            rule._init_source_info(tree, source_string)
+            rule._init_source_info(start, end, source_string)
+        return self.modulewrapper.current_module.operators
 
     def _term_expand(self, term):
         if self.modulewrapper.system is not None:
@@ -192,20 +189,13 @@ class Engine(object):
 
     def runstring(self, s, file_name=None):
         from prolog.interpreter.parsing import parse_file
-        parse_file(s, None, Engine._build_and_run, self, file_name=file_name)
+        parse_file(s, self.modulewrapper.current_module.operators,
+                   Engine._build_and_run, self, file_name=file_name)
 
     def parse(self, s, file_name=None):
-        from prolog.interpreter.parsing import parse_file, TermBuilder
-        builder = TermBuilder()
-        trees = parse_file(s, None, file_name=file_name)
-        terms = builder.build_many(trees)
-        return terms, builder.varname_to_var
-
-    def getoperations(self):
-        from prolog.interpreter.parsing import default_operations
-        if self.operations is None:
-            return default_operations
-        return self.operations
+        from prolog.interpreter.parsing import parse_file_with_vars
+        return parse_file_with_vars(s, self.modulewrapper.current_module.operators,
+                                    file_name=file_name)
 
     # _____________________________________________________
     # Prolog execution
@@ -311,6 +301,7 @@ class Engine(object):
                 return (BodyContinuation(self, scont.rule, scont.nextcont,
                                          scont.recover), scont.fcont, heap)
         uncaught = error.UncaughtError(exc_term, exc.sig_context, rule_likely_source, orig_scont)
+        uncaught.parse_error = exc.parse_error
         uncaught.missing_signature = exc.missing_signature
         uncaught.lookup_module = exc.lookup_module
         raise uncaught

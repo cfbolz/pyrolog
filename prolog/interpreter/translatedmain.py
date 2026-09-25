@@ -7,8 +7,6 @@ from prolog.interpreter.replpolicy import PrologInputPolicy
 from prolog.interpreter.highlighting import PrologHighlighter
 from prolog.interpreter.completion import PrologCompleter
 from rpython.rlib.listsort import TimSort
-from rpython.rlib.parsing.parsing import ParseError
-from rpython.rlib.parsing.deterministic import LexerError
 from prolog.interpreter.parsing import get_query_and_vars
 from prolog.interpreter.parsing import get_engine
 from prolog.interpreter.continuation import Continuation, Engine, \
@@ -138,7 +136,7 @@ def run(query, var_to_pos, engine, query_source=None):
     except error.CatchableError, e:
         printmessage("ERROR: %s\n" % e.get_errstr(engine))
     except error.PrologParseError, exc:
-        printmessage(exc.message + "\n")
+        printmessage(exc.format_message() + "\n")
     # except error.UncatchableError, e:
     #     printmessage("INTERNAL ERROR: %s\n" % (e.message, ))
     except StopItNow:
@@ -206,7 +204,7 @@ def repl(engine):
             printmessage("ERROR: %s\n" % exc.get_errstr(engine))
             continue
         except error.PrologParseError, exc:
-            printmessage(exc.message + "\n")
+            printmessage(exc.format_message() + "\n")
             continue
         for goal in goals:
             run(goal, var_to_pos, engine, query_source=line)

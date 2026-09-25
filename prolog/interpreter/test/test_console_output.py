@@ -1,3 +1,4 @@
+# coding: utf-8
 from __future__ import with_statement
 import pytest
 import py
@@ -122,19 +123,19 @@ class TestInteraction:
         child.expect("welcome!")
         child.expect(">?- ")
         child.sendline("X = `.")
-        child.expect("  File <stdin>, line 1")
+        child.expect(re.escape("[<stdin>:1:"))
         child.expect(re.escape("X = `."))
-        child.expect(re.escape("    ^"))
-        child.expect("LexerError")
+        child.expect(re.escape("    ─"))
+        child.expect("SyntaxError")
 
         child = self.spawn([])
         child.expect("welcome!")
         child.expect(">?- ")
         child.sendline("X = a b c.")
-        child.expect("  File <stdin>, line 1")
+        child.expect(re.escape("[<stdin>:1:"))
         child.expect(re.escape("X = a b c."))
-        child.expect(re.escape("      ^"))
-        child.expect(re.escape("ParseError: expected ."))
+        child.expect("unexpected term")
+        child.expect(re.escape("SyntaxError: expected an operator"))
 
     def test_traceback(self):
         child = self.spawn([])

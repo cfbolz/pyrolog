@@ -271,7 +271,6 @@ def test_indexing2():
     heaps = collect_all(e, "sibling(m, X).")
     assert len(heaps) == 3
 
-@pytest.mark.xfail
 def test_runstring():
     e = get_engine("foo(a, c).")
     e.runstring("""

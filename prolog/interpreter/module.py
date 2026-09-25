@@ -60,7 +60,9 @@ class ModuleWrapper(object):
 class Module(object):
     _immutable_fields_ = ["name", "nameatom", "_toplevel_rule", "version?"]
     def __init__(self, name):
+        from prolog.interpreter.parsing import make_operator_table, default_operations
         self.name = name
+        self.operators = make_operator_table(default_operations)
         self.nameatom = Atom(name)
         self.functions = {}
         self.version = VersionTag()

@@ -95,3 +95,35 @@ def test_number_codes_errors():
 
 def test_number_chars_completes_partial_list():
     assert_true("number_chars(45, [A|Tail]), A == '4', Tail == ['5'].")
+
+
+@pytest.mark.parametrize('kind', ['chars', 'codes'])
+@pytest.mark.parametrize('text, value', [
+    ('0xff', 255), ('0xFf', 255), ('0o77', 63), ('0b101', 5),
+    ('+0xff', 255), ('-0xff', -255), ('-0o77', -63), ('+0b101', 5),
+    (' \t-0xff', -255), ('0b0', 0), ('-0x0', 0), ('0123', 123),
+    ('0x8000000000000000', 2 ** 63),
+    ('-0x8000000000000000', -(2 ** 63)),
+    ('0x1' + '0' * 25, 2 ** 100),
+    ('-0x1' + '0' * 25, -(2 ** 100)),
+    ('0o' + '1' + '0' * 40, 8 ** 40),
+    ('0b' + '1' + '0' * 100, 2 ** 100),
+])
+def test_number_conversion_base_prefix(kind, text, value):
+    codes = str([ord(c) for c in text])
+    assert_true('atom_codes(A, %s), atom_%s(A, L), '
+                'number_%s(N, L), N == %s.' % (codes, kind, kind, value))
+
+
+@pytest.mark.parametrize('kind', ['chars', 'codes'])
+@pytest.mark.parametrize('text', [
+    '0x', '-0o', '+0b', '0xg', '0o8', '0b2', '0b102',
+    '0xff ', '0x ff', '0x+ff', '0x-ff', '0x1.0', '0x1_0',
+    '0XFF', '0O77', '0B101', '0xffjunk',
+    u'0x\u0661f', u'\u0660x\u0661f',
+])
+def test_number_conversion_invalid_base_prefix(kind, text):
+    codes = str([ord(c) for c in text])
+    prolog_raises('syntax_error(_)',
+                  'atom_codes(A, %s), atom_%s(A, L), number_%s(N, L)'
+                  % (codes, kind, kind))

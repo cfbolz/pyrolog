@@ -1,7 +1,6 @@
 import py
 from rpython.rlib.objectmodel import specialize
 from prolog.interpreter import arithmetic
-from prolog.interpreter.parsing import TermBuilder
 from prolog.interpreter import helper, term, error
 from prolog.builtin.register import expose_builtin
 

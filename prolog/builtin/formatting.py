@@ -4,7 +4,7 @@ from prolog.interpreter import utf8
 import os
 import string
 
-from prolog.interpreter.term import Float, Number, Var, Atom, Callable, AttVar, BindingVar
+from prolog.interpreter.term import Float, Number, Numeric, Var, Atom, Callable, AttVar, BindingVar
 from prolog.interpreter import error, helper, parsing
 from prolog.builtin.register import expose_builtin
 from prolog.interpreter.signature import Signature
@@ -16,15 +16,19 @@ tuplesig = Signature.getsignature(",", 2)
 
 
 def join_operator_parts(parts):
-    """Separate adjacent graphic tokens so printing cannot merge them."""
+    """Separate adjacent tokens that the lexer would otherwise merge."""
     result = []
     previous = ''
     for part in parts:
         if not part:
             continue
-        if (previous and utf8.ascii_graphic(ord(previous[-1])) and
-                utf8.ascii_graphic(ord(part[0]))):
-            result.append(' ')
+        if previous:
+            last = rutf8.codepoint_at_pos(previous,
+                        rutf8.prev_codepoint_pos(previous, len(previous)))
+            first = rutf8.codepoint_at_pos(part, 0)
+            if (utf8.ascii_graphic(last) and utf8.ascii_graphic(first) or
+                    utf8.identifier_continue(last) and utf8.identifier_continue(first)):
+                result.append(' ')
         result.append(part)
         previous = part
     return ''.join(result)
@@ -83,18 +87,20 @@ class CycleFactorizer(object):
 
 class TermFormatter(object):
     def __init__(self, engine, quoted=False, max_depth=0,
-                 ignore_ops=False, cycles=True):
+                 ignore_ops=False, cycles=True, module=None):
         self.engine = engine
         self.quoted = quoted
         self.max_depth = max_depth
         self.ignore_ops = ignore_ops
         self.cycles = cycles
-        self._make_reverse_op_mapping()
+        if module is None:
+            module = engine.modulewrapper.current_module
+        self._make_reverse_op_mapping(module.operators)
         self.var_to_number = {}
         self.variable_names = {}
         self.active_attvars = {}
     
-    def from_option_list(engine, options):
+    def from_option_list(engine, options, module=None):
         # XXX add numbervars support
         quoted = False
         max_depth = 0
@@ -118,7 +124,7 @@ class TermFormatter(object):
                 ignore_ops = arg.name()== "true"
             elif option.name()== "cycles":
                 cycles = arg.name()== "true"
-        return TermFormatter(engine, quoted, max_depth, ignore_ops, cycles)
+        return TermFormatter(engine, quoted, max_depth, ignore_ops, cycles, module)
     from_option_list = staticmethod(from_option_list)
 
     def format(self, term, depth=1):
@@ -164,14 +170,14 @@ class TermFormatter(object):
             return '?'
 
     def format_atom(self, s):
-        from rpython.rlib.parsing.deterministic import LexerError
+        from prolog.interpreter.syntaxerror import SyntaxError
         if self.quoted:
             try:
                 tokens = parsing.lexer.tokenize(s)
                 if (len(tokens) == 1 and tokens[0].name == 'ATOM' and
-                    tokens[0].source == s and not s.startswith("'")):
+                    tokens[0].source == s and s != ',' and not s.startswith("'")):
                     return s
-            except LexerError:
+            except SyntaxError:
                 pass
             parts = []
             for code in rutf8.Utf8StringIterator(s):
@@ -275,14 +281,17 @@ class TermFormatter(object):
                    (self.max_depth <= 0 or depth <= self.max_depth)):
                 first = term.argument_at(0)
                 second = term.argument_at(1).dereference(None)
-                result.append(self._format(first, depth + 1))
+                result.append(self._format_operand(first, depth + 1, 999))
                 result.append(", ")
                 term = second
                 depth += 1
-            result.append(self._format(term, depth))
+            result.append(self._format_operand(term, depth, 1000))
             result.append(")")
             return (0, "".join(result))
         if (term.argument_count(), term.name()) not in self.op_mapping:
+            return (0, self.format_term_normally(term, depth))
+        if self.quoted and self.format_atom(term.name()) != term.name():
+            # Quoted names are functors, never operators, in the parser.
             return (0, self.format_term_normally(term, depth))
         form, prec = self.op_mapping[(term.argument_count(), term.name())]
         result = []
@@ -292,23 +301,67 @@ class TermFormatter(object):
             if c == "f":
                 result.append(self.format_atom(term.name()))
             else:
-                childprec, child = self.format_with_ops(term.argument_at(curr_index), depth + 1)
-                parentheses = (c == "x" and childprec >= prec or
-                               c == "y" and childprec > prec)
-                if parentheses:
-                    result.append("(")
-                    result.append(child)
-                    result.append(")")
-                else:
-                    result.append(child)
+                operand = term.argument_at(curr_index).dereference(None)
+                limit = prec - 1 if c == 'x' else prec
+                following_precedence = -1
+                if curr_index == 0 and form[0] != 'f':
+                    # The parser initially prefers infix even when this name
+                    # will eventually be reinterpreted as postfix.
+                    following_form, following_precedence = self.op_mapping.get(
+                        (2, term.name()), (form, prec))
+                child = self._format_operand(operand, depth + 1, limit,
+                                             following_precedence)
+                if form[0] == 'f' and (child.startswith('(') or
+                        term.name() == '-' and isinstance(operand, Numeric)):
+                    # Adjacent '(' starts a compound call; adjacent '-1' is a
+                    # numeric literal rather than a unary '-' application.
+                    result.append(' ')
+                result.append(child)
                 curr_index += 1
         assert curr_index == term.argument_count()
         return (prec, join_operator_parts(result))
 
-    def _make_reverse_op_mapping(self):
+    def _format_operand(self, operand, depth, limit, following_precedence=-1):
+        if self.max_depth > 0 and depth > self.max_depth:
+            return '...'
+        operand = operand.dereference(None)
+        precedence, text = self.format_with_ops(operand, depth)
+        parentheses = precedence > limit
+        if precedence > 0 and following_precedence >= 0:
+            assert isinstance(operand, Callable)
+            form, _ = self.op_mapping[(operand.argument_count(), operand.name())]
+            if form[-1] in 'xy':
+                right_limit = precedence - 1 if form[-1] == 'x' else precedence
+                # A following operator must not become part of this child's
+                # still-open right operand, even if its own left limit fits.
+                if following_precedence <= right_limit:
+                    parentheses = True
+        if isinstance(operand, Atom) and (
+                (1, operand.name()) in self.op_mapping or
+                (2, operand.name()) in self.op_mapping):
+            # Atom precedence alone cannot protect an operator name from being
+            # reinterpreted in its parent's expression.
+            parentheses = True
+        elif isinstance(operand, Callable) and operand.argument_count() == 1:
+            if operand.name() in self.ambiguous_postfix:
+                # Terminate the child expression before a following operator
+                # can make its postfix name look like an infix application.
+                parentheses = True
+        if parentheses:
+            return '(' + text + ')'
+        return text
+
+    def _make_reverse_op_mapping(self, operators):
         m = {}
-        for prec, allops in self.engine.getoperations():
-            for form, ops in allops:
-                for op in ops:
-                    m[len(form) - 1, op] = (form, prec)
+        for operator in operators.all_operators():
+            key = (len(operator.form) - 1, operator.name)
+            # Preserve the formatter's preference for tighter unary operators
+            # when a name has both prefix and postfix declarations.
+            if key not in m or operator.precedence <= m[key][1]:
+                m[key] = (operator.form, operator.precedence)
         self.op_mapping = m
+        self.ambiguous_postfix = {}
+        for name in operators.postfix_ops:
+            form, precedence = m[(1, name)]
+            if form in ('xf', 'yf') and name in operators.infix_ops:
+                self.ambiguous_postfix[name] = None

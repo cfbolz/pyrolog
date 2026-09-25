@@ -23,8 +23,6 @@ EXPECTATIONS = {
         xfail('Suite assumes 1000 is invalid, but it is a Unicode scalar value', UnificationFailed),
     ('number_codes', "number_codes(A,[ 0'1, 0'2, 1000])"):
         xfail('Suite expects invalid character code; Unicode U+03E8 instead gives invalid number syntax', UncaughtError),
-    ('number_codes', "number_codes(A,[0'0,0'x,0'f])"):
-        xfail('number_codes/2 does not parse hexadecimal notation', UncaughtError),
     ('sub_atom', "sub_atom('ab', Before, Length, After, Sub_atom)"):
         xfail('Suite expects one-based Before offsets; Prolog sub_atom/5 is zero-based', UnificationFailed),
     ('abolish', '(current_prolog_flag(max_arity,A), X is A + 1, abolish(foo/X))'):
@@ -125,8 +123,6 @@ EXPECTATIONS = {
         skip('Process termination needs a subprocess test, not this engine runner'),
     ('halt', 'halt(a)'):
         xfail('halt/1 is not implemented', UncaughtError),
-    ('number_chars', "number_chars(A,['0',x,f])"):
-        xfail('number_chars/2 does not parse hexadecimal notation', UncaughtError),
     ('set_prolog_flag', '(set_prolog_flag(unknown, fail), current_prolog_flag(unknown, V))'):
         xfail('set_prolog_flag/2 is not implemented', UncaughtError),
     ('set_prolog_flag', 'set_prolog_flag(X, warning)'):

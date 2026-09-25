@@ -1,5 +1,5 @@
 from rpython.rlib import rstring
-from rpyrepl.color import styled, filelink
+from rpyrepl.color import styled, filelink, can_colorize
 
 def _format_source(source, output_fd):
     # The highlighter uses the parser, which imports this module.
@@ -18,15 +18,40 @@ class UncatchableError(PrologError):
         self.message = message
 
 class PrologParseError(PrologError):
-    def __init__(self, file_name, line_number, message):
+    def __init__(self, file_name, line_number, message=None, parse_error=None, source=None):
         self.file_name = file_name
         self.line_number = line_number
-        self.message = message
+        self._message = message
+        self.parse_error = parse_error
+        self.source = source
+
+    @property
+    def message(self):
+        message = self._message
+        if message is None:
+            from prolog.interpreter.diagnostics import format_syntax_error
+            assert self.parse_error is not None
+            assert self.source is not None
+            message = format_syntax_error(self.source, self.file_name,
+                                          self.parse_error).rstrip('\n')
+            self._message = message
+        return message
+
+    def format_message(self, output_fd=1):
+        # Keep .message plain for programmatic callers. Select terminal colour
+        # only when displaying the diagnostic, just as for runtime tracebacks.
+        if self.parse_error is not None and self.source is not None and can_colorize(output_fd):
+            from prolog.interpreter.diagnostics import format_syntax_error
+            filename = filelink(self.file_name, output_fd)
+            return format_syntax_error(self.source, filename, self.parse_error,
+                                       color=True).rstrip('\n')
+        return self.message
 
 class TermedError(PrologError):
     def __init__(self, term, sig_context=None):
         self.term = term
         self.sig_context = sig_context
+        self.parse_error = None
         self.missing_signature = None
         self.lookup_module = None
 
@@ -36,7 +61,6 @@ class TermedError(PrologError):
         errorsig = signature.Signature.getsignature("error", 1)
 
         f = formatting.TermFormatter(engine, quoted=True, max_depth=20)
-        f._make_reverse_op_mapping()
 
         t = self.term
         if not isinstance(t, term.Callable) or not t.signature().eq(errorsig):
@@ -192,10 +216,12 @@ def wrap_error(t):
 class UnificationFailed(PrologError):
     pass
 
-def throw_syntax_error(msg):
+def throw_syntax_error(msg, parse_error=None):
     from prolog.interpreter import term
     t = term.Callable.build("syntax_error", [term.Callable.build(msg)])
-    raise wrap_error(t)
+    exc = wrap_error(t)
+    exc.parse_error = parse_error
+    raise exc
 
 def throw_import_error(modulename, signature):
     from prolog.interpreter import term

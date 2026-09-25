@@ -310,30 +310,30 @@ def impl_nl(engine, heap, stream):
 def impl_nl_0(engine, heap):
     impl_nl(engine, heap, engine.streamwrapper.current_outstream)
 
-@expose_builtin("write", unwrap_spec=["outstream", "raw"])
-def impl_write(engine, heap, stream, term):
+@expose_builtin("write", unwrap_spec=["outstream", "raw"], needs_module=True)
+def impl_write(engine, heap, module, stream, term):
     check_stream_type(stream, False, 'output')
-    formatter = TermFormatter.from_option_list(engine, [])
+    formatter = TermFormatter.from_option_list(engine, [], module)
     stream.write(formatter.format(term))
 
-@expose_builtin("write", unwrap_spec=["raw"])
-def impl_write_1(engine, heap, term):
-    impl_write(engine, heap, engine.streamwrapper.current_outstream, term)
+@expose_builtin("write", unwrap_spec=["raw"], needs_module=True)
+def impl_write_1(engine, heap, module, term):
+    impl_write(engine, heap, module, engine.streamwrapper.current_outstream, term)
 
-@expose_builtin("write_term", unwrap_spec=["outstream", "raw", "list"])
-def impl_write_term(engine, heap, stream, term, options):
+@expose_builtin("write_term", unwrap_spec=["outstream", "raw", "list"], needs_module=True)
+def impl_write_term(engine, heap, module, stream, term, options):
     check_stream_type(stream, False, 'output')
-    formatter = TermFormatter.from_option_list(engine, options)
+    formatter = TermFormatter.from_option_list(engine, options, module)
     stream.write(formatter.format(term))
  
-@expose_builtin("write_term", unwrap_spec=["raw", "list"])
-def impl_write_term_2(engine, heap, term, options):
-    impl_write_term(engine, heap, engine.streamwrapper.current_outstream,
+@expose_builtin("write_term", unwrap_spec=["raw", "list"], needs_module=True)
+def impl_write_term_2(engine, heap, module, term, options):
+    impl_write_term(engine, heap, module, engine.streamwrapper.current_outstream,
             term, options)
 
 def read_till_next_dot(stream):
-    from prolog.interpreter.parsing import lexer, LexerError
-    from prolog.interpreter.lexer import IncompleteTokenError
+    from prolog.interpreter.parsing import lexer
+    from prolog.interpreter.syntaxerror import SyntaxError
     from prolog.interpreter.utf8 import layout
     chars = []
     while True:
@@ -343,8 +343,8 @@ def read_till_next_dot(stream):
             try:
                 if not lexer.tokenize(source):
                     return "end_of_file."
-            except LexerError:
-                pass
+            except SyntaxError as exc:
+                error.throw_syntax_error(exc.msg, exc)
             error.throw_syntax_error("Unexpected end of file")
         chars.append(char)
         if char != '.':
@@ -356,23 +356,23 @@ def read_till_next_dot(stream):
         source = "".join(chars)
         try:
             tokens = lexer.tokenize(source)
-        except IncompleteTokenError:
-            continue  # The dot is inside an unfinished quote or comment.
-        except LexerError:
-            raise error.throw_syntax_error("Invalid token")
+        except SyntaxError as exc:
+            if exc.incomplete:
+                continue  # The dot is inside an unfinished quote or comment.
+            raise error.throw_syntax_error(exc.msg, exc)
         if tokens and tokens[-1].name == '.' and tokens[-1].source_pos.i == len(source) - 1:
             return source
 
-@expose_builtin("read", unwrap_spec=["instream", "obj"])
-def impl_read(engine, heap, stream, obj):
+@expose_builtin("read", unwrap_spec=["instream", "obj"], needs_module=True)
+def impl_read(engine, heap, module, stream, obj):
     from prolog.interpreter.parsing import parse_query_term
     src = read_till_next_dot(stream)
-    parsed = parse_query_term(src)
+    parsed = parse_query_term(src, module.operators)
     obj.unify(parsed, heap)
 
-@expose_builtin("read", unwrap_spec=["obj"])
-def impl_read_1(engine, heap, obj):
-    impl_read(engine, heap, engine.streamwrapper.current_instream, obj)
+@expose_builtin("read", unwrap_spec=["obj"], needs_module=True)
+def impl_read_1(engine, heap, module, obj):
+    impl_read(engine, heap, module, engine.streamwrapper.current_instream, obj)
 
 @expose_builtin("see", unwrap_spec=["atom"])
 def impl_see(engine, heap, obj):

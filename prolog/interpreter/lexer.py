@@ -1,12 +1,8 @@
 """Code-point aware Prolog lexer with byte offsets into the original source."""
 from rpython.rlib import rutf8, rstring
 from rpython.rlib.parsing.lexer import Token, SourcePos
-from rpython.rlib.parsing.deterministic import LexerError
+from prolog.interpreter.syntaxerror import SyntaxError, SourceSpan
 from prolog.interpreter import utf8
-
-
-class IncompleteTokenError(LexerError):
-    """A quoted token or block comment needs more input."""
 
 
 class UnicodeLexer(object):
@@ -37,7 +33,9 @@ class UnicodeRunner(object):
             # check_utf8 reports the start of the first invalid sequence.
             while self.pos < exc.pos:
                 self.advance()
-            raise LexerError(text, 0, SourcePos(exc.pos, self.lineno, self.columnno))
+            start = SourcePos(exc.pos, self.lineno, self.columnno)
+            end = SourcePos(exc.pos + 1, self.lineno, self.columnno + 1)
+            raise SyntaxError('invalid UTF-8 sequence', SourceSpan(start, end), 'invalid_utf8')
 
     def advance(self):
         code = rutf8.codepoint_at_pos(self.text, self.pos)
@@ -49,7 +47,21 @@ class UnicodeRunner(object):
             self.columnno += 1
 
     def fail(self, start, line, column):
-        raise LexerError(self.text, 0, SourcePos(start, line, column))
+        beginning = SourcePos(start, line, column)
+        if self.pos == start:
+            end = SourcePos(rutf8.next_codepoint_pos(self.text, start), line, column + 1)
+        else:
+            end = SourcePos(self.pos, self.lineno, self.columnno)
+        raise SyntaxError('invalid token', SourceSpan(beginning, end), 'invalid_token')
+
+    def unclosed(self, start, line, column, width, kind, expected):
+        primary = SourceSpan(SourcePos(start, line, column),
+                             SourcePos(start + width, line, column + width))
+        end = SourcePos(self.pos, self.lineno, self.columnno)
+        raise SyntaxError('expected %s before end of input' % expected, primary, kind,
+                          SourceSpan(end, end), expected, 'EOF', incomplete=True,
+                          primary_label='opened here',
+                          secondary_label="expected '%s' here" % expected)
 
     def scan_block_comment(self, start, line, column):
         text = self.text
@@ -59,7 +71,7 @@ class UnicodeRunner(object):
         while self.pos < size and not rstring.startswith(text, '*/', self.pos, size):
             self.advance()
         if self.pos == size:
-            raise IncompleteTokenError(text, 0, SourcePos(start, line, column))
+            self.unclosed(start, line, column, 2, 'unclosed_comment', '*/')
         self.advance()
         self.advance()
 
@@ -85,7 +97,7 @@ class UnicodeRunner(object):
                     self.advance()
                 else:
                     return
-        raise IncompleteTokenError(text, 0, SourcePos(start, line, column))
+        self.unclosed(start, line, column, 1, 'unclosed_quote', char)
 
     def scan_character_code(self, start, line, column):
         # The initial zero has been consumed; the cursor is on the quote.
@@ -131,6 +143,17 @@ class UnicodeRunner(object):
         self.advance()
         if char == '0' and self.pos < size and text[self.pos] == "'":
             self.scan_character_code(start, line, column)
+            return 'NUMBER'
+        if char == '0' and self.pos < size and text[self.pos] in 'xob':
+            prefix = text[self.pos]
+            digits = '0123456789abcdef' if prefix == 'x' else (
+                '01234567' if prefix == 'o' else '01')
+            self.advance()
+            first_digit = self.pos
+            while self.pos < size and text[self.pos].lower() in digits:
+                self.advance()
+            if self.pos == first_digit:
+                self.fail(start, line, column)
             return 'NUMBER'
         self.scan_decimal_digits()
         if (self.pos + 1 >= size or text[self.pos] != '.' or

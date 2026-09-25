@@ -37,7 +37,7 @@ def test_console_recovers_from_float_literal_overflow(monkeypatch):
     output = terminal_input(monkeypatch, 'X is 1.0e999.\ntrue.\nhalt.\n')
     translatedmain.run_console(Engine())
     text = ''.join(output)
-    assert "Syntax error: 'float_overflow'" in text
+    assert "SyntaxError: float overflow" in text
     assert 'yes' in text
 
 
@@ -147,3 +147,77 @@ def test_plain_input_does_not_touch_history(monkeypatch, tmpdir):
     monkeypatch.setenv('PYROLOG_HISTORY', str(path))
     translatedmain.run_console(Engine())
     assert not path.check()
+
+
+def test_console_uses_labeled_syntax_diagnostics(monkeypatch):
+    from prolog.interpreter.diagnostics import format_syntax_error
+    from prolog.interpreter.test.test_parser_diagnostics import diagnostic
+    source = 'f(a b).\n'
+    output = terminal_input(monkeypatch, source + 'halt.\n')
+    translatedmain.run_console(Engine())
+    assert format_syntax_error(source, '<stdin>', diagnostic(source)) in ''.join(output)
+
+
+@pytest.mark.parametrize('tty, term, force, no_color, expected_color', [
+    (True, 'xterm', False, False, True),
+    (False, 'xterm', False, False, False),
+    (True, 'dumb', False, False, False),
+    (False, 'dumb', True, False, True),
+    (True, 'xterm', True, True, False),
+])
+def test_syntax_diagnostic_color_policy(monkeypatch, tty, term, force, no_color, expected_color):
+    from rpyrepl import color
+    from prolog.interpreter.diagnostics import format_syntax_error
+    from prolog.interpreter.test.test_parser_diagnostics import diagnostic
+    monkeypatch.setenv('TERM', term)
+    monkeypatch.delenv('FORCE_COLOR', raising=False)
+    monkeypatch.delenv('NO_COLOR', raising=False)
+    if force:
+        monkeypatch.setenv('FORCE_COLOR', '1')
+    if no_color:
+        monkeypatch.setenv('NO_COLOR', '1')
+    monkeypatch.setattr(color.os, 'isatty', lambda fd: tty and fd == 1)
+    source = 'f(a b).\n'
+    output = terminal_input(monkeypatch, source + 'halt.\n')
+    translatedmain.run_console(Engine())
+    expected = format_syntax_error(source, '<stdin>', diagnostic(source), color=expected_color)
+    assert expected in ''.join(output)
+
+
+def test_consult_syntax_diagnostic_color(monkeypatch, tmpdir):
+    from rpyrepl.color import filelink
+    from prolog.interpreter import parsing, error
+    from prolog.interpreter.diagnostics import format_syntax_error
+    from prolog.interpreter.test.test_parser_diagnostics import diagnostic
+    monkeypatch.delenv('NO_COLOR', raising=False)
+    monkeypatch.setenv('FORCE_COLOR', '1')
+    source = 'f(a b).'
+    path = tmpdir.join('bad file.pl')
+    path.write(source)
+    output = []
+    monkeypatch.setattr(translatedmain, 'printmessage', output.append)
+    translatedmain.execute(Engine(), str(path))
+    text = ''.join(output)
+    link = filelink(str(path))
+    assert '[' + link + ':1:5]' in text
+    assert '%20' in link
+    assert format_syntax_error(source, str(path), diagnostic(source), color=True) in text.replace(link, str(path))
+    with pytest.raises(error.PrologParseError) as caught:
+        parsing.parse_file(source)
+    assert '\x1b[' not in caught.value.message
+
+
+def test_syntax_filename_link_uses_output_fd(monkeypatch):
+    from prolog.interpreter import parsing, error
+    from rpyrepl import color
+    monkeypatch.delenv('NO_COLOR', raising=False)
+    monkeypatch.delenv('FORCE_COLOR', raising=False)
+    monkeypatch.setenv('TERM', 'xterm')
+    monkeypatch.setattr(color.os, 'isatty', lambda fd: fd == 17)
+    with pytest.raises(error.PrologParseError) as caught:
+        parsing.parse_file('f(a b).', file_name='example.pl')
+    exc = caught.value
+    assert color.filelink('example.pl', 17) in exc.format_message(17)
+    assert '\x1b]8;;' in exc.format_message(17)
+    assert exc.format_message(18) == exc.message
+    assert '\x1b' not in exc.message

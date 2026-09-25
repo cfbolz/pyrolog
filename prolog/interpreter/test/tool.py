@@ -3,7 +3,7 @@ import os
 from prolog.interpreter.error import UnificationFailed
 from prolog.interpreter.parsing import parse_query_term, get_engine
 from prolog.interpreter.continuation import Continuation, Heap, Engine
-from prolog.interpreter.parsing import parse_file, TermBuilder
+from prolog.interpreter.parsing import parse_file
 
 def assert_true(query, e=None):
     if e is None:
@@ -47,9 +47,7 @@ def collect_all(engine, s):
     return collector.heaps
 
 def parse(inp):
-    t = parse_file(inp)
-    builder = TermBuilder()
-    return builder.build(t)
+    return parse_file(inp)
 
 def create_file(name, content):
     with open(name, "w") as f:

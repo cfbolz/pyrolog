@@ -2,9 +2,7 @@ import math
 from prolog.interpreter import helper, term, error
 from prolog.builtin.register import expose_builtin
 from prolog.interpreter.term import Callable
-from rpython.rlib.rstring import ParseStringError, ParseStringOverflowError
-from rpython.rlib.rarithmetic import string_to_int
-from rpython.rlib.rbigint import rbigint
+from prolog.interpreter.parsing_helpers import integer_literal_base, parse_integer_literal
 from prolog.interpreter.helper import wrap_list
 from rpython.rlib import rutf8
 from prolog.interpreter.utf8 import unicodedb, layout
@@ -28,18 +26,30 @@ def num_to_list(num, codes=False):
     return wrap_list([Callable.build(c) for c in s])
 
 def parse_number(chars):
-    # Validate the complete decimal token before invoking host conversions.
+    # Validate the complete token before invoking host conversions.
     text = "".join(chars)
     start = 0
     while start < len(text) and layout(rutf8.codepoint_at_pos(text, start)):
         start = rutf8.next_codepoint_pos(text, start)
     text = text[start:]
     if text.startswith("0'"):
-        from prolog.interpreter.parsing import unescape
+        from prolog.interpreter.parsing_helpers import unescape
         char = unescape(text[2:])
         if rutf8.codepoints_in_utf8(char) != 1:
             error.throw_syntax_error("Illegal number")
         return term.Number(rutf8.codepoint_at_pos(char, 0))
+    base = integer_literal_base(text)
+    if base != 10:
+        start = 2
+        if text[0] in '+-':
+            start += 1
+        if start == len(text):
+            error.throw_syntax_error("Illegal number")
+        for i in range(start, len(text)):
+            digit = '0123456789abcdef'.find(text[i].lower())
+            if digit < 0 or digit >= base:
+                error.throw_syntax_error("Illegal number")
+        return parse_integer_literal(text)
     # Numeric conversions accept Unicode decimal digits; source literals stay ASCII.
     normalized = []
     digit_block = -1
@@ -83,12 +93,7 @@ def parse_number(chars):
     if i != size:
         error.throw_syntax_error("Illegal number")
     if not is_float:
-        try:
-            return term.Number(string_to_int(text))
-        except ParseStringOverflowError:
-            return term.BigInt(rbigint.fromdecimalstr(text))
-        except ParseStringError:
-            error.throw_syntax_error("Illegal number")
+        return parse_integer_literal(text)
     try:
         value = float(text)
     except ValueError:

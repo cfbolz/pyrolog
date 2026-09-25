@@ -1,4 +1,4 @@
-from prolog.interpreter.parsing import parse_file, TermBuilder
+from prolog.interpreter.parsing import parse_file
 from prolog.interpreter.term import Atom, Number, Term, Callable, \
         specialized_term_classes, NumberedVar
 from prolog.interpreter.test.tool import parse
@@ -6,9 +6,7 @@ from prolog.interpreter.heap import Heap
 import pytest
 
 def parse(inp):
-    t = parse_file(inp)
-    builder = TermBuilder()
-    return builder.build(t)
+    return parse_file(inp)
     
 atom = parse('a.')[0]
 term = parse('t(a, b, c, d, f).')[0]
