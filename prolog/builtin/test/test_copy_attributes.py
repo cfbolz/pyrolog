@@ -127,3 +127,36 @@ def test_attribute_goals_restore_changes(ending):
         result = 'catch(copy_term(X,_,_),projection_error,true)'
     assert_true('put_attr(X,projected,Y), %s, var(Y), '
                 'get_attr(X,projected,V), V == Y.' % result, engine)
+
+
+def test_attribute_goals_can_bind_source_temporarily():
+    engine = get_engine('', load_system=True, projected='''
+        :- module(projected, []).
+        attribute_goals(X) --> { del_attrs(X), X=bound }, [].
+    ''')
+    assert_true('put_attr(X,projected,a), put_attr(X,other,b), '
+                'copy_term(X,C,G), C == bound, G == [], var(X), '
+                'get_attr(X,projected,a), get_attr(X,other,b).', engine)
+
+
+def test_attribute_goals_can_suppress_related_variable_projection():
+    engine = get_engine('', load_system=True, projected='''
+        :- module(projected, []).
+        attribute_goals(X) -->
+            { get_attr(X,projected,Y), del_attr(Y,projected) },
+            [related(X,Y)].
+    ''')
+    assert_true('put_attr(X,projected,Y), put_attr(Y,projected,X), '
+                'copy_term(pair(X,Y),pair(C,D),G), G == [related(C,D)], '
+                'get_attr(X,projected,P), P == Y, '
+                'get_attr(Y,projected,Q), Q == X.', engine)
+
+
+def test_attribute_goals_strip_fresh_attributes_in_emitted_goals():
+    engine = get_engine('', load_system=True, projected='''
+        :- module(projected, []).
+        attribute_goals(X) --> { put_attr(Y,internal,a) }, [related(X,Y,Y)].
+    ''')
+    assert_true('put_attr(X,projected,a), copy_term(X,C,G), '
+                'G = [related(C,D,E)], D == E, term_attvars(C-G,[]), '
+                'get_attr(X,projected,a).', engine)
