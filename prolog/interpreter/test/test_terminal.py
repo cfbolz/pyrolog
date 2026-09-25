@@ -156,3 +156,47 @@ def test_console_uses_labeled_syntax_diagnostics(monkeypatch):
     output = terminal_input(monkeypatch, source + 'halt.\n')
     translatedmain.run_console(Engine())
     assert format_syntax_error(source, '<stdin>', diagnostic(source)) in ''.join(output)
+
+
+@pytest.mark.parametrize('tty, term, force, no_color, expected_color', [
+    (True, 'xterm', False, False, True),
+    (False, 'xterm', False, False, False),
+    (True, 'dumb', False, False, False),
+    (False, 'dumb', True, False, True),
+    (True, 'xterm', True, True, False),
+])
+def test_syntax_diagnostic_color_policy(monkeypatch, tty, term, force, no_color, expected_color):
+    from rpyrepl import color
+    from prolog.interpreter.diagnostics import format_syntax_error
+    from prolog.interpreter.test.test_parser_diagnostics import diagnostic
+    monkeypatch.setenv('TERM', term)
+    monkeypatch.delenv('FORCE_COLOR', raising=False)
+    monkeypatch.delenv('NO_COLOR', raising=False)
+    if force:
+        monkeypatch.setenv('FORCE_COLOR', '1')
+    if no_color:
+        monkeypatch.setenv('NO_COLOR', '1')
+    monkeypatch.setattr(color.os, 'isatty', lambda fd: tty and fd == 1)
+    source = 'f(a b).\n'
+    output = terminal_input(monkeypatch, source + 'halt.\n')
+    translatedmain.run_console(Engine())
+    expected = format_syntax_error(source, '<stdin>', diagnostic(source), color=expected_color)
+    assert expected in ''.join(output)
+
+
+def test_consult_syntax_diagnostic_color(monkeypatch, tmpdir):
+    from prolog.interpreter import parsing, error
+    from prolog.interpreter.diagnostics import format_syntax_error
+    from prolog.interpreter.test.test_parser_diagnostics import diagnostic
+    monkeypatch.delenv('NO_COLOR', raising=False)
+    monkeypatch.setenv('FORCE_COLOR', '1')
+    source = 'f(a b).'
+    path = tmpdir.join('bad.pl')
+    path.write(source)
+    output = []
+    monkeypatch.setattr(translatedmain, 'printmessage', output.append)
+    translatedmain.execute(Engine(), str(path))
+    assert format_syntax_error(source, str(path), diagnostic(source), color=True) in ''.join(output)
+    with pytest.raises(error.PrologParseError) as caught:
+        parsing.parse_file(source)
+    assert '\x1b[' not in caught.value.message

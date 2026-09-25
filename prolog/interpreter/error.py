@@ -1,5 +1,5 @@
 from rpython.rlib import rstring
-from rpyrepl.color import styled, filelink
+from rpyrepl.color import styled, filelink, can_colorize
 
 class EndOfInput(Exception):
     """Terminal EOF, including while choosing an answer or debugging."""
@@ -12,11 +12,21 @@ class UncatchableError(PrologError):
         self.message = message
 
 class PrologParseError(PrologError):
-    def __init__(self, file_name, line_number, message, parse_error=None):
+    def __init__(self, file_name, line_number, message, parse_error=None, source=None):
         self.file_name = file_name
         self.line_number = line_number
         self.message = message
         self.parse_error = parse_error
+        self.source = source
+
+    def format_message(self, output_fd=1):
+        # Keep .message plain for programmatic callers. Select terminal colour
+        # only when displaying the diagnostic, just as for runtime tracebacks.
+        if self.parse_error is not None and self.source is not None and can_colorize(output_fd):
+            from prolog.interpreter.diagnostics import format_syntax_error
+            return format_syntax_error(self.source, self.file_name, self.parse_error,
+                                       color=True).rstrip('\n')
+        return self.message
 
 class TermedError(PrologError):
     def __init__(self, term, sig_context=None):

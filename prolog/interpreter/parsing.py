@@ -68,7 +68,7 @@ def parse_file_with_vars(s, operators=None, callback=_dummyfunc, arg=None, file_
         pos = exc.primary.start
         message = format_syntax_error(s, file_name, exc).rstrip('\n')
         lineno = pos.lineno
-    raise error.PrologParseError(file_name, lineno, message, parse_error)
+    raise error.PrologParseError(file_name, lineno, message, parse_error, s)
 
 
 def _parse_file(tokens, eof, operators, callback, arg, source, file_name):

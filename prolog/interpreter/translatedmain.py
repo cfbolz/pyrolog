@@ -136,7 +136,7 @@ def run(query, var_to_pos, engine, query_source=None):
     except error.CatchableError, e:
         printmessage("ERROR: %s\n" % e.get_errstr(engine))
     except error.PrologParseError, exc:
-        printmessage(exc.message + "\n")
+        printmessage(exc.format_message() + "\n")
     # except error.UncatchableError, e:
     #     printmessage("INTERNAL ERROR: %s\n" % (e.message, ))
     except StopItNow:
@@ -204,7 +204,7 @@ def repl(engine):
             printmessage("ERROR: %s\n" % exc.get_errstr(engine))
             continue
         except error.PrologParseError, exc:
-            printmessage(exc.message + "\n")
+            printmessage(exc.format_message() + "\n")
             continue
         for goal in goals:
             run(goal, var_to_pos, engine, query_source=line)
