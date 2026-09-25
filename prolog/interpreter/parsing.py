@@ -66,7 +66,7 @@ def parse_file_with_vars(s, operators=None, callback=_dummyfunc, arg=None, file_
         parse_error = exc
         pos = exc.primary.start
         lines = s.split('\n')
-        message = ('  File %s, line %s\n%s\n%s^\nParseError: %s' %
+        message = ('  File %s, line %s\n%s\n%s^\nSyntaxError: %s' %
                    (file_name, pos.lineno + 1, lines[pos.lineno],
                     ' ' * pos.columnno, exc.msg))
         lineno = pos.lineno
