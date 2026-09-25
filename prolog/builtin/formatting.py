@@ -161,6 +161,8 @@ class TermFormatter(object):
             assert isinstance(term, Callable)
             return self.format_term(term, depth)
         elif isinstance(term, AttVar):
+            if term.is_empty():
+                return self.format_var(term)
             return self.format_attvar(term, depth)
         elif isinstance(term, Var):
             return self.format_var(term)
