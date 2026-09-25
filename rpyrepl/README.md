@@ -164,3 +164,14 @@ Goals, depths, and debugger command prompts remain plain.
 Diagnostic formatters call `styled(text, tag, output_fd=1)` and
 `filelink(filename, output_fd=1)` directly; these helpers apply the output policy
 and return plain text when styling is disabled.
+
+Uncaught undefined-predicate errors suggest visible predicates with the same
+name at other arities, and close spellings with the requested arity. Spelling
+matches use bounded, Unicode-aware weighted edit distance, with adjacent swaps
+costing one ordinary edit and case-only changes costing half an edit; at most three
+equally good matches are shown, sorted by name. Other arities are ranked by
+distance from the requested arity, with lower arities first on ties; at most
+three are shown. Suggestions follow the failing
+call's module, including imports and runtime builtin/system fallbacks. They are
+computed only when the uncaught traceback is rendered, never while searching
+for a `catch/3` handler, and do not execute or rewrite the query.

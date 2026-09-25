@@ -2,6 +2,7 @@
 from rpyrepl.completion import Completer, Completion
 from prolog.interpreter.highlighting import PrologHighlighter
 from prolog.interpreter import utf8
+from prolog.interpreter.predicates import visible_predicates
 from rpython.rlib import rutf8
 
 
@@ -41,7 +42,6 @@ class PrologCompleter(Completer):
         self.highlighter = PrologHighlighter()
 
     def complete(self, text, pos):
-        from prolog.builtin.register import builtin_names
         assert pos >= 0
         start = identifier_start_backwards(text, pos)
         assert start >= 0
@@ -79,22 +79,13 @@ class PrologCompleter(Completer):
             if module is None:
                 return Completion(pos, [])
         names = {}
-        self.add_module(names, module, stem)
+        for signature in visible_predicates(self.engine, module,
+                                            include_fallbacks=not qualified):
+            name = signature.name
+            if plain_name(name) and name.startswith(stem):
+                names[name] = True
         if not qualified:
-            system = self.engine.modulewrapper.system
-            if system is not None:
-                self.add_module(names, system, stem)
-            for name in builtin_names:
-                if plain_name(name) and name.startswith(stem):
-                    names[name] = True
             for name in self.engine.modulewrapper.modules:
                 if plain_name(name) and name.startswith(stem):
                     names[name + ':'] = True
         return Completion(start, names.keys())
-
-    def add_module(self, names, module, stem):
-        for signature, function in module.functions.iteritems():
-            name = signature.name
-            if (function.rulechain is not None and plain_name(name) and
-                    name.startswith(stem)):
-                names[name] = True

@@ -21,6 +21,8 @@ class TermedError(PrologError):
     def __init__(self, term, sig_context=None):
         self.term = term
         self.sig_context = sig_context
+        self.missing_signature = None
+        self.lookup_module = None
 
     def get_errstr(self, engine):
         from prolog.builtin import formatting
@@ -108,6 +110,27 @@ class UncaughtError(TermedError):
         context = styled(context, 'ERROR_LABEL', output_fd)
         message = styled(message, 'ERROR_MESSAGE', output_fd)
         out.append("%s%s" % (context, message))
+        if self.missing_signature is not None and self.lookup_module is not None:
+            from prolog.interpreter.suggestions import predicate_suggestions
+            from prolog.builtin.formatting import TermFormatter
+            from prolog.interpreter.term import Callable, Number
+            arities, spellings = predicate_suggestions(
+                engine, self.lookup_module, self.missing_signature)
+            formatter = TermFormatter(engine, quoted=True)
+            for candidates, singular, plural in [
+                    (arities, 'a predicate with this name exists at another arity',
+                     'predicates with this name exist at other arities'),
+                    (spellings, 'a similarly named predicate is available',
+                     'similarly named predicates are available')]:
+                if candidates:
+                    description = singular if len(candidates) == 1 else plural
+                    indicators = []
+                    for candidate in candidates:
+                        indicator = Callable.build('/', [
+                            Callable.build(candidate.name), Number(candidate.numargs)])
+                        indicators.append(formatter.format(indicator))
+                    out.append(styled('help: ' + description + ': ' +
+                                      ', '.join(indicators), 'ERROR_MESSAGE', output_fd))
         return "\n".join(out)
 
 
@@ -176,10 +199,13 @@ def throw_import_error(modulename, signature):
             term.Callable.build(signature.string())])
     raise wrap_error(t)
 
-def throw_existence_error(object_type, obj):
+def throw_existence_error(object_type, obj, missing_signature=None, lookup_module=None):
     from prolog.interpreter import term
     t = term.Callable.build("existence_error", [term.Callable.build(object_type), obj])
-    raise wrap_error(t)
+    exc = wrap_error(t)
+    exc.missing_signature = missing_signature
+    exc.lookup_module = lookup_module
+    raise exc
 
 def throw_instantiation_error(obj = None):
     from prolog.interpreter import term
