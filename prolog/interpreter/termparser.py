@@ -319,30 +319,7 @@ class Parser(object):
                 expect_operand = False
                 continue
             if incoming is None:
-                previous = self.tokens[self.position - 1] if self.position else None
-                if (current.name == '(' and previous is not None and previous.name == 'ATOM'
-                        and state.terms and isinstance(state.terms[-1], term.Atom)
-                        and state.operand_tokens[-1] is previous):
-                    self._error("expected an operator; '(' must immediately follow a functor name",
-                                current, 'functor_whitespace', previous,
-                                primary_label='whitespace before this parenthesis',
-                                secondary_label='functor name here')
-                if context == 'argument':
-                    self._error("expected an operator or ',' between arguments",
-                                current, 'missing_separator', previous,
-                                expected="operator or ','", primary_label='unexpected term',
-                                secondary_label='preceding argument ends here')
-                if context == 'list_element':
-                    self._error("expected an operator, ',' or '|' between list elements",
-                                current, 'missing_separator', previous,
-                                expected="operator, ',' or '|'", primary_label='unexpected term',
-                                secondary_label='preceding list element ends here')
-                expected = 'operator'
-                if not self.open_delimiters:
-                    expected = "operator or '.'"
-                self._error('expected an %s between terms' % expected, current,
-                            'missing_operator', previous, expected=expected,
-                            primary_label='unexpected term', secondary_label='preceding term ends here')
+                self._missing_operator(current, state, context)
             self._get_next()
             state.push_operator(current, incoming)
             expect_operand = incoming.kind == 'infix'
@@ -351,6 +328,32 @@ class Parser(object):
             self._check_delimiter(self.eof)
         state.complete_operand(expect_operand, current, context)
         return state.finish()
+
+    def _missing_operator(self, current, state, context):
+        previous = self.tokens[self.position - 1] if self.position else None
+        if (current.name == '(' and previous is not None and previous.name == 'ATOM'
+                and state.terms and isinstance(state.terms[-1], term.Atom)
+                and state.operand_tokens[-1] is previous):
+            self._error("expected an operator; '(' must immediately follow a functor name",
+                        current, 'functor_whitespace', previous,
+                        primary_label='whitespace before this parenthesis',
+                        secondary_label='functor name here')
+        if context == 'argument':
+            self._error("expected an operator or ',' between arguments",
+                        current, 'missing_separator', previous,
+                        expected="operator or ','", primary_label='unexpected term',
+                        secondary_label='preceding argument ends here')
+        if context == 'list_element':
+            self._error("expected an operator, ',' or '|' between list elements",
+                        current, 'missing_separator', previous,
+                        expected="operator, ',' or '|'", primary_label='unexpected term',
+                        secondary_label='preceding list element ends here')
+        expected = 'operator'
+        if not self.open_delimiters:
+            expected = "operator or '.'"
+        self._error('expected an %s between terms' % expected, current,
+                    'missing_operator', previous, expected=expected,
+                    primary_label='unexpected term', secondary_label='preceding term ends here')
 
     def _select_operator(self, token, state, expect_operand):
         if token.name not in ('ATOM', '|') or token.source.startswith("'"):
