@@ -33,7 +33,28 @@ def parse_integer_literal(s):
         return BigInt(rbigint.fromstr(s, base))
 
 
+class EscapeError(Exception):
+    def __init__(self, start, end, reason):
+        self.start = start
+        self.end = end
+        self.reason = reason
+
+
+def _escape_error(s, start, end, reason='character_escape'):
+    # An invalid non-ASCII escape/digit must still have a whole-code-point span.
+    while end < len(s) and ord(s[end]) & 0xc0 == 0x80:
+        end += 1
+    raise EscapeError(start, end, reason)
+
+
 def unescape(s, quote="'"):
+    try:
+        return unescape_literal(s, quote)
+    except EscapeError as exc:
+        raise error.throw_syntax_error(exc.reason)
+
+
+def unescape_literal(s, quote="'"):
     result = []
     i = 0
     while i < len(s):
@@ -45,25 +66,26 @@ def unescape(s, quote="'"):
         elif c != "\\":
             result.append(c)
         else:
+            start = i - 1
             if i == len(s):
-                error.throw_syntax_error("character_escape")
+                _escape_error(s, start, i)
             c = s[i]
             i += 1
             if c in 'uU':
                 count = 4 if c == 'u' else 8
                 if i + count > len(s):
-                    error.throw_syntax_error("character_escape")
+                    _escape_error(s, start, len(s))
                 value = 0
                 for j in range(count):
                     digit = s[i + j].lower()
                     if digit not in '0123456789abcdef':
-                        error.throw_syntax_error("character_escape")
+                        _escape_error(s, start, i + j + 1)
                     value = value * 16 + '0123456789abcdef'.find(digit)
                 i += count
                 try:
                     result.append(rutf8.unichr_as_utf8(value))
                 except rutf8.OutOfRange:
-                    error.throw_syntax_error("character_code")
+                    _escape_error(s, start, i, 'character_code')
             elif c == 'x' or '0' <= c <= '7':
                 base = 16 if c == 'x' else 8
                 value = 0 if c == 'x' else ord(c) - 48
@@ -71,17 +93,17 @@ def unescape(s, quote="'"):
                 while i < len(s) and s[i] != "\\":
                     digit = '0123456789abcdef'.find(s[i].lower())
                     if digit < 0 or digit >= base or value > 0x10ffff:
-                        error.throw_syntax_error("character_escape")
+                        _escape_error(s, start, i + 1)
                     value = value * base + digit
                     digits += 1
                     i += 1
                 if i == len(s) or digits == 0:
-                    error.throw_syntax_error("character_escape")
+                    _escape_error(s, start, i)
                 i += 1
                 try:
                     result.append(rutf8.unichr_as_utf8(value))
                 except rutf8.OutOfRange:
-                    error.throw_syntax_error("character_code")
+                    _escape_error(s, start, i, 'character_code')
             elif c == "\n":
                 pass
             elif c in "'\"":
@@ -89,6 +111,5 @@ def unescape(s, quote="'"):
             elif "\\" + c in ESCAPES:
                 result.append(ESCAPES["\\" + c])
             else:
-                error.throw_syntax_error("character_escape")
+                _escape_error(s, start, i)
     return "".join(result)
-

@@ -242,3 +242,69 @@ def test_expression_precedence_limit_reports_actual_and_limit():
     assert exc.primary.start.i == 1
     assert exc.expected == 'at most 400'
     assert exc.found == '500'
+
+
+@pytest.mark.parametrize('source, start, end, kind', [
+    ("'abc\\qxyz'.", 4, 6, 'invalid_escape'),
+    ('"abc\\qxyz".', 4, 6, 'invalid_escape'),
+    ("'\\uD800'.", 1, 7, 'invalid_character_code'),
+    ("'\\u12Z4'.", 1, 6, 'invalid_escape'),
+    ("'\\u12'.", 1, 5, 'invalid_escape'),
+    ("0'\\uD800.", 2, 8, 'invalid_character_code'),
+    ("'\\x110000\\'.", 1, 10, 'invalid_character_code'),
+    ("'\\\xc3\xa9'.", 1, 4, 'invalid_escape'),
+])
+def test_invalid_escape_points_to_escape_sequence(source, start, end, kind):
+    exc = diagnostic(source)
+    assert exc.kind == kind
+    assert (exc.primary.start.i, exc.primary.end.i) == (start, end)
+    assert exc.secondary is None
+
+
+def test_escape_position_after_utf8_and_newline():
+    exc = diagnostic("'\xc3\xa9\nxy\\q'.")
+    assert position(exc.primary.start) == (6, 1, 2)
+    assert position(exc.primary.end) == (8, 1, 4)
+
+
+def test_float_overflow_has_stable_kind():
+    exc = diagnostic('1.0e999.')
+    assert exc.kind == 'float_overflow'
+    assert (exc.primary.start.i, exc.primary.end.i) == (0, 7)
+
+
+@pytest.mark.parametrize('name, source, kind', [
+    ('NUMBER', '0xG', 'invalid_integer'),
+    ('NUMBER', "0'ab", 'invalid_character_literal'),
+    ('FLOAT', '1.2.3', 'invalid_float'),
+])
+def test_defensive_literal_errors(name, source, kind):
+    # These malformed tokens normally fail lexing; the parser still validates
+    # tokens supplied directly by its callers.
+    from rpython.rlib.parsing.lexer import Token, SourcePos
+    tokens = [Token(name, source, SourcePos(0, 0, 0)),
+              Token('.', '.', SourcePos(len(source), 0, len(source)))]
+    with pytest.raises(ParseError) as caught:
+        Parser(tokens, default_operator_table).parse()
+    assert caught.value.kind == kind
+    assert caught.value.primary.start.i == 0
+    assert caught.value.primary.end.i == len(source)
+
+
+def test_expected_separator_reports_spelling_not_token_class():
+    parser = Parser(UnicodeLexer().tokenize('foo.'), default_operator_table)
+    with pytest.raises(ParseError) as caught:
+        parser._expect('ATOM', ',')
+    exc = caught.value
+    assert exc.kind == 'unexpected_token'
+    assert exc.expected == ','
+    assert exc.found == 'foo'
+    assert "found 'foo'" in exc.msg
+
+
+def test_file_location_uses_precise_escape_span():
+    from prolog.interpreter import parsing, error
+    with pytest.raises(error.PrologParseError) as caught:
+        parsing.parse_file("'first\nxy\\q'.", file_name='example.pl')
+    assert caught.value.line_number == 1
+    assert position(caught.value.parse_error.primary.start) == (9, 1, 2)

@@ -2,8 +2,8 @@ import math
 from rpython.rlib import rutf8
 from rpython.rlib.rstring import ParseStringError
 from rpython.rlib.parsing.lexer import Token, SourcePos
-from prolog.interpreter import error, helper, term
-from prolog.interpreter.parsing_helpers import unescape, parse_integer_literal
+from prolog.interpreter import helper, term
+from prolog.interpreter.parsing_helpers import unescape_literal, EscapeError, parse_integer_literal
 
 CLOSING_DELIMITERS = {'(': ')', '[': ']', '{': '}'}
 
@@ -14,16 +14,21 @@ class SourceSpan(object):
         self.end = end
 
 
-def token_span(token):
+def token_position(token, offset):
+    assert offset >= 0
     start = token.source_pos
     line, column = start.lineno, start.columnno
-    for code in rutf8.Utf8StringIterator(token.source):
+    for code in rutf8.Utf8StringIterator(token.source[:offset]):
         if code == 10:
             line += 1
             column = 0
         else:
             column += 1
-    return SourceSpan(start, SourcePos(start.i + len(token.source), line, column))
+    return SourcePos(start.i + offset, line, column)
+
+
+def token_span(token):
+    return SourceSpan(token.source_pos, token_position(token, len(token.source)))
 
 
 class ParseError(Exception):
@@ -152,17 +157,18 @@ class ExpressionState(object):
             elif not self.reinterpret_pending(self.max_precedence + 1):
                 if self.pending_tokens:
                     operator_token = self.pending_tokens[-1]
-                    self.parser._error('expected a right operand for operator %r' %
+                    self.parser._error("expected a right operand for operator '%s'" %
                                        operator_token.source, operator_token,
                                        'missing_operand', token or self.parser.eof,
-                                       expected='term')
+                                       expected='term',
+                                       found=token.source if token is not None else 'EOF')
                 self.parser._missing_term(token, context)
 
     def _reduce(self):
         operator = self.pending_operators.pop()
         token = self.pending_tokens.pop()
         if operator.precedence > self.max_precedence:
-            self.parser._error('operator %r has precedence %d, exceeding expression limit %d' %
+            self.parser._error("operator '%s' has precedence %d, exceeding expression limit %d" %
                                (operator.name, operator.precedence, self.max_precedence),
                                token, 'precedence_limit',
                                expected='at most %d' % self.max_precedence,
@@ -199,7 +205,7 @@ class ExpressionState(object):
 
     def _check_precedence(self, operator, token, precedence, limit, operand_token, side):
         if precedence > limit:
-            self.parser._error('%s operand of %r (%s, precedence %d) has precedence %d; '
+            self.parser._error("%s operand of '%s' (%s, precedence %d) has precedence %d; "
                                'expected at most %d' %
                                (side, operator.name, operator.form, operator.precedence,
                                 precedence, limit), token, 'precedence_clash', operand_token,
@@ -285,7 +291,7 @@ class Parser(object):
         tok = self._get_next()
         if tok.name != name or source is not None and tok.source != source:
             expected = source if source is not None else name
-            self._error("expected %r, found %r" % (expected, tok.source), tok,
+            self._error("expected '%s', found '%s'" % (expected, tok.source), tok,
                         'unexpected_token', expected=expected)
         if name in (')', ']', '}'):
             self.open_delimiters.pop()
@@ -331,7 +337,9 @@ class Parser(object):
                 continue
             if incoming is None:
                 previous = self.tokens[self.position - 1] if self.position else None
-                if current.name == '(' and previous is not None and previous.name == 'ATOM':
+                if (current.name == '(' and previous is not None and previous.name == 'ATOM'
+                        and state.terms and isinstance(state.terms[-1], term.Atom)
+                        and state.operand_tokens[-1] is previous):
                     self._error("expected an operator; '(' must immediately follow a functor name",
                                 current, 'functor_whitespace', previous)
                 self._error('expected an operator between terms', current,
@@ -410,11 +418,19 @@ class Parser(object):
             return term.Callable.build("{}", [res])
         self._missing_term(current)
 
-    def _unescape(self, text, current, quote="'"):
+    def _unescape(self, text, current, quote="'", offset=1):
         try:
-            return unescape(text, quote)
-        except error.CatchableError:
-            self._error("invalid character escape", current)
+            return unescape_literal(text, quote)
+        except EscapeError as exc:
+            kind = 'invalid_escape'
+            message = 'invalid character escape'
+            if exc.reason == 'character_code':
+                kind = 'invalid_character_code'
+                message = 'escape does not denote a Unicode scalar value'
+            diagnostic = ParseError(message, current, self, kind)
+            diagnostic.primary = SourceSpan(token_position(current, offset + exc.start),
+                                            token_position(current, offset + exc.end))
+            raise diagnostic
 
     def _parse_string(self, current):
         end = len(current.source) - 1
@@ -426,24 +442,25 @@ class Parser(object):
     def _parse_number(self, current):
         s = current.source
         if s.startswith("0'"):
-            char = self._unescape(s[2:], current)
+            char = self._unescape(s[2:], current, offset=2)
             if rutf8.codepoints_in_utf8(char) != 1:
-                self._error("expected one character", current)
+                self._error("character-code literal must contain exactly one character",
+                            current, 'invalid_character_literal')
             return term.Number(rutf8.codepoint_at_pos(char, 0))
         try:
             return parse_integer_literal(s)
         except ParseStringError:
-            self._error("invalid integer literal", current)
+            self._error("invalid integer literal", current, 'invalid_integer')
 
     def _parse_float(self, current):
         try:
             value = float(current.source)
         except ValueError:
-            raise self._error("invalid float literal", current)
+            raise self._error("invalid float literal", current, 'invalid_float')
         except OverflowError:
-            raise self._error("float overflow", current)
+            raise self._error("float overflow", current, 'float_overflow')
         if math.isinf(value):
-            self._error("float overflow", current)
+            self._error("float overflow", current, 'float_overflow')
         return term.Float(value)
 
     def _parse_negative_number(self, current):

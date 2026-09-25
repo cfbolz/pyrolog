@@ -64,11 +64,7 @@ def parse_file_with_vars(s, operators=None, callback=_dummyfunc, arg=None, file_
         return _parse_file(tokens, eof, operators, callback, arg, s, file_name)
     except ParseError as exc:
         parse_error = exc
-        token = exc.tok
-        if token is None:
-            assert eof is not None
-            token = eof
-        pos = token.source_pos
+        pos = exc.primary.start
         lines = s.split('\n')
         message = ('  File %s, line %s\n%s\n%s^\nParseError: %s' %
                    (file_name, pos.lineno + 1, lines[pos.lineno],
@@ -119,7 +115,7 @@ def get_query_and_vars(s, operators=None):
     try:
         query = parser.parse()
     except ParseError as exc:
-        reason = 'float_overflow' if exc.msg == 'float overflow' else exc.msg
+        reason = 'float_overflow' if exc.kind == 'float_overflow' else exc.msg
         raise error.throw_syntax_error(reason, exc)
     return query, parser.varname_to_var
 
