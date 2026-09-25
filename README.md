@@ -2,6 +2,9 @@
 
 A Prolog interpreter in RPython.
 
+Arithmetic `/` always returns a float, including for exact integer quotients:
+`1 / 2` is `0.5` and `4 / 2` is `2.0`. Use `//` for integer division.
+
 The interactive REPL supports editing, persistent history, highlighting, and
 predicate/module completion. See [rpyrepl](rpyrepl/README.md) for keys and settings.
 

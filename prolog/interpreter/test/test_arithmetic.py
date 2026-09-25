@@ -14,6 +14,34 @@ from rpython.rlib.rbigint import rbigint
 def is_64_bit():
     return sys.maxint > 2147483647
 
+
+@pytest.mark.parametrize('left, right, expected', [
+    (1, 2, 0.5), (4, 2, 2.0), (0, 2, 0.0),
+    (-1, 2, -0.5), (1, -2, -0.5), (-4, -2, 2.0),
+    (4.0, 2, 2.0), (4, 2.0, 2.0), (4.0, 2.0, 2.0),
+    (10 ** 100, 2, 5e99), (1, 10 ** 100, 1e-100),
+    (10 ** 400, 2 * 10 ** 400, 0.5),
+    (2 * 10 ** 400, 10 ** 400, 2.0),
+    (1, 10 ** 400, 0.0),
+])
+def test_division_returns_float(left, right, expected):
+    result = assert_true('X is %s / %s, float(X).' % (left, right))['X']
+    assert result.floatval == expected
+
+
+@pytest.mark.parametrize('numerator', [1, 10 ** 100, 1.0])
+@pytest.mark.parametrize('denominator', [0, 0.0])
+def test_division_by_zero(numerator, denominator):
+    prolog_raises('evaluation_error(zero_divisor)',
+                  'X is %s / %s' % (numerator, denominator))
+
+
+def test_integer_division_float_overflow():
+    prolog_raises('evaluation_error(float_overflow)', 'X is %d / 1' % (10 ** 400))
+    prolog_raises('evaluation_error(float_overflow)',
+                  'X is %d / %d' % (10 ** 500, 10 ** 100))
+
+
 class TestArithmeticMethod(object):
     def test_add(self):
         f1 = Float(5.1)
@@ -78,16 +106,16 @@ class TestArithmeticMethod(object):
         assert Float(2.5).arith_mul(Number(2)).floatval == 5
 
     def test_div(self):
-        assert Number(5).arith_div(Number(2)).num == 2
-        assert Number(15).arith_div(Number(5)).num == 3
+        assert Number(5).arith_div(Number(2)).floatval == 2.5
+        assert Number(15).arith_div(Number(5)).floatval == 3.0
         assert Number(5).arith_div(Float(2.5)).floatval == 2.0
         assert Float(2.5).arith_div(Number(5)).floatval == 0.5
         assert Float(-10).arith_div(Float(2.5)).floatval == -4.0
-        assert BigInt(rbigint.fromdecimalstr('50000000000000000')).arith_div(BigInt(rbigint.fromdecimalstr('25000000000000000'))).num == 2
+        assert BigInt(rbigint.fromdecimalstr('50000000000000000')).arith_div(BigInt(rbigint.fromdecimalstr('25000000000000000'))).floatval == 2.0
         assert BigInt(rbigint.fromdecimalstr('100000000000000000000')).arith_div(Float(100000000000000000000.0)).floatval == 1.0
         assert Float(100000000000000000000).arith_div(BigInt(rbigint.fromdecimalstr('100000000000000000000'))).floatval == 1.0
-        assert Number(5).arith_div(BigInt(rbigint.fromdecimalstr('5'))).num == 1
-        assert BigInt(rbigint.fromdecimalstr('5')).arith_div(Number(5)).num == 1
+        assert Number(5).arith_div(BigInt(rbigint.fromdecimalstr('5'))).floatval == 1.0
+        assert BigInt(rbigint.fromdecimalstr('5')).arith_div(Number(5)).floatval == 1.0
 
         with pytest.raises(error.CatchableError):
             BigInt(rbigint.fromdecimalstr('1')).arith_div(BigInt(rbigint.fromdecimalstr('0')))
@@ -231,7 +259,7 @@ def test_simple():
     assert_true("X is 2 * -2, X = -4.")
     assert_true("X is 2 * -2.1, X = -4.2.")
     assert_true("X is 2 + -2, X = 0.")
-    assert_true("X is 2 / -2, X = -1.")
+    assert_true("X is 2 / -2, X = -1.0.")
 
     assert_true("X is 1 << 4, X = 16.")
     assert_true("X is 128 >> 7, X = 1.")

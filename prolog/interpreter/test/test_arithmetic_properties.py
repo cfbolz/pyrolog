@@ -30,6 +30,33 @@ numbers = st.one_of(integers, st.floats())
 
 
 @settings(max_examples=200, deadline=None)
+@given(integers, integers.filter(lambda value: value != 0))
+@example(2 ** 53 + 1, 3)
+@example(-sys.maxint - 1, -1)
+@example(0, -1)
+def test_integer_true_division(left, right):
+    try:
+        expected = operator.truediv(long(left), long(right))
+    except OverflowError:
+        expected = None
+    for force_bigint in [False, True]:
+        lhs = wrap_number(left, force_bigint)
+        rhs = wrap_number(right, force_bigint)
+        try:
+            actual = lhs.arith_div(rhs)
+        except error.CatchableError as exc:
+            assert expected is None
+            err = exc.term.argument_at(0)
+            assert err.name() == 'evaluation_error'
+            assert err.argument_at(0).name() == 'float_overflow'
+        else:
+            assert isinstance(actual, term.Float)
+            assert actual.floatval == expected
+            if expected == 0.0:
+                assert math.copysign(1.0, actual.floatval) == math.copysign(1.0, expected)
+
+
+@settings(max_examples=200, deadline=None)
 @given(st.floats(allow_nan=False, allow_infinity=False),
        st.floats(allow_nan=False, allow_infinity=False))
 @example(1.0e308, 2.0)

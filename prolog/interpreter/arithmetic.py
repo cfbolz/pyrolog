@@ -115,6 +115,17 @@ def bigint_to_float(value):
         error.throw_evaluation_error("float_overflow")
 
 
+def bigint_true_divide(numerator, denominator):
+    # Divide before converting: even enormous operands can have a small quotient.
+    try:
+        result = numerator.truediv(denominator)
+    except ZeroDivisionError:
+        error.throw_evaluation_error("zero_divisor")
+    except OverflowError:
+        error.throw_evaluation_error("float_overflow")
+    return make_float(result)
+
+
 UNORDERED = 2
 
 
@@ -342,16 +353,15 @@ class __extend__(term.Number):
     def arith_div_number(self, other_num):
         if self.num == 0:
             error.throw_evaluation_error("zero_divisor")
-        try:
-            res = rarithmetic.ovfcheck(other_num / self.num)
-        except OverflowError:
-            return self.arith_div_bigint(rbigint.fromint(other_num))
-        return term.Number(res)
+        # Avoid rounding large operands before computing their quotient.
+        if rarithmetic.LONG_BIT > 32 and not (
+                -1 <= other_num >> 53 < 1 and -1 <= self.num >> 53 < 1):
+            return bigint_true_divide(rbigint.fromint(other_num),
+                                      rbigint.fromint(self.num))
+        return make_float(float(other_num) / float(self.num))
 
     def arith_div_bigint(self, other_value):
-        if self.num == 0:
-            error.throw_evaluation_error("zero_divisor")
-        return make_int(term.BigInt(other_value.div(rbigint.fromint(self.num))))
+        return bigint_true_divide(other_value, rbigint.fromint(self.num))
 
     def arith_div_float(self, other_float):
         if self.num == 0:
@@ -754,13 +764,10 @@ class __extend__(term.BigInt):
         return other.arith_div_bigint(self.value)
 
     def arith_div_number(self, other_num):
-        return make_int(term.BigInt(rbigint.fromint(other_num).div(self.value)))
+        return bigint_true_divide(rbigint.fromint(other_num), self.value)
 
     def arith_div_bigint(self, other_value):
-        try:
-            return make_int(term.BigInt(other_value.div(self.value)))
-        except ZeroDivisionError:
-            error.throw_evaluation_error("zero_divisor")
+        return bigint_true_divide(other_value, self.value)
 
     def arith_div_float(self, other_float):
         return make_float(other_float / bigint_to_float(self.value))
