@@ -88,6 +88,7 @@ def assert_roundtrip(case, ignore_ops=False):
 @settings(max_examples=300, deadline=None)
 @given(case=formatting_cases(custom_operators=False))
 @example(case=([], ('\\+', ((',', ('a', 'a')),))))
+@example(case=([], ('-', (1,))))
 def test_roundtrip_default_operators(ignore_ops, case):
     assert_roundtrip(case, ignore_ops)
 
@@ -97,5 +98,9 @@ def test_roundtrip_default_operators(ignore_ops, case):
 @given(case=formatting_cases(custom_operators=True))
 @example(case=([('p', 200, 'xf')], ('p', ('+',))))
 @example(case=([('pre', 500, 'fy'), ('post', 500, 'yf')], ('post', ('pre',))))
+@example(case=([('q', 1200, 'xf')], (',', ('a', ('q', ('a',))))))
+@example(case=([('q', 1000, 'fx')], (',', ('q', 'a'))))
+@example(case=([('p', 200, 'xf'), ('p', 200, 'xfx'), ('+', 400, 'xf')],
+              ('+', (('p', ('a',)),))))
 def test_roundtrip_custom_operators(ignore_ops, case):
     assert_roundtrip(case, ignore_ops)

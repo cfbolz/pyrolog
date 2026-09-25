@@ -4,7 +4,7 @@ from prolog.interpreter import utf8
 import os
 import string
 
-from prolog.interpreter.term import Float, Number, Var, Atom, Callable, AttVar, BindingVar
+from prolog.interpreter.term import Float, Number, Numeric, Var, Atom, Callable, AttVar, BindingVar
 from prolog.interpreter import error, helper, parsing
 from prolog.builtin.register import expose_builtin
 from prolog.interpreter.signature import Signature
@@ -281,11 +281,11 @@ class TermFormatter(object):
                    (self.max_depth <= 0 or depth <= self.max_depth)):
                 first = term.argument_at(0)
                 second = term.argument_at(1).dereference(None)
-                result.append(self._format(first, depth + 1))
+                result.append(self._format_operand(first, depth + 1, 999))
                 result.append(", ")
                 term = second
                 depth += 1
-            result.append(self._format(term, depth))
+            result.append(self._format_operand(term, depth, 1000))
             result.append(")")
             return (0, "".join(result))
         if (term.argument_count(), term.name()) not in self.op_mapping:
@@ -301,18 +301,39 @@ class TermFormatter(object):
             if c == "f":
                 result.append(self.format_atom(term.name()))
             else:
-                childprec, child = self.format_with_ops(term.argument_at(curr_index), depth + 1)
-                parentheses = (c == "x" and childprec >= prec or
-                               c == "y" and childprec > prec)
-                if parentheses:
-                    result.append("(")
-                    result.append(child)
-                    result.append(")")
-                else:
-                    result.append(child)
+                operand = term.argument_at(curr_index).dereference(None)
+                limit = prec - 1 if c == 'x' else prec
+                child = self._format_operand(operand, depth + 1, limit)
+                if form[0] == 'f' and (child.startswith('(') or
+                        term.name() == '-' and isinstance(operand, Numeric)):
+                    # Adjacent '(' starts a compound call; adjacent '-1' is a
+                    # numeric literal rather than a unary '-' application.
+                    result.append(' ')
+                result.append(child)
                 curr_index += 1
         assert curr_index == term.argument_count()
         return (prec, join_operator_parts(result))
+
+    def _format_operand(self, operand, depth, limit):
+        if self.max_depth > 0 and depth > self.max_depth:
+            return '...'
+        operand = operand.dereference(None)
+        precedence, text = self.format_with_ops(operand, depth)
+        parentheses = precedence > limit
+        if isinstance(operand, Atom) and (
+                (1, operand.name()) in self.op_mapping or
+                (2, operand.name()) in self.op_mapping):
+            # Atom precedence alone cannot protect an operator name from being
+            # reinterpreted in its parent's expression.
+            parentheses = True
+        elif isinstance(operand, Callable) and operand.argument_count() == 1:
+            if operand.name() in self.ambiguous_postfix:
+                # Terminate the child expression before a following operator
+                # can make its postfix name look like an infix application.
+                parentheses = True
+        if parentheses:
+            return '(' + text + ')'
+        return text
 
     def _make_reverse_op_mapping(self, operators):
         m = {}
@@ -323,3 +344,8 @@ class TermFormatter(object):
             if key not in m or operator.precedence <= m[key][1]:
                 m[key] = (operator.form, operator.precedence)
         self.op_mapping = m
+        self.ambiguous_postfix = {}
+        for name in operators.postfix_ops:
+            form, precedence = m[(1, name)]
+            if form in ('xf', 'yf') and name in operators.infix_ops:
+                self.ambiguous_postfix[name] = None
