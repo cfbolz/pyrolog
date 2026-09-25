@@ -153,9 +153,9 @@ and obeys the same colour policy as syntax highlighting.
 Pyrolog's runtime tracebacks use the same colour policy: bold magenta for the
 error label/context and magenta for the message and source locations. Real
 filenames become OSC 8 terminal hyperlinks to absolute, URL-escaped `file://`
-paths; pseudo filenames such as `<stdin>` remain unlinked. Source excerpts stay
-plain, since current locations describe whole clauses rather than individual
-failing goals. Disabling colour also disables these links. Terminals without
+paths; pseudo filenames such as `<stdin>` remain unlinked. Query and clause
+source excerpts use the editor's syntax colours, without cursor-dependent
+delimiter highlighting. Disabling colour also disables these links. Terminals without
 hyperlink support still display the filename. Ordinary Prolog output is unchanged.
 The `Nein` failure/no-more-solutions message is bold red when colour is enabled.
 Debugger port labels follow SWI's colours: bold green for `Call` and `Exit`,
