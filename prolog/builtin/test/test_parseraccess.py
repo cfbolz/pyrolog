@@ -43,6 +43,31 @@ def test_calling_module_owns_operators():
     assert_false('current_op(_,_,testop).', Engine())
 
 
+def test_directive_changes_next_term_and_query():
+    e = get_engine(':- op(450,xfy,joins). a joins b. b joins c.')
+    assert_true('a joins b.', e)
+    assert_true('op(0,xfy,joins).', e)
+    from prolog.interpreter.error import PrologParseError
+    with pytest.raises(PrologParseError):
+        e.parse('a joins b.')
+
+
+def test_module_switch_changes_parsing_table():
+    e = Engine()
+    e.runstring(':- module(left, []). :- op(450,xfy,joins). a joins b. '
+                ':- module(right, []). :- op(350,yfx,joins). a joins b joins c.')
+    assert_true("left:'joins'(a,b), right:'joins'('joins'(a,b),c).", e)
+    assert_true('current_op(350,yfx,joins).', e)
+    assert_false('current_op(450,xfy,joins).', e)
+
+
+def test_operator_change_inside_consult(tmpdir):
+    path = tmpdir.join('operators.pl')
+    path.write(':- op(450,xfy,joins).')
+    e = get_engine(" :- consult('%s'). a joins b." % path)
+    assert_true('a joins b.', e)
+
+
 @pytest.mark.parametrize('query, expected', [
     ('op(_,xfx,a)', 'instantiation_error'),
     ('op(1,_,a)', 'instantiation_error'),

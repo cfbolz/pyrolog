@@ -88,8 +88,11 @@ def _parse_file(tokens, eof, operators, callback, arg, source, file_name):
             parser = Parser(line, operators)
             value = parser.parse()
             variables = parser.varname_to_var
-            callback(arg, value, source, file_name,
-                     line[0].source_pos, token.source_pos)
+            next_operators = callback(arg, value, source, file_name,
+                                      line[0].source_pos, token.source_pos)
+            # Directives can modify operators or switch the current module.
+            if next_operators is not None:
+                operators = next_operators
             terms.append(value)
             line = []
     if line:
@@ -97,16 +100,18 @@ def _parse_file(tokens, eof, operators, callback, arg, source, file_name):
     return terms, variables
 
 
-def parse_query(s):
-    return parse_query_term(s)
+def parse_query(s, operators=None):
+    return parse_query_term(s, operators)
 
 
-def parse_query_term(s):
-    return get_query_and_vars(s)[0]
+def parse_query_term(s, operators=None):
+    return get_query_and_vars(s, operators)[0]
 
 
-def get_query_and_vars(s):
-    parser = Parser(lexer.tokenize(s), default_operator_table)
+def get_query_and_vars(s, operators=None):
+    if operators is None:
+        operators = default_operator_table
+    parser = Parser(lexer.tokenize(s), operators)
     try:
         query = parser.parse()
     except ParseError as exc:

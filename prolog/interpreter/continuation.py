@@ -173,6 +173,7 @@ class Engine(object):
             rule = self.add_rule(term)
             rule.file_name = file_name
             rule._init_source_info(start, end, source_string)
+        return self.modulewrapper.current_module.operators
 
     def _term_expand(self, term):
         if self.modulewrapper.system is not None:
@@ -189,11 +190,13 @@ class Engine(object):
 
     def runstring(self, s, file_name=None):
         from prolog.interpreter.parsing import parse_file
-        parse_file(s, None, Engine._build_and_run, self, file_name=file_name)
+        parse_file(s, self.modulewrapper.current_module.operators,
+                   Engine._build_and_run, self, file_name=file_name)
 
     def parse(self, s, file_name=None):
         from prolog.interpreter.parsing import parse_file_with_vars
-        return parse_file_with_vars(s, file_name=file_name)
+        return parse_file_with_vars(s, self.modulewrapper.current_module.operators,
+                                    file_name=file_name)
 
     def getoperations(self):
         from prolog.interpreter.parsing import default_operations

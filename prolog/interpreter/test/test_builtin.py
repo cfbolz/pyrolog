@@ -552,7 +552,6 @@ def test_between():
 def test_is():
     assert_true("5 is 1 + 1 + 1 + 1 + 1.")
 
-@pytest.mark.xfail
 def test_parser_access():
     assert_true("current_op(200, xfx, **).")
     f = collect_all(Engine(), "current_op(200, Form, X).")
