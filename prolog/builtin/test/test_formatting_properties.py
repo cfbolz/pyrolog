@@ -102,5 +102,25 @@ def test_roundtrip_default_operators(ignore_ops, case):
 @example(case=([('q', 1000, 'fx')], (',', ('q', 'a'))))
 @example(case=([('p', 200, 'xf'), ('p', 200, 'xfx'), ('+', 400, 'xf')],
               ('+', (('p', ('a',)),))))
+@example(case=([('p', 1000, 'fy'), ('@', 1000, 'yf')],
+              ('@', (('p', ('a',)),))))
+@example(case=([('+', 200, 'fy'), ('\xe2\x89\xa4', 400, 'xf'),
+               ('\xe2\x89\xa4', 200, 'xfx')],
+              ('\xe2\x89\xa4', (('+', ('a',)),))))
 def test_roundtrip_custom_operators(ignore_ops, case):
     assert_roundtrip(case, ignore_ops)
+
+
+@pytest.mark.parametrize('child_form', ['fx', 'fy', 'xfx', 'xfy', 'yfx'])
+@pytest.mark.parametrize('child_priority', [200, 400, 1000])
+@pytest.mark.parametrize('postfix_form', ['xf', 'yf'])
+@pytest.mark.parametrize('postfix_priority', [200, 400, 1000])
+@pytest.mark.parametrize('infix_priority', [None, 200, 1000])
+def test_roundtrip_postfix_after_right_operand(child_form, child_priority,
+        postfix_form, postfix_priority, infix_priority):
+    definitions = [('child', child_priority, child_form),
+                   ('post', postfix_priority, postfix_form)]
+    if infix_priority is not None:
+        definitions.append(('post', infix_priority, 'xfx'))
+    args = ('a',) if len(child_form) == 2 else ('a', 'b')
+    assert_roundtrip((definitions, ('post', (('child', args),))))

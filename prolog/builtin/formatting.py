@@ -303,7 +303,14 @@ class TermFormatter(object):
             else:
                 operand = term.argument_at(curr_index).dereference(None)
                 limit = prec - 1 if c == 'x' else prec
-                child = self._format_operand(operand, depth + 1, limit)
+                following_precedence = -1
+                if curr_index == 0 and form[0] != 'f':
+                    # The parser initially prefers infix even when this name
+                    # will eventually be reinterpreted as postfix.
+                    following_form, following_precedence = self.op_mapping.get(
+                        (2, term.name()), (form, prec))
+                child = self._format_operand(operand, depth + 1, limit,
+                                             following_precedence)
                 if form[0] == 'f' and (child.startswith('(') or
                         term.name() == '-' and isinstance(operand, Numeric)):
                     # Adjacent '(' starts a compound call; adjacent '-1' is a
@@ -314,12 +321,21 @@ class TermFormatter(object):
         assert curr_index == term.argument_count()
         return (prec, join_operator_parts(result))
 
-    def _format_operand(self, operand, depth, limit):
+    def _format_operand(self, operand, depth, limit, following_precedence=-1):
         if self.max_depth > 0 and depth > self.max_depth:
             return '...'
         operand = operand.dereference(None)
         precedence, text = self.format_with_ops(operand, depth)
         parentheses = precedence > limit
+        if precedence > 0 and following_precedence >= 0:
+            assert isinstance(operand, Callable)
+            form, _ = self.op_mapping[(operand.argument_count(), operand.name())]
+            if form[-1] in 'xy':
+                right_limit = precedence - 1 if form[-1] == 'x' else precedence
+                # A following operator must not become part of this child's
+                # still-open right operand, even if its own left limit fits.
+                if following_precedence <= right_limit:
+                    parentheses = True
         if isinstance(operand, Atom) and (
                 (1, operand.name()) in self.op_mapping or
                 (2, operand.name()) in self.op_mapping):
