@@ -146,7 +146,7 @@ when(Cond, Goal) :-
     throw(error(instantiation_error)).
 
 when(Cond, Goal) :-
-    coroutines:when_impl(Cond, Goal).
+    coroutines:when_impl(Cond, when:run_suspension(Cond, Goal, _State)).
 
 % *****************************************************
 % *					     D I F                        *

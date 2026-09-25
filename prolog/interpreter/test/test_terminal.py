@@ -221,3 +221,46 @@ def test_syntax_filename_link_uses_output_fd(monkeypatch):
     assert '\x1b]8;;' in exc.format_message(17)
     assert exc.format_message(18) == exc.message
     assert '\x1b' not in exc.message
+
+
+def test_console_projection_preserves_redo_and_repeat(monkeypatch):
+    output = terminal_input(monkeypatch,
+        'when(nonvar(X),Y=done), (true;X=a).\np\n;\nhalt.\n')
+    translatedmain.run_console(Engine(load_system=True))
+    text = ''.join(output)
+    assert text.count('coroutines:when(nonvar(X), user:(Y=done))') == 2
+    assert 'X = a\nY = done' in text
+    assert 'ERROR' not in text
+
+
+def test_console_hook_runs_once_and_restores_source(monkeypatch, capfd):
+    from prolog.interpreter.parsing import get_engine
+    engine = get_engine('''
+        :- module(projected, []).
+        attribute_goals(X, [constraint(X,Value)], []) :-
+            write(projecting), nl,
+            get_attr(X, projected, Value), del_attr(X, projected).
+        :- module(user).
+    ''', load_system=True)
+    output = terminal_input(monkeypatch,
+        'put_attr(X,projected,Y), (true;get_attr(X,projected,Y),Y=kept).\n'
+        'p\n;\n\nhalt.\n')
+    translatedmain.run_console(engine)
+    text = ''.join(output)
+    assert text.count('constraint(X, Y)') == 2
+    assert 'Y = kept\nconstraint(X, kept)' in text
+    assert 'ERROR' not in text
+    out, err = capfd.readouterr()
+    assert out == 'projecting\nprojecting\n'
+
+
+def test_deep_answer_through_repl_continuation():
+    from prolog.interpreter.term import Callable
+    value = Callable.build('a')
+    for i in range(3000):
+        value = Callable.build('f', [value])
+    engine = Engine()
+    output = []
+    display = translatedmain.ContinueContinuation(engine, {'X': value}, output.append)
+    engine.run_query_in_current(Callable.build('true'), display)
+    assert ''.join(output) == 'yes\nX = ' + 'f(' * 20 + '...' + ')' * 20 + '\n\n'

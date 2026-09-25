@@ -60,10 +60,9 @@ def test_write_term_bounded_cycle(capfd):
 
 
 def test_console_formats_cyclic_list():
-    from prolog.interpreter.translatedmain import var_representation
+    from prolog.interpreter.answer import format_answer
     variables = assert_true('X = [a|X].')
-    output = []
-    var_representation(variables, Engine(), output.append, None)
+    output = format_answer(variables, [], Engine()).splitlines(True)
     assert output == ['X = [a|X]\n']
 
 
@@ -79,24 +78,21 @@ def test_console_formats_cyclic_list():
     ("X = 'with space'(X).", ["X = 'with space'(X)"]),
 ])
 def test_console_recursive_equations(query, expected):
-    from prolog.interpreter.translatedmain import var_representation
+    from prolog.interpreter.answer import format_answer
     variables = assert_true(query)
-    output = []
-    var_representation(variables, Engine(), output.append, None)
+    output = format_answer(variables, [], Engine()).splitlines(True)
     assert output == [line + '\n' for line in expected]
     # Formatting is read-only and repeatable, including generated labels.
-    repeated = []
-    var_representation(variables, Engine(), repeated.append, None)
+    repeated = format_answer(variables, [], Engine()).splitlines(True)
     assert repeated == output
 
 
 def test_console_deep_term_still_truncates():
-    from prolog.interpreter.translatedmain import var_representation
+    from prolog.interpreter.answer import format_answer
     obj = Callable.build('a')
     for i in range(3000):
         obj = Callable.build('f', [obj])
-    output = []
-    var_representation({'X': obj}, Engine(), output.append, None)
+    output = format_answer({'X': obj}, [], Engine()).splitlines(True)
     assert output == ['X = ' + 'f(' * 20 + '...' + ')' * 20 + '\n']
 
 

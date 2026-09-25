@@ -34,7 +34,7 @@ trans_body_call(A, X0, XE, _, true, _LastRule, R) :-
 	\+ is_list(A),
 	add_arguments(A, X0, XE, R).
 
-trans_body_call({X}, X0, XE, _, _, LastRule, R) :-
+trans_body_call({X}, X0, XE, _, true, LastRule, R) :-
 	trans_braces(X, X0, XE, LastRule, R).
 
 append_bodies(true, B, B).
@@ -46,7 +46,7 @@ append_bodies(B1, B2, (B1, B2)) :-
 	B1 \= true.
 
 trans_braces_body_last(X, X0, XE, true, (X, X0 = XE)).
-trans_braces_body_last(X, _, _, false, X).
+trans_braces_body_last(X, X0, X0, false, X).
 
 trans_braces((B1, B2), X0, XE, Emit, (B1, R2)) :-
 	B1 \= (_, _),

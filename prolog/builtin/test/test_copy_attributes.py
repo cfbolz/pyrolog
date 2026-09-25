@@ -61,3 +61,102 @@ def test_copy_preserves_shared_payload_compounds():
     assert values['U'] is values['V']
     assert values['U'] is not values['T']
     assert values['U'].argument_at(0).dereference(None) is not values['A']
+
+
+PROJECTION_SOURCE = '''
+    :- module(projected, []).
+    attribute_goals(X) -->
+        { get_attr(X, projected, Value) },
+        [projected:restore(X, Value)].
+    restore(X, Value) :- put_attr(X, projected, Value).
+    attr_unify_hook(_, _).
+'''
+
+
+@pytest.mark.parametrize('query', [
+    'put_attr(X,projected,pair(Y,Y)), '
+    'copy_term(pair(X,Y),pair(C,D),G), '
+    'G == [projected:restore(C,pair(D,D))], '
+    'C \\== X, D \\== Y, term_attvars(C-D-G,[]), '
+    'restore_attributes(G), get_attr(C,projected,pair(D,D)), '
+    'get_attr(X,projected,pair(Y,Y))',
+    'put_attr(X,projected,peer(Y)), put_attr(Y,projected,peer(X)), '
+    'copy_term(X,C,G), G = [projected:restore(C,peer(D)), '
+    'projected:restore(D,peer(C))], term_attvars(C-G,[]), C \\== X, D \\== Y',
+    'put_attr(X,projected,Y), put_attr(X,missing_module,Y), '
+    'copy_term(X,C,G), G = [projected:restore(C,D),put_attr(C,missing_module,D)], '
+    'D \\== Y, term_attvars(C-G,[])',
+    'T=f(X,T), put_attr(X,projected,T), copy_term(T,C,G), '
+    'C=f(D,C), G == [projected:restore(D,C)], term_attvars(C-G,[])',
+    'put_attr(X,projected,a), \\+ copy_term(X,_,[]), get_attr(X,projected,a)',
+])
+def test_attribute_goals_projection(query):
+    engine = get_engine(SOURCE, load_system=True, projected=PROJECTION_SOURCE)
+    assert_true(query + '.', engine)
+
+
+@pytest.mark.parametrize('hook, expected', [
+    ('attribute_goals(_) --> [].', '[]'),
+    ('attribute_goals(X) --> [one(X), two(X)].', '[one(C),two(C)]'),
+    ('attribute_goals(X) --> [first(X)]. '
+     'attribute_goals(X) --> [second(X)].', '[first(C)]'),
+    ('attribute_goals(_) --> { fail }.', '[put_attr(C,projected,a)]'),
+])
+def test_attribute_goals_results(hook, expected):
+    engine = get_engine('', load_system=True,
+                        projected=':- module(projected, []).\n' + hook)
+    assert_true('put_attr(X,projected,a), '
+                'findall(C-G,copy_term(X,C,G),[C-G]), '
+                'G == %s, get_attr(X,projected,a).' % expected, engine)
+
+
+@pytest.mark.parametrize('ending', ['true', 'fail', 'throw(projection_error)'])
+def test_attribute_goals_restore_changes(ending):
+    engine = get_engine('', load_system=True, projected='''
+        :- module(projected, []).
+        attribute_goals(X) -->
+            { get_attr(X,projected,Y), del_attr(X,projected),
+              Y=changed, %s },
+            [saved(X,Y)].
+    ''' % ending)
+    if ending == 'true':
+        result = 'copy_term(X,C,G), G == [saved(C,changed)]'
+    elif ending == 'fail':
+        result = 'copy_term(X,C,G), G = [put_attr(C,projected,D)], var(D)'
+    else:
+        result = 'catch(copy_term(X,_,_),projection_error,true)'
+    assert_true('put_attr(X,projected,Y), %s, var(Y), '
+                'get_attr(X,projected,V), V == Y.' % result, engine)
+
+
+def test_attribute_goals_can_bind_source_temporarily():
+    engine = get_engine('', load_system=True, projected='''
+        :- module(projected, []).
+        attribute_goals(X) --> { del_attrs(X), X=bound }, [].
+    ''')
+    assert_true('put_attr(X,projected,a), put_attr(X,other,b), '
+                'copy_term(X,C,G), C == bound, G == [], var(X), '
+                'get_attr(X,projected,a), get_attr(X,other,b).', engine)
+
+
+def test_attribute_goals_can_suppress_related_variable_projection():
+    engine = get_engine('', load_system=True, projected='''
+        :- module(projected, []).
+        attribute_goals(X) -->
+            { get_attr(X,projected,Y), del_attr(Y,projected) },
+            [related(X,Y)].
+    ''')
+    assert_true('put_attr(X,projected,Y), put_attr(Y,projected,X), '
+                'copy_term(pair(X,Y),pair(C,D),G), G == [related(C,D)], '
+                'get_attr(X,projected,P), P == Y, '
+                'get_attr(Y,projected,Q), Q == X.', engine)
+
+
+def test_attribute_goals_strip_fresh_attributes_in_emitted_goals():
+    engine = get_engine('', load_system=True, projected='''
+        :- module(projected, []).
+        attribute_goals(X) --> { put_attr(Y,internal,a) }, [related(X,Y,Y)].
+    ''')
+    assert_true('put_attr(X,projected,a), copy_term(X,C,G), '
+                'G = [related(C,D,E)], D == E, term_attvars(C-G,[]), '
+                'get_attr(X,projected,a).', engine)

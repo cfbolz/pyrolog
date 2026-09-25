@@ -6,7 +6,7 @@ from rpyrepl.color import styled
 from prolog.interpreter.replpolicy import PrologInputPolicy
 from prolog.interpreter.highlighting import PrologHighlighter
 from prolog.interpreter.completion import PrologCompleter
-from rpython.rlib.listsort import TimSort
+from prolog.interpreter.answer import format_answer
 from prolog.interpreter.parsing import get_query_and_vars
 from prolog.interpreter.parsing import get_engine
 from prolog.interpreter.continuation import Continuation, Engine, \
@@ -35,8 +35,43 @@ class ContinueContinuation(Continuation):
         self.write = write
 
     def activate(self, fcont, heap):
+        from prolog.builtin.attvars import attributed_variables, copy_term_with_attributes
+        from prolog.interpreter.helper import wrap_list
+        names = self.var_to_pos.keys()
+        values = wrap_list([self.var_to_pos[name] for name in names])
+        variables = attributed_variables(self.engine, heap, values)
+        if not variables:
+            # Formatting is read-only. Avoid the recursive copier for ordinary
+            # answers, including deep terms that the formatter will truncate.
+            display = DisplayAnswerContinuation(self.engine, names, values,
+                                                wrap_list([]), self.write)
+            return display, fcont, heap
+        copied = heap.newvar()
+        goals = heap.newvar()
+        display = DisplayAnswerContinuation(self.engine, names, copied,
+                                            goals, self.write)
+        return copy_term_with_attributes(self.engine, heap, values, copied,
+                                         goals, variables, display, fcont)
+
+
+class DisplayAnswerContinuation(Continuation):
+    def __init__(self, engine, names, copied, goals, write):
+        Continuation.__init__(self, engine, DoneSuccessContinuation(engine))
+        self.names = names
+        self.copied = copied
+        self.goals = goals
+        self.write = write
+
+    def activate(self, fcont, heap):
+        from prolog.interpreter.helper import unwrap_list
+        values = unwrap_list(self.copied)
+        variables = {}
+        for i in range(len(self.names)):
+            variables[self.names[i]] = values[i]
+        goals = unwrap_list(self.goals)
+        answer = format_answer(variables, goals, self.engine)
         self.write("yes\n")
-        var_representation(self.var_to_pos, self.engine, self.write, heap)
+        self.write(answer)
         while 1:
             if not fcont.has_choices():
                 self.write("\n")
@@ -50,52 +85,10 @@ class ContinueContinuation(Continuation):
             elif res in "h?":
                 self.write(helptext)
             elif res in "p":
-                var_representation(self.var_to_pos, self.engine, self.write, heap)
+                self.write(answer)
             else:
                 self.write('unknown action. press "h" for help\n')
                 
-def var_representation(var_to_pos, engine, write, heap):
-    from prolog.builtin import formatting
-    f = formatting.TermFormatter(engine, quoted=True, max_depth=20)
-    factorizer = formatting.CycleFactorizer()
-    names = [name for name in var_to_pos if not name.startswith("_")]
-    TimSort(names).sort()
-    # Choose names before traversing any answer, including roots reached through
-    # another answer. Aliases consistently use the first visible name.
-    for name in names:
-        value = var_to_pos[name].dereference(heap)
-        if isinstance(value, term.Var):
-            if value not in f.variable_names:
-                f.variable_names[value] = name
-        elif isinstance(value, term.Callable) and value.argument_count() > 0:
-            if value not in factorizer.preferred:
-                label = term.BindingVar()
-                factorizer.preferred[value] = label
-                f.variable_names[label] = name
-    values = [factorizer.visit(var_to_pos[name]) for name in names]
-    definitions = {}
-    for binding in factorizer.bindings:
-        definitions[binding.argument_at(0)] = binding.argument_at(1)
-    printed = {}
-    for i in range(len(names)):
-        name = names[i]
-        value = values[i]
-        if value in definitions and f.variable_names.get(value) == name:
-            printed[value] = None
-            value = definitions[value]
-        elif (isinstance(value, term.Var) and not isinstance(value, term.AttVar)
-              and f.variable_names.get(value) == name):
-            continue  # An unconstrained variable needs no X = X equation.
-        val = f.format(value)
-        if isinstance(value, term.AttVar):
-            write("%s\n" % val)
-        else:
-            write("%s = %s\n" % (name, val))
-    for binding in factorizer.bindings:
-        label = binding.argument_at(0)
-        if label not in printed:
-            write("%s = %s\n" % (f.format(label), f.format(binding.argument_at(1))))
-        
 def getch():
     line = readline()
     return line[0]

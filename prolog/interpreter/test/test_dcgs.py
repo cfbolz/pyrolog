@@ -105,6 +105,14 @@ def test_curly_terminal():
     R = (a(X1, X2) :- X=1, X1=[b|X2]).
     """, e)
 
+
+def test_curly_goal_preserves_difference_list_when_executed():
+    engine = get_engine('''
+        goals(X) --> { X=bound }, [first(X),second(X)].
+    ''', load_system=True)
+    assert_true('goals(X,G,[]), X == bound, '
+                'G == [first(bound),second(bound)].', engine)
+
 def test_dcg_integration_1():
     assert_true("""
     trans((a --> {X=1, Y=2}, [b, c], b(Y)), R),
