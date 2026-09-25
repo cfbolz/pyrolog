@@ -68,6 +68,50 @@ def test_operator_change_inside_consult(tmpdir):
     assert_true('a joins b.', e)
 
 
+def test_read_and_write_use_calling_module(tmpdir):
+    e = get_engine(':- module(left, []). :- op(450,xfy,joins). '
+                   'read_it(S,T) :- read(S,T). '
+                   'write_it(S,T) :- write_term(S,T,[]). '
+                   ':- module(right, []).')
+    source = tmpdir.join('input.pl')
+    source.write('a joins b.')
+    output = tmpdir.join('output.pl')
+    assert_true("open('%s',read,S), left:read_it(S,T), close(S), "
+                "T = 'joins'(a,b), open('%s',write,W), "
+                "left:write_it(W,T), close(W)." % (source, output), e)
+    assert output.read() == 'a joins b'
+    assert_true("open('%s',read,S), "
+                "catch(read(S,_),error(syntax_error(_)),Caught=yes), "
+                "Caught==yes, close(S)." % source, e)
+
+
+@pytest.mark.parametrize('name', ['joins', '\xc3\xa9'])
+def test_formatter_uses_current_module(name):
+    from prolog.builtin.formatting import TermFormatter
+    from prolog.interpreter.parsing import parse_query_term
+    e = Engine()
+    assert_true('op(450,xfy,%s).' % name, e)
+    value = parse_query_term('%s(a,b).' % name)
+    assert TermFormatter(e).format(value) == 'a %s b' % name
+
+
+def test_module_qualified_operator_names():
+    e = get_engine(':- module(left, []). :- module(right, []).')
+    assert_true('op(450,xfy,left:joins), current_op(450,xfy,left:joins).', e)
+    rows = collect_all(e, 'current_op(450,xfy,left:Name).')
+    assert [r['Name'].name() for r in rows] == ['joins']
+    assert_false('right:current_op(_,_,joins).', e)
+    assert_true('op(0,xfy,left:joins).', e)
+    assert_false('current_op(_,_,left:joins).', e)
+
+
+def test_bar_operator_outside_lists():
+    e = Engine()
+    assert_true("op(1100,xfy,'|').", e)
+    assert_true("T = (a|b|c), T = '|'(a,'|'(b,c)).", e)
+    assert_true('T = [a|b], T = [a|b].', e)
+
+
 @pytest.mark.parametrize('query, expected', [
     ('op(_,xfx,a)', 'instantiation_error'),
     ('op(1,_,a)', 'instantiation_error'),

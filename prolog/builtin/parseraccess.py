@@ -29,10 +29,20 @@ def _form(value):
     return form
 
 
+def _qualified_names(engine, heap, module, names):
+    while (isinstance(names, term.Callable) and names.name() == ':' and
+           names.argument_count() == 2):
+        module_name = _atom(names.argument_at(0).dereference(heap))
+        module = engine.modulewrapper.get_module(module_name, names)
+        names = names.argument_at(1).dereference(heap)
+    return module, names
+
+
 @expose_builtin('op', unwrap_spec=['obj', 'obj', 'obj'], needs_module=True)
 def impl_op(engine, heap, module, precedence, typ, names):
     priority = _priority(precedence, 0)
     form = _form(typ)
+    module, names = _qualified_names(engine, heap, module, names)
     if isinstance(names, term.Callable) and (names.name() == '.' and
             names.argument_count() == 2 or names.name() == '[]'):
         values = helper.unwrap_list(names)
@@ -41,9 +51,11 @@ def impl_op(engine, heap, module, precedence, typ, names):
     for value in values:
         value = value.dereference(heap)
         name = _atom(value)
-        if name == ',' or (name == '|' and priority != 0 and
-                (form not in ('xfx', 'xfy', 'yfx') or priority < 1001)):
+        if name == ',':
             error.throw_permission_error('modify', 'operator', value)
+        if name == '|' and (form not in ('xfx', 'xfy', 'yfx') or
+                           0 < priority < 1001):
+            error.throw_permission_error('create', 'operator', value)
         if priority == 0:
             module.operators.remove(name, form)
         else:
@@ -69,6 +81,7 @@ def continue_current_op(Choice, engine, scont, fcont, heap, operators, index,
 def impl_current_op(engine, heap, module, precedence, typ, name, scont, fcont):
     priority = -1 if isinstance(precedence, term.Var) else _priority(precedence, 1)
     form = '' if isinstance(typ, term.Var) else _form(typ)
+    module, name = _qualified_names(engine, heap, module, name)
     op_name = None if isinstance(name, term.Var) else _atom(name)
     operators = []
     for operator in module.operators.all_operators():

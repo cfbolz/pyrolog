@@ -238,7 +238,7 @@ class Parser(object):
         return state.finish()
 
     def _select_operator(self, token, state, expect_operand):
-        if token.name != 'ATOM' or token.source.startswith("'"):
+        if token.name not in ('ATOM', '|') or token.source.startswith("'"):
             return None
         if expect_operand and self._starts_compound(token):
             return None
