@@ -298,7 +298,9 @@ class Engine(object):
             else:
                 return self.call(
                     scont.recover, scont.rule, scont.nextcont, scont.fcont, heap)
-        raise error.UncaughtError(exc_term, exc.sig_context, rule_likely_source, orig_scont)
+        uncaught = error.UncaughtError(exc_term, exc.sig_context, rule_likely_source, orig_scont)
+        uncaught.parse_error = exc.parse_error
+        raise uncaught
 
 
 

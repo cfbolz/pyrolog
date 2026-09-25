@@ -179,6 +179,35 @@ def test_query_eof_preserves_trailing_layout_position():
     assert position(exc.secondary.start) == (6, 1, 2)
 
 
+@pytest.mark.parametrize('goal', [
+    'read(input, _)',
+    'catch(read(input, _), unrelated_error, true)',
+])
+def test_uncaught_read_preserves_diagnostic(tmpdir, goal):
+    from prolog.interpreter import error
+    from prolog.interpreter.continuation import Engine
+    from prolog.interpreter.test.tool import assert_true
+    path = tmpdir.join('bad.pl')
+    path.write('f(x].')
+    engine = Engine()
+    assert_true("open('%s', read, _, [alias(input)])." % path, engine)
+    try:
+        with pytest.raises(error.UncaughtError) as caught:
+            assert_true(goal + '.', engine)
+        exc = caught.value.parse_error
+        assert exc is not None
+        assert exc.kind == 'mismatched_delimiter'
+        assert position(exc.primary.start) == (3, 0, 3)
+        assert position(exc.primary.end) == (4, 0, 4)
+        assert position(exc.secondary.start) == (1, 0, 1)
+        assert position(exc.secondary.end) == (2, 0, 2)
+        assert exc.primary_label == "expected ')' here"
+        assert exc.secondary_label == 'opened here'
+        assert caught.value.term.argument_at(0).name() == 'syntax_error'
+    finally:
+        assert_true('close(input).', engine)
+
+
 def test_file_lexer_error_preserves_syntax_diagnostic():
     from prolog.interpreter import parsing, error
     with pytest.raises(error.PrologParseError) as caught:
