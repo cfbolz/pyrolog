@@ -65,7 +65,8 @@ def handle_use_module(engine, heap, module, path, imports=None):
                     error.throw_import_error(modulename, sig)
         finally:
             m.current_module = current_module
-        module = current_module
+        # Restore the parser's context above, but import into the caller's
+        # module, which can differ for an explicitly qualified use_module/2.
         # XXX should use name argument of module here like SWI
     try:
         imported_module = m.modules[modulename]
