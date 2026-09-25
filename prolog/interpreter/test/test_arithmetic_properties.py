@@ -30,6 +30,41 @@ numbers = st.one_of(integers, st.floats())
 
 
 @settings(max_examples=200, deadline=None)
+@given(integers, integers.filter(lambda value: value != 0),
+       st.booleans(), st.booleans())
+@example(-5, 2, False, False)
+@example(-sys.maxint - 1, -1, False, False)
+@example(1, -2, True, False)
+@example(-1, 2, False, True)
+def test_integer_truncating_division(left, right, left_big, right_big):
+    lhs, rhs = wrap_number(left, left_big), wrap_number(right, right_big)
+    actual = unwrap_integer(lhs.arith_floordiv(rhs))
+    remainder = left - actual * right
+    assert abs(remainder) < abs(right)
+    assert remainder == 0 or (remainder < 0) == (left < 0)
+
+
+@settings(max_examples=200, deadline=None)
+@given(integers, integers.filter(lambda value: value != 0),
+       st.booleans(), st.booleans())
+@example(-5, 2, False, False)
+@example(-sys.maxint - 1, -1, False, False)
+@example(-1, 2, True, False)
+@example(1, -2, False, True)
+def test_div_mod_and_trunc_rem_identities(left, right, left_big, right_big):
+    lhs, rhs = wrap_number(left, left_big), wrap_number(right, right_big)
+    quotient = unwrap_integer(lhs.arith_func_div(rhs))
+    modulus = unwrap_integer(lhs.arith_mod(rhs))
+    assert quotient == left // right
+    assert left == quotient * right + modulus
+    truncated = unwrap_integer(lhs.arith_floordiv(rhs))
+    remainder = unwrap_integer(lhs.arith_rem(rhs))
+    assert left == truncated * right + remainder
+    assert abs(remainder) < abs(right)
+    assert remainder == 0 or (remainder < 0) == (left < 0)
+
+
+@settings(max_examples=200, deadline=None)
 @given(integers, integers.filter(lambda value: value != 0))
 @example(2 ** 53 + 1, 3)
 @example(-sys.maxint - 1, -1)

@@ -42,6 +42,25 @@ def test_integer_division_float_overflow():
                   'X is %d / %d' % (10 ** 500, 10 ** 100))
 
 
+@pytest.mark.parametrize('left, right, expected', [
+    (5, 2, 2), (1, 2, 0), (6, 2, 3),
+    (10 ** 20 + 1, 3, 33333333333333333333),
+    (5, 10 ** 20, 0), (10 ** 20 + 1, 10 ** 20, 1),
+    (sys.maxint + 1, 1, sys.maxint + 1),
+    (sys.maxint + 1, 3, (sys.maxint + 1) // 3),
+])
+@pytest.mark.parametrize('left_sign, right_sign', [(1, 1), (-1, 1), (1, -1), (-1, -1)])
+def test_integer_division_truncates_toward_zero(left, right, expected, left_sign, right_sign):
+    assert_true('X is %d // (%d), X == %d.' %
+                (left_sign * left, right_sign * right,
+                 left_sign * right_sign * expected))
+
+
+@pytest.mark.parametrize('numerator', [1, 10 ** 100])
+def test_integer_division_by_zero(numerator):
+    prolog_raises('evaluation_error(zero_divisor)', 'X is %d // 0' % numerator)
+
+
 class TestArithmeticMethod(object):
     def test_add(self):
         f1 = Float(5.1)

@@ -1,12 +1,13 @@
 import py
 import math
+import sys
 from prolog.interpreter import helper, term, error
 from prolog.interpreter.signature import Signature
 from prolog.interpreter.error import UnificationFailed
 from rpython.rlib.rarithmetic import ovfcheck_float_to_int
 from rpython.rlib.unroll import unrolling_iterable
 from rpython.rlib import jit, rarithmetic, objectmodel
-from rpython.rlib.rbigint import rbigint
+from rpython.rlib.rbigint import rbigint, _divrem
 
 Signature.register_extr_attr("arithmetic")
 
@@ -62,6 +63,8 @@ simple_functions = [
     ("*", 2, "mul"),
     ("/", 2, "div"),
     ("//", 2, "floordiv"),
+    ("div", 2, "func_div"),
+    ("rem", 2, "rem"),
     ("**", 2, "pow"),
     ("sqrt", 1, "sqrt"),
     (">>", 2, "shr"),
@@ -124,6 +127,31 @@ def bigint_true_divide(numerator, denominator):
     except OverflowError:
         error.throw_evaluation_error("float_overflow")
     return make_float(result)
+
+
+def bigint_trunc_divide(numerator, denominator):
+    try:
+        # _divrem truncates toward zero; divmod adjusts this to floor division.
+        quotient, remainder = _divrem(numerator, denominator)
+    except ZeroDivisionError:
+        error.throw_evaluation_error("zero_divisor")
+    return make_int(term.BigInt(quotient))
+
+
+def bigint_floor_divide(numerator, denominator):
+    try:
+        quotient = numerator.floordiv(denominator)
+    except ZeroDivisionError:
+        error.throw_evaluation_error("zero_divisor")
+    return make_int(term.BigInt(quotient))
+
+
+def bigint_remainder(numerator, denominator):
+    try:
+        quotient, remainder = _divrem(numerator, denominator)
+    except ZeroDivisionError:
+        error.throw_evaluation_error("zero_divisor")
+    return make_int(term.BigInt(remainder))
 
 
 UNORDERED = 2
@@ -374,19 +402,51 @@ class __extend__(term.Number):
     def arith_floordiv_number(self, other_num):
         if self.num == 0:
             error.throw_evaluation_error("zero_divisor")
-        try:
-            res = rarithmetic.ovfcheck(other_num // self.num)
-        except OverflowError:
+        # Guard the one overflowing quotient before using C-style division.
+        if other_num == -sys.maxint - 1 and self.num == -1:
             return self.arith_floordiv_bigint(rbigint.fromint(other_num))
-        return term.Number(res)
+        return term.Number(rarithmetic.int_c_div(other_num, self.num))
 
     def arith_floordiv_bigint(self, other_value):
-        if self.num == 0:
-            error.throw_evaluation_error("zero_divisor")
-        return make_int(term.BigInt(other_value.floordiv(rbigint.fromint(self.num))))
+        return bigint_trunc_divide(other_value, rbigint.fromint(self.num))
 
     def arith_floordiv_float(self, other_float):
         error.throw_type_error("integer", other_float)
+
+    def arith_func_div(self, other):
+        return other.arith_func_div_number(self.num)
+
+    def arith_func_div_number(self, other_num):
+        if self.num == 0:
+            error.throw_evaluation_error("zero_divisor")
+        try:
+            quotient = rarithmetic.ovfcheck(other_num // self.num)
+        except OverflowError:
+            return self.arith_func_div_bigint(rbigint.fromint(other_num))
+        return term.Number(quotient)
+
+    def arith_func_div_bigint(self, other_value):
+        return bigint_floor_divide(other_value, rbigint.fromint(self.num))
+
+    def arith_func_div_float(self, other_float):
+        error.throw_type_error("integer", term.Float(other_float))
+
+    def arith_rem(self, other):
+        return other.arith_rem_number(self.num)
+
+    def arith_rem_number(self, other_num):
+        if self.num == 0:
+            error.throw_evaluation_error("zero_divisor")
+        # C remainder may trap for MIN_INT % -1, although the result is zero.
+        if self.num == -1:
+            return term.Number(0)
+        return term.Number(rarithmetic.int_c_mod(other_num, self.num))
+
+    def arith_rem_bigint(self, other_value):
+        return bigint_remainder(other_value, rbigint.fromint(self.num))
+
+    def arith_rem_float(self, other_float):
+        error.throw_type_error("integer", term.Float(other_float))
 
 
     # ------------------ power ------------------ 
@@ -536,6 +596,11 @@ class __extend__(term.Float):
     arith_and_number = arith_xor_number = arith_mod_number = arith_or_number
     arith_and_bigint = arith_xor_bigint = arith_mod_bigint = arith_or_bigint
     arith_and_float = arith_xor_float = arith_mod_float = arith_or_float
+
+    arith_func_div = arith_rem = arith_or
+    arith_func_div_number = arith_rem_number = arith_or_number
+    arith_func_div_bigint = arith_rem_bigint = arith_or_bigint
+    arith_func_div_float = arith_rem_float = arith_or_float
 
     def arith_not(self):
         error.throw_type_error("integer", self)
@@ -776,16 +841,38 @@ class __extend__(term.BigInt):
         return other.arith_floordiv_bigint(self.value)
 
     def arith_floordiv_number(self, other_num):
-        return make_int(term.BigInt(rbigint.fromint(other_num).div(self.value)))
+        return bigint_trunc_divide(rbigint.fromint(other_num), self.value)
 
     def arith_floordiv_bigint(self, other_value):
-        try:
-            return make_int(term.BigInt(other_value.div(self.value)))
-        except ZeroDivisionError:
-            error.throw_evaluation_error("zero_divisor")
+        return bigint_trunc_divide(other_value, self.value)
 
     def arith_floordiv_float(self, other_float):
         error.throw_type_error("integer", other_float)
+
+    def arith_func_div(self, other):
+        return other.arith_func_div_bigint(self.value)
+
+    def arith_func_div_number(self, other_num):
+        return bigint_floor_divide(rbigint.fromint(other_num), self.value)
+
+    def arith_func_div_bigint(self, other_value):
+        return bigint_floor_divide(other_value, self.value)
+
+    def arith_func_div_float(self, other_float):
+        error.throw_type_error("integer", term.Float(other_float))
+
+    def arith_rem(self, other):
+        return other.arith_rem_bigint(self.value)
+
+    def arith_rem_number(self, other_num):
+        return bigint_remainder(rbigint.fromint(other_num), self.value)
+
+    def arith_rem_bigint(self, other_value):
+        return bigint_remainder(other_value, self.value)
+
+    def arith_rem_float(self, other_float):
+        error.throw_type_error("integer", term.Float(other_float))
+
     # ------------------ power ------------------
     def arith_pow(self, other):
         return other.arith_pow_bigint(self.value)

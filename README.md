@@ -3,7 +3,11 @@
 A Prolog interpreter in RPython.
 
 Arithmetic `/` always returns a float, including for exact integer quotients:
-`1 / 2` is `0.5` and `4 / 2` is `2.0`. Use `//` for integer division.
+`1 / 2` is `0.5` and `4 / 2` is `2.0`. Use `//` for integer division,
+which truncates toward zero: `-5 // 2` is `-2`.
+`div` rounds down (`-5 div 2` is `-3`). Its corresponding modulo operation
+is `mod`, while `rem` gives the remainder for `//`: `-5 mod 2` is `1`,
+and `-5 rem 2` is `-1`.
 
 The interactive REPL supports editing, persistent history, highlighting, and
 predicate/module completion. See [rpyrepl](rpyrepl/README.md) for keys and settings.
