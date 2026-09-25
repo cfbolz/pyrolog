@@ -140,7 +140,7 @@ class ExpressionState(object):
         self.pending_tokens.pop()
         self.push_operand(term.Callable.build(operator.name))
 
-    def complete_operand(self, expect_operand, token):
+    def complete_operand(self, expect_operand, token, context):
         if expect_operand:
             # A lone operator name is an atom even in a restricted argument
             # context, e.g. f(p) where p is a prefix operator of priority 1100.
@@ -148,7 +148,13 @@ class ExpressionState(object):
                     self.pending_operators[0].kind == 'prefix'):
                 self._prefix_as_atom()
             elif not self.reinterpret_pending(self.max_precedence + 1):
-                self.parser._error('expected a term', token)
+                if self.pending_tokens:
+                    operator_token = self.pending_tokens[-1]
+                    self.parser._error('expected a right operand for operator %r' %
+                                       operator_token.source, operator_token,
+                                       'missing_operand', token or self.parser.eof,
+                                       expected='term')
+                self.parser._missing_term(token, context)
 
     def _reduce(self):
         operator = self.pending_operators.pop()
@@ -217,7 +223,7 @@ class Parser(object):
     def _peek(self):
         if self.position == len(self.tokens):
             self._check_delimiter(self.eof)
-            self._error("unexpected end of input", None)
+            self._error("unexpected end of input", None, 'unexpected_eof')
         token = self.tokens[self.position]
         self._check_delimiter(token)
         return token
@@ -242,18 +248,26 @@ class Parser(object):
                              token, self, 'mismatched_delimiter', opening,
                              expected, token.name)
 
-    def _error(self, msg, tok):
-        raise ParseError(msg, tok, self)
+    def _error(self, msg, tok, kind='syntax_error', secondary=None, expected='', found=''):
+        if not found:
+            found = 'EOF' if tok is None or tok.name == 'EOF' else tok.source
+        raise ParseError(msg, tok, self, kind, secondary, expected, found)
+
+    def _missing_term(self, token, context='term'):
+        opening = self.open_delimiters[-1] if self.open_delimiters else None
+        self._error('expected %s' % context.replace('_', ' '), token,
+                    'missing_' + context, opening, expected='term')
 
     def _expect(self, name, source=None):
         if self.position == len(self.tokens):
             self._check_delimiter(self.eof)
-            self._error('expected %s' % name, self.eof)
+            kind = 'missing_full_stop' if name == '.' else 'unexpected_eof'
+            self._error('expected %s' % name, self.eof, kind, expected=name)
         tok = self._get_next()
-        if tok.name != name:
-            self._error("expected %s got %s" % (name, tok.name), tok)
-        if source is not None and tok.source != source:
-            self._error("expected %s got %s" % (source, tok.name), tok)
+        if tok.name != name or source is not None and tok.source != source:
+            expected = source if source is not None else name
+            self._error("expected %r, found %r" % (expected, tok.source), tok,
+                        'unexpected_token', expected=expected)
         if name in (')', ']', '}'):
             self.open_delimiters.pop()
 
@@ -261,10 +275,11 @@ class Parser(object):
         res = self._parse_op_expr(1200, '.')
         self._expect(".")
         if self.position != len(self.tokens):
-            self._error("unexpected token after full stop", self._peek())
+            self._error("unexpected token after full stop", self._peek(),
+                        'trailing_input', self.tokens[self.position - 1])
         return res
 
-    def _parse_op_expr(self, max_precedence, stops):
+    def _parse_op_expr(self, max_precedence, stops, context='term'):
         state = ExpressionState(self, max_precedence)
         expect_operand = True
         while self.position < len(self.tokens):
@@ -296,14 +311,19 @@ class Parser(object):
                 expect_operand = False
                 continue
             if incoming is None:
-                self._error('expected an operator', current)
+                previous = self.tokens[self.position - 1] if self.position else None
+                if current.name == '(' and previous is not None and previous.name == 'ATOM':
+                    self._error("expected an operator; '(' must immediately follow a functor name",
+                                current, 'functor_whitespace', previous)
+                self._error('expected an operator between terms', current,
+                            'missing_operator', previous, expected='operator')
             self._get_next()
             state.push_operator(current, incoming)
             expect_operand = incoming.kind == 'infix'
         current = self.tokens[self.position] if self.position < len(self.tokens) else None
         if current is None:
             self._check_delimiter(self.eof)
-        state.complete_operand(expect_operand, current)
+        state.complete_operand(expect_operand, current, context)
         return state.finish()
 
     def _select_operator(self, token, state, expect_operand):
@@ -330,7 +350,7 @@ class Parser(object):
         current = self._get_next()
         if current.name == "ATOM":
             if current.source == ',':
-                self._error('expected a term', current)
+                self._missing_term(current)
             name = current.source
             if name.startswith("'"):
                 end = len(name) - 1
@@ -369,7 +389,7 @@ class Parser(object):
             res = self._parse_op_expr(1200, '}')
             self._expect("}")
             return term.Callable.build("{}", [res])
-        self._error("expected a term", current)
+        self._missing_term(current)
 
     def _unescape(self, text, current, quote="'"):
         try:
@@ -436,7 +456,7 @@ class Parser(object):
         while 1:
             # Like SWI's default mode, allow all operator priorities here;
             # the unparenthesized comma still separates arguments.
-            res.append(self._parse_op_expr(1200, ',)'))
+            res.append(self._parse_op_expr(1200, ',)', 'argument'))
             next = self._peek()
             if next.name == ')':
                 self._expect(')')
@@ -452,14 +472,17 @@ class Parser(object):
             return tail
         elements = []
         while True:
-            elements.append(self._parse_op_expr(1200, ',|]'))
+            elements.append(self._parse_op_expr(1200, ',|]', 'list_element'))
             next = self._peek()
             if next.name == "]":
                 self._expect(']')
                 break
             if next.name == "|":
-                self._get_next()
-                tail = self._parse_op_expr(1200, ',|]')
+                bar = self._get_next()
+                tail = self._parse_op_expr(1200, ',|]', 'list_tail')
+                if self._peek().name != ']':
+                    self._error("expected ']' after list tail", self._peek(),
+                                'invalid_list_tail', bar, expected=']')
                 self._expect("]")
                 break
             self._expect("ATOM", ",")

@@ -18,10 +18,10 @@ def position(pos):
 
 def test_error_token_has_full_utf8_span():
     exc = diagnostic('a \xc3\xa9clair.')
-    assert exc.kind == 'syntax_error'
+    assert exc.kind == 'missing_operator'
     assert position(exc.primary.start) == (2, 0, 2)
     assert position(exc.primary.end) == (9, 0, 8)
-    assert exc.secondary is None
+    assert exc.secondary.start.i == 0
 
 
 def test_multiline_error_token_span():
@@ -144,3 +144,63 @@ def test_file_lexer_error_has_no_parser_diagnostic():
     with pytest.raises(error.PrologParseError) as caught:
         parsing.parse_file('` .')
     assert caught.value.parse_error is None
+
+
+@pytest.mark.parametrize('source, primary, secondary', [
+    ('a + .', 2, 4), ('a +', 2, 3), ('f(a+,b).', 3, 4),
+])
+def test_missing_operand_points_to_operator(source, primary, secondary):
+    exc = diagnostic(source)
+    assert exc.kind == 'missing_operand'
+    assert exc.primary.start.i == primary
+    assert exc.secondary.start.i == secondary
+    assert 'right operand' in exc.msg
+    assert '+' in exc.msg
+
+
+@pytest.mark.parametrize('source, kind, primary, secondary', [
+    ('f().', 'missing_argument', 2, 1),
+    ('f(a,,b).', 'missing_argument', 4, 1),
+    ('f(a,).', 'missing_argument', 4, 1),
+    ('[,a].', 'missing_list_element', 1, 0),
+    ('[a,].', 'missing_list_element', 3, 0),
+    ('[a|].', 'missing_list_tail', 3, 0),
+    ('().', 'missing_term', 1, 0),
+])
+def test_missing_term_context(source, kind, primary, secondary):
+    exc = diagnostic(source)
+    assert exc.kind == kind
+    assert exc.primary.start.i == primary
+    assert exc.secondary.start.i == secondary
+
+
+@pytest.mark.parametrize('source', ['f (x).', 'f/*comment*/(x).'])
+def test_functor_separation(source):
+    exc = diagnostic(source)
+    assert exc.kind == 'functor_whitespace'
+    assert exc.primary.start.i == source.index('(')
+    assert exc.secondary.start.i == 0
+    assert 'immediately' in exc.msg
+
+
+def test_trailing_input_points_back_to_full_stop():
+    exc = diagnostic('a. b.')
+    assert exc.kind == 'trailing_input'
+    assert exc.primary.start.i == 3
+    assert exc.secondary.start.i == 1
+
+
+def test_missing_full_stop_at_eof():
+    exc = diagnostic('f(x)  ')
+    assert exc.kind == 'missing_full_stop'
+    assert exc.primary.start.i == 6
+    assert exc.expected == '.'
+    assert exc.found == 'EOF'
+
+
+@pytest.mark.parametrize('source', ['[a|b,c].', '[a|b|c].'])
+def test_extra_separator_after_list_tail(source):
+    exc = diagnostic(source)
+    assert exc.kind == 'invalid_list_tail'
+    assert exc.primary.start.i == 4
+    assert exc.secondary.start.i == 2
