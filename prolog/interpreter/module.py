@@ -48,10 +48,17 @@ class ModuleWrapper(object):
         return self.modules.get(name, None)
 
     def add_module(self, name, exports = []):
+        from prolog.builtin.parseraccess import declare_exported_operator
         mod = Module(name)
         for export in exports:
-            mod.exports.append(Signature.getsignature(
-                    *unwrap_predicate_indicator(export)))
+            export = export.dereference(None)
+            if (isinstance(export, Callable) and export.name() == 'op' and
+                    export.argument_count() == 3):
+                mod.operator_exports.append(
+                    declare_exported_operator(mod.operators, export))
+            else:
+                mod.exports.append(Signature.getsignature(
+                        *unwrap_predicate_indicator(export)))
         self.current_module = mod
         self.modules[name] = mod
         self.version = VersionTag()
@@ -68,6 +75,7 @@ class Module(object):
         self.version = VersionTag()
         self.meta_predicates = {}
         self.exports = []
+        self.operator_exports = []
         self._toplevel_rule = _make_toplevel_rule(self)
 
     def add_meta_predicate(self, signature, arglist):
@@ -85,8 +93,11 @@ class Module(object):
         return self.functions.get(signature, None)
 
     def use_module(self, module, imports=None):
+        from prolog.builtin.parseraccess import declare_exported_operator
         if imports is None:
             importlist = module.exports
+            for declaration in module.operator_exports:
+                declare_exported_operator(self.operators, declaration)
         else:
             importlist = []
             for pred in imports:

@@ -43,14 +43,20 @@ def impl_op(engine, heap, module, precedence, typ, names):
     priority = _priority(precedence, 0)
     form = _form(typ)
     module, names = _qualified_names(engine, heap, module, names)
+    declare_operator(module.operators, priority, form, names)
+
+
+def declare_operator(operators, priority, form, names):
+    """Apply a validated priority/form and return a ground export declaration."""
     if isinstance(names, term.Var):
         error.throw_instantiation_error()
     if isinstance(names, term.Atom) and names.name() != '[]':
         values = [names]
     else:
         values = helper.unwrap_list(names)
+    normalized = []
     for value in values:
-        value = value.dereference(heap)
+        value = value.dereference(None)
         name = _atom(value)
         if name == ',':
             error.throw_permission_error('modify', 'operator', value)
@@ -58,9 +64,23 @@ def impl_op(engine, heap, module, precedence, typ, names):
                            0 < priority < 1001):
             error.throw_permission_error('create', 'operator', value)
         if priority == 0:
-            module.operators.remove(name, form)
+            operators.remove(name, form)
         else:
-            module.operators.add(name, priority, form)
+            operators.add(name, priority, form)
+        normalized.append(term.Callable.build(name))
+    if isinstance(names, term.Atom) and names.name() != '[]':
+        exported_names = normalized[0]
+    else:
+        exported_names = helper.wrap_list(normalized)
+    return term.Callable.build('op', [term.Number(priority),
+                                    term.Callable.build(form), exported_names])
+
+
+def declare_exported_operator(operators, declaration):
+    priority = _priority(declaration.argument_at(0).dereference(None), 0)
+    form = _form(declaration.argument_at(1).dereference(None))
+    names = declaration.argument_at(2).dereference(None)
+    return declare_operator(operators, priority, form, names)
 
 
 @continuation.make_failure_continuation
