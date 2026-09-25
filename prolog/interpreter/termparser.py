@@ -98,12 +98,14 @@ class ExpressionState(object):
         self.max_precedence = max_precedence
         self.terms = []
         self.precedences = []
+        self.operand_tokens = []
         self.pending_tokens = []
         self.pending_operators = []
 
-    def push_operand(self, value, precedence=0):
+    def push_operand(self, value, precedence=0, token=None):
         self.terms.append(value)
         self.precedences.append(precedence)
+        self.operand_tokens.append(token)
 
     def push_operator(self, token, incoming):
         self._reduce_before(incoming)
@@ -137,8 +139,8 @@ class ExpressionState(object):
 
     def _prefix_as_atom(self):
         operator = self.pending_operators.pop()
-        self.pending_tokens.pop()
-        self.push_operand(term.Callable.build(operator.name))
+        token = self.pending_tokens.pop()
+        self.push_operand(term.Callable.build(operator.name), token=token)
 
     def complete_operand(self, expect_operand, token, context):
         if expect_operand:
@@ -160,36 +162,53 @@ class ExpressionState(object):
         operator = self.pending_operators.pop()
         token = self.pending_tokens.pop()
         if operator.precedence > self.max_precedence:
-            self.parser._error('operator precedence exceeds expression limit', token)
+            self.parser._error('operator %r has precedence %d, exceeding expression limit %d' %
+                               (operator.name, operator.precedence, self.max_precedence),
+                               token, 'precedence_limit',
+                               expected='at most %d' % self.max_precedence,
+                               found=str(operator.precedence))
         if operator.kind == 'infix':
             right = self.terms.pop()
             right_precedence = self.precedences.pop()
+            right_token = self.operand_tokens.pop()
             left = self.terms.pop()
             left_precedence = self.precedences.pop()
-            if (left_precedence > operator.left_limit or
-                    right_precedence > operator.right_limit):
-                self.parser._error('operand precedence clash', token)
+            left_token = self.operand_tokens.pop()
+            self._check_precedence(operator, token, left_precedence,
+                                   operator.left_limit, left_token, 'left')
+            self._check_precedence(operator, token, right_precedence,
+                                   operator.right_limit, right_token, 'right')
             args = [left, right]
         elif operator.kind == 'prefix':
             right = self.terms.pop()
             right_precedence = self.precedences.pop()
-            if right_precedence > operator.right_limit:
-                self.parser._error('operand precedence clash', token)
+            right_token = self.operand_tokens.pop()
+            self._check_precedence(operator, token, right_precedence,
+                                   operator.right_limit, right_token, 'right')
             args = [right]
         else:
             assert operator.kind == 'postfix'
             left = self.terms.pop()
             left_precedence = self.precedences.pop()
-            if left_precedence > operator.left_limit:
-                self.parser._error('operand precedence clash', token)
+            left_token = self.operand_tokens.pop()
+            self._check_precedence(operator, token, left_precedence,
+                                   operator.left_limit, left_token, 'left')
             args = [left]
         self.push_operand(term.Callable.build(operator.name, args),
-                          operator.precedence)
+                          operator.precedence, token)
+
+    def _check_precedence(self, operator, token, precedence, limit, operand_token, side):
+        if precedence > limit:
+            self.parser._error('%s operand of %r (%s, precedence %d) has precedence %d; '
+                               'expected at most %d' %
+                               (side, operator.name, operator.form, operator.precedence,
+                                precedence, limit), token, 'precedence_clash', operand_token,
+                               expected='at most %d' % limit, found=str(precedence))
 
     def finish(self):
         while self.pending_operators:
             self._reduce()
-        assert len(self.terms) == len(self.precedences) == 1
+        assert len(self.terms) == len(self.precedences) == len(self.operand_tokens) == 1
         return self.terms[0]
 
 
@@ -295,7 +314,7 @@ class Parser(object):
                             number.source_pos.i == current.source_pos.i + 1):
                         self._get_next()
                         self._get_next()
-                        state.push_operand(self._parse_negative_number(number))
+                        state.push_operand(self._parse_negative_number(number), token=current)
                         expect_operand = False
                         continue
                 if (current.name == 'ATOM' and not current.source.startswith("'")
@@ -307,7 +326,7 @@ class Parser(object):
                         continue
             incoming = self._select_operator(current, state, expect_operand)
             if incoming is None and expect_operand:
-                state.push_operand(self._parse_expr())
+                state.push_operand(self._parse_expr(), token=current)
                 expect_operand = False
                 continue
             if incoming is None:

@@ -204,3 +204,41 @@ def test_extra_separator_after_list_tail(source):
     assert exc.kind == 'invalid_list_tail'
     assert exc.primary.start.i == 4
     assert exc.secondary.start.i == 2
+
+
+@pytest.mark.parametrize('source, primary, secondary, side', [
+    ('1=2=3.', 3, 1, 'left'),
+    ('- - X.', 0, 2, 'right'),
+])
+def test_precedence_clash_identifies_both_operators(source, primary, secondary, side):
+    exc = diagnostic(source)
+    assert exc.kind == 'precedence_clash'
+    assert exc.primary.start.i == primary
+    assert exc.secondary.start.i == secondary
+    assert side + ' operand' in exc.msg
+    assert 'precedence' in exc.msg
+
+
+def test_postfix_precedence_clash():
+    from prolog.interpreter.termparser import OperatorTable
+    table = OperatorTable()
+    table.add('@', 400, 'xf')
+    with pytest.raises(ParseError) as caught:
+        Parser(UnicodeLexer().tokenize('a @ @ .'), table).parse()
+    exc = caught.value
+    assert exc.kind == 'precedence_clash'
+    assert exc.primary.start.i == 4
+    assert exc.secondary.start.i == 2
+    assert exc.expected == 'at most 399'
+    assert exc.found == '400'
+
+
+def test_expression_precedence_limit_reports_actual_and_limit():
+    parser = Parser(UnicodeLexer().tokenize('1+2.'), default_operator_table)
+    with pytest.raises(ParseError) as caught:
+        parser._parse_op_expr(400, '.')
+    exc = caught.value
+    assert exc.kind == 'precedence_limit'
+    assert exc.primary.start.i == 1
+    assert exc.expected == 'at most 400'
+    assert exc.found == '500'
