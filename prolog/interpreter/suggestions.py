@@ -3,7 +3,8 @@
 The bounded distance algorithm is adapted from PyPy's Python 3.12
 lib-python/3/traceback.py (originally CPython). License:
 https://docs.python.org/3.12/license.html
-Here inputs are lists of Unicode code points, suitable for RPython.
+Here inputs are lists of Unicode code points, suitable for RPython, and
+adjacent transpositions cost one ordinary edit.
 """
 from rpython.rlib import rutf8
 from rpython.rlib.listsort import TimSort, make_timsort_class
@@ -31,7 +32,11 @@ def substitution_cost(a, b):
 
 
 def levenshtein_distance(a, b, max_cost):
-    """Exact distance within budget, otherwise a value greater than budget."""
+    """Bounded weighted optimal string alignment distance.
+
+    Adjacent swaps cost MOVE_COST; overlapping swaps are not combined.
+    Return the exact distance within budget, otherwise a value above budget.
+    """
     start = 0
     while start < len(a) and start < len(b) and a[start] == b[start]:
         start += 1
@@ -49,20 +54,26 @@ def levenshtein_distance(a, b, max_cost):
         a, b = b, a
     if (len(b) - len(a)) * MOVE_COST > max_cost:
         return max_cost + 1
-    row = [(i + 1) * MOVE_COST for i in range(len(a))]
-    result = 0
+    row = [i * MOVE_COST for i in range(len(a) + 1)]
+    previous = [0] * (len(a) + 1)
+    current = [0] * (len(a) + 1)
     for bindex in range(len(b)):
-        diagonal = result = bindex * MOVE_COST
-        minimum = max_cost + 1
+        current[0] = (bindex + 1) * MOVE_COST
+        minimum = current[0]
         for index in range(len(a)):
-            substitute = diagonal + substitution_cost(b[bindex], a[index])
-            diagonal = row[index]
-            result = min(substitute, min(result, diagonal) + MOVE_COST)
-            row[index] = result
+            substitute = row[index] + substitution_cost(b[bindex], a[index])
+            result = min(substitute,
+                         min(current[index], row[index + 1]) + MOVE_COST)
+            if (bindex > 0 and index > 0 and
+                    a[index] == b[bindex - 1] and
+                    a[index - 1] == b[bindex]):
+                result = min(result, previous[index - 1] + MOVE_COST)
+            current[index + 1] = result
             minimum = min(minimum, result)
         if minimum > max_cost:
             return max_cost + 1
-    return result
+        previous, row, current = row, current, previous
+    return row[len(a)]
 
 
 def predicate_suggestions(engine, module, missing):

@@ -13,7 +13,13 @@ def codes(text):
 
 @pytest.mark.parametrize('a,b,expected', [
     (u'cat', u'sat', 2), (u'cat', u'ca', 2), (u'cat', u'caT', 1),
-    (u'lenght', u'length', 4), (u'', u'cat', 6),
+    (u'lenght', u'length', 2), (u'', u'cat', 6),
+    (u'foobra', u'foobar', 2), (u'act', u'cat', 2),
+    (u'abcd', u'badc', 4), (u'abcd', u'bade', 6),
+    (u'abC', u'bac', 3),
+    (u'cAt', u'cat', 1), (u'\xe9a', u'a\xe9', 2),
+    (u'aab', u'aba', 2), (u'abc', u'cba', 4),
+    (u'CA', u'ABC', 6),  # Overlapping edits are not combined (OSA).
     (u'caf\xe9', u'caf\xe8', 2), (u'\xc4', u'\xe4', 1),
     (u'\u754c', u'', 2), (u'same', u'same', 0),
 ])
@@ -49,6 +55,12 @@ def test_ties_are_sorted_capped_and_replaced_by_a_better_match():
     assert matches(e, 'foox', 0) == [[], ['fooa/0', 'foob/0', 'fooc/0']]
     e.runstring("'fooX'.")
     assert matches(e, 'foox', 0) == [[], ['fooX/0']]
+
+
+def test_transpositions_pass_short_name_cutoff_and_improve_ranking():
+    e = get_engine('cat. foobar. foobaz.')
+    assert matches(e, 'act', 0) == [[], ['cat/0']]
+    assert matches(e, 'foobra', 0) == [[], ['foobar/0']]
 
 
 @pytest.mark.parametrize('requested, expected', [
