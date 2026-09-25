@@ -1,7 +1,8 @@
 """Suggestions for uncaught undefined calls; never used during execution.
 
 The bounded distance algorithm is adapted from PyPy's Python 3.12
-lib-python/3/traceback.py (originally CPython). See LICENSE.cpython.
+lib-python/3/traceback.py (originally CPython). License:
+https://docs.python.org/3.12/license.html
 Here inputs are lists of Unicode code points, suitable for RPython.
 """
 from rpython.rlib import rutf8
