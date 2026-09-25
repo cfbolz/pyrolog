@@ -28,11 +28,15 @@ def token_span(token):
 
 
 class SyntaxError(Exception):
+    """A diagnostic with optional labels explaining the role of each span."""
     def __init__(self, msg, primary, kind='syntax_error', secondary=None,
-                 expected='', found='', incomplete=False):
+                 expected='', found='', incomplete=False,
+                 primary_label='', secondary_label=''):
         self.msg = msg
         self.primary = primary
         self.secondary = secondary
+        self.primary_label = primary_label
+        self.secondary_label = secondary_label
         self.kind = kind
         self.expected = expected
         self.found = found

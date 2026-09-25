@@ -59,7 +59,9 @@ class UnicodeRunner(object):
                              SourcePos(start + width, line, column + width))
         end = SourcePos(self.pos, self.lineno, self.columnno)
         raise SyntaxError('expected %s before end of input' % expected, primary, kind,
-                          SourceSpan(end, end), expected, 'EOF', incomplete=True)
+                          SourceSpan(end, end), expected, 'EOF', incomplete=True,
+                          primary_label='opened here',
+                          secondary_label="expected '%s' here" % expected)
 
     def scan_block_comment(self, start, line, column):
         text = self.text

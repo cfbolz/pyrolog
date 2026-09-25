@@ -17,6 +17,36 @@ def position(pos):
     return pos.i, pos.lineno, pos.columnno
 
 
+def test_span_labels_are_optional():
+    from prolog.interpreter.syntaxerror import SourceSpan
+    from rpython.rlib.parsing.lexer import SourcePos
+    span = SourceSpan(SourcePos(0, 0, 0), SourcePos(1, 0, 1))
+    exc = SyntaxError('example', span)
+    assert exc.primary_label == ''
+    assert exc.secondary_label == ''
+
+
+@pytest.mark.parametrize('source, primary, secondary', [
+    ('f(x', 'opened here', "expected ')' here"),
+    ('f(x.', 'opened here', "expected ')' here"),
+    ('f(x]', "expected ')' here", 'opened here'),
+    ('a + .', 'requires a right operand', 'expected a term here'),
+    ('f(,a).', 'expected an argument here', 'opened here'),
+    ('[a,,b].', 'expected a list element here', 'opened here'),
+    ('[a|].', 'expected a list tail here', 'opened here'),
+    ('f(a b).', 'unexpected term', 'preceding argument ends here'),
+    ('[a b].', 'unexpected term', 'preceding list element ends here'),
+    ('a b.', 'unexpected term', 'preceding term ends here'),
+    ('f (a).', 'whitespace before this parenthesis', 'functor name here'),
+    ('[a|b,c].', "expected ']' here", 'list tail starts after this'),
+    ('a. b.', 'unexpected input', 'term ended here'),
+])
+def test_span_labels_explain_related_locations(source, primary, secondary):
+    exc = diagnostic(source)
+    assert exc.primary_label == primary
+    assert exc.secondary_label == secondary
+
+
 def test_error_token_has_full_utf8_span():
     exc = diagnostic('a \xc3\xa9clair.')
     assert exc.kind == 'missing_operator'
@@ -124,6 +154,8 @@ def test_file_preserves_diagnostic_for_unterminated_last_term():
     assert position(exc.secondary.start) == (len(source), 2, 2)
     assert caught.value.file_name == 'example.pl'
     assert caught.value.line_number == 1
+    assert exc.primary_label == 'opened here'
+    assert exc.secondary_label == "expected ')' here"
 
 
 def test_query_preserves_diagnostic():
@@ -135,6 +167,8 @@ def test_query_preserves_diagnostic():
     assert exc.primary.start.i == 3
     assert exc.secondary.start.i == 1
     assert caught.value.term.argument_at(0).name() == 'syntax_error'
+    assert exc.primary_label == "expected ')' here"
+    assert exc.secondary_label == 'opened here'
 
 
 def test_query_eof_preserves_trailing_layout_position():
@@ -223,6 +257,8 @@ def test_precedence_clash_identifies_both_operators(source, primary, secondary, 
     assert exc.secondary.start.i == secondary
     assert side + ' operand' in exc.msg
     assert 'precedence' in exc.msg
+    assert exc.primary_label == '%s operand requires precedence %s' % (side, exc.expected)
+    assert exc.secondary_label == 'operand has precedence %s' % exc.found
 
 
 def test_postfix_precedence_clash():

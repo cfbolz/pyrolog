@@ -21,6 +21,8 @@ def test_unclosed_lexical_construct(source, kind, start, width, expected):
     assert exc.found == 'EOF'
     assert exc.incomplete
     assert not hasattr(exc, 'text')
+    assert exc.primary_label == 'opened here'
+    assert exc.secondary_label == "expected '%s' here" % expected
 
 
 def test_lexer_eof_positions_after_utf8_and_newline():

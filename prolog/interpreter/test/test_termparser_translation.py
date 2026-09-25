@@ -16,6 +16,7 @@ def test_parser_is_rpython():
             result = Parser(UnicodeLexer().tokenize(source, eof=True), operators).parse()
         except SyntaxError as exc:
             offset = exc.primary.start.i
+            offset += len(exc.primary_label) + len(exc.secondary_label)
             if exc.secondary is not None:
                 offset += exc.secondary.start.i
             return -1 - offset

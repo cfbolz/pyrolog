@@ -125,7 +125,9 @@ class ExpressionState(object):
                                        operator_token.source, operator_token,
                                        'missing_operand', token or self.parser.eof,
                                        expected='term',
-                                       found=token.source if token is not None else 'EOF')
+                                       found=token.source if token is not None else 'EOF',
+                                       primary_label='requires a right operand',
+                                       secondary_label='expected a term here')
                 self.parser._missing_term(token, context)
 
     def _reduce(self):
@@ -173,7 +175,9 @@ class ExpressionState(object):
                                'expected at most %d' %
                                (side, operator.name, operator.form, operator.precedence,
                                 precedence, limit), token, 'precedence_clash', operand_token,
-                               expected='at most %d' % limit, found=str(precedence))
+                               expected='at most %d' % limit, found=str(precedence),
+                               primary_label='%s operand requires precedence at most %d' % (side, limit),
+                               secondary_label='operand has precedence %d' % precedence)
 
     def finish(self):
         while self.pending_operators:
@@ -231,13 +235,17 @@ class Parser(object):
         if token.name in ('.', 'EOF'):
             self._error('unclosed %s: expected %s' % (opening.name, expected),
                              opening, 'unclosed_delimiter', token,
-                             expected, token.name)
+                             expected, token.name, primary_label='opened here',
+                             secondary_label="expected '%s' here" % expected)
         if token.name != expected:
             self._error('expected %s, found %s' % (expected, token.name),
                              token, 'mismatched_delimiter', opening,
-                             expected, token.name)
+                             expected, token.name,
+                             primary_label="expected '%s' here" % expected,
+                             secondary_label='opened here')
 
-    def _error(self, msg, tok, kind='syntax_error', secondary=None, expected='', found=''):
+    def _error(self, msg, tok, kind='syntax_error', secondary=None, expected='', found='',
+               primary_label='', secondary_label=''):
         if not found:
             found = 'EOF' if tok is None or tok.name == 'EOF' else tok.source
         primary_span = token_span(tok if tok is not None else self.eof)
@@ -246,12 +254,16 @@ class Parser(object):
                       secondary is not None and secondary.name == 'EOF' or
                       found == 'EOF' and kind in ('missing_full_stop', 'unexpected_eof',
                                                  'missing_term'))
-        raise SyntaxError(msg, primary_span, kind, secondary_span, expected, found, incomplete)
+        raise SyntaxError(msg, primary_span, kind, secondary_span, expected, found, incomplete,
+                          primary_label, secondary_label)
 
     def _missing_term(self, token, context='term'):
         opening = self.open_delimiters[-1] if self.open_delimiters else None
+        description = 'an argument' if context == 'argument' else 'a ' + context.replace('_', ' ')
         self._error('expected %s' % context.replace('_', ' '), token,
-                    'missing_' + context, opening, expected='term')
+                    'missing_' + context, opening, expected='term',
+                    primary_label='expected %s here' % description,
+                    secondary_label='opened here' if opening is not None else '')
 
     def _expect(self, name, source=None):
         if self.position == len(self.tokens):
@@ -271,7 +283,8 @@ class Parser(object):
         self._expect(".")
         if self.position != len(self.tokens):
             self._error("unexpected token after full stop", self._peek(),
-                        'trailing_input', self.tokens[self.position - 1])
+                        'trailing_input', self.tokens[self.position - 1],
+                        primary_label='unexpected input', secondary_label='term ended here')
         return res
 
     def _parse_op_expr(self, max_precedence, stops, context='term'):
@@ -311,17 +324,22 @@ class Parser(object):
                         and state.terms and isinstance(state.terms[-1], term.Atom)
                         and state.operand_tokens[-1] is previous):
                     self._error("expected an operator; '(' must immediately follow a functor name",
-                                current, 'functor_whitespace', previous)
+                                current, 'functor_whitespace', previous,
+                                primary_label='whitespace before this parenthesis',
+                                secondary_label='functor name here')
                 if context == 'argument':
                     self._error("expected an operator or ',' between arguments",
                                 current, 'missing_separator', previous,
-                                expected="operator or ','")
+                                expected="operator or ','", primary_label='unexpected term',
+                                secondary_label='preceding argument ends here')
                 if context == 'list_element':
                     self._error("expected an operator, ',' or '|' between list elements",
                                 current, 'missing_separator', previous,
-                                expected="operator, ',' or '|'")
+                                expected="operator, ',' or '|'", primary_label='unexpected term',
+                                secondary_label='preceding list element ends here')
                 self._error('expected an operator between terms', current,
-                            'missing_operator', previous, expected='operator')
+                            'missing_operator', previous, expected='operator',
+                            primary_label='unexpected term', secondary_label='preceding term ends here')
             self._get_next()
             state.push_operator(current, incoming)
             expect_operand = incoming.kind == 'infix'
@@ -496,7 +514,9 @@ class Parser(object):
                 tail = self._parse_op_expr(1200, ',|]', 'list_tail')
                 if self._peek().name != ']':
                     self._error("expected ']' after list tail", self._peek(),
-                                'invalid_list_tail', bar, expected=']')
+                                'invalid_list_tail', bar, expected=']',
+                                primary_label="expected ']' here",
+                                secondary_label='list tail starts after this')
                 self._expect("]")
                 break
             self._expect("ATOM", ",")
