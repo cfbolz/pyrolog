@@ -30,6 +30,58 @@ numbers = st.one_of(integers, st.floats())
 
 
 @settings(max_examples=200, deadline=None)
+@given(integers, st.integers(-sys.maxint - 1, sys.maxint))
+@example(10 ** 100, -sys.maxint - 1)
+@example(-10 ** 100, -sys.maxint - 1)
+@example(-sys.maxint - 1, -sys.maxint - 1)
+@example(0, 0)
+@example(1, -1)
+@example(-1, 1)
+@example(sys.maxint + 1, sys.maxint)
+def test_mixed_integer_operations(big, small):
+    big_term, small_term = wrap_number(big, True), wrap_number(small)
+    operations = [
+        ('add', operator.add), ('sub', operator.sub), ('mul', operator.mul),
+        ('and', operator.and_), ('or', operator.or_), ('xor', operator.xor),
+        ('min', min), ('max', max),
+    ]
+    for lhs, rhs, left, right in [(big_term, small_term, big, small),
+                                  (small_term, big_term, small, big)]:
+        for name, operation in operations:
+            expected = operation(left, right)
+            actual = getattr(lhs, 'arith_' + name)(rhs)
+            assert unwrap_integer(actual) == expected
+            assert isinstance(actual, term.Number) == (-sys.maxint - 1 <= expected <= sys.maxint)
+        comparison = (left > right) - (left < right)
+        assert arithmetic.compare_numbers(lhs, rhs) == comparison
+        assert lhs.cmp_standard_order(rhs, None) == comparison
+        if right:
+            assert unwrap_integer(lhs.arith_func_div(rhs)) == left // right
+            assert unwrap_integer(lhs.arith_mod(rhs)) == left % right
+            quotient = abs(left) // abs(right)
+            if (left < 0) != (right < 0):
+                quotient = -quotient
+            assert unwrap_integer(lhs.arith_floordiv(rhs)) == quotient
+            assert unwrap_integer(lhs.arith_rem(rhs)) == left - quotient * right
+
+
+@settings(max_examples=200, deadline=None)
+@given(st.integers(-sys.maxint - 1, sys.maxint),
+       st.integers(-sys.maxint - 1, sys.maxint))
+@example(sys.maxint, 1)
+@example(-sys.maxint - 1, -1)
+@example(sys.maxint, -sys.maxint - 1)
+@example(-sys.maxint - 1, sys.maxint)
+def test_machine_integer_overflow(left, right):
+    lhs, rhs = wrap_number(left), wrap_number(right)
+    for name in ['add', 'sub', 'mul']:
+        expected = getattr(operator, name)(left, right)
+        actual = getattr(lhs, 'arith_' + name)(rhs)
+        assert unwrap_integer(actual) == expected
+        assert isinstance(actual, term.Number) == (-sys.maxint - 1 <= expected <= sys.maxint)
+
+
+@settings(max_examples=200, deadline=None)
 @given(integers, integers.filter(lambda value: value != 0),
        st.booleans(), st.booleans())
 @example(-5, 2, False, False)

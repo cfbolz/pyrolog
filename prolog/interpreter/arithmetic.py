@@ -123,9 +123,9 @@ def bigint_true_divide(numerator, denominator):
     try:
         result = numerator.truediv(denominator)
     except ZeroDivisionError:
-        error.throw_evaluation_error("zero_divisor")
+        raise error.throw_evaluation_error("zero_divisor")
     except OverflowError:
-        error.throw_evaluation_error("float_overflow")
+        raise error.throw_evaluation_error("float_overflow")
     return make_float(result)
 
 
@@ -134,7 +134,7 @@ def bigint_trunc_divide(numerator, denominator):
         # _divrem truncates toward zero; divmod adjusts this to floor division.
         quotient, remainder = _divrem(numerator, denominator)
     except ZeroDivisionError:
-        error.throw_evaluation_error("zero_divisor")
+        raise error.throw_evaluation_error("zero_divisor")
     return make_int(term.BigInt(quotient))
 
 
@@ -142,7 +142,7 @@ def bigint_floor_divide(numerator, denominator):
     try:
         quotient = numerator.floordiv(denominator)
     except ZeroDivisionError:
-        error.throw_evaluation_error("zero_divisor")
+        raise error.throw_evaluation_error("zero_divisor")
     return make_int(term.BigInt(quotient))
 
 
@@ -150,7 +150,7 @@ def bigint_remainder(numerator, denominator):
     try:
         quotient, remainder = _divrem(numerator, denominator)
     except ZeroDivisionError:
-        error.throw_evaluation_error("zero_divisor")
+        raise error.throw_evaluation_error("zero_divisor")
     return make_int(term.BigInt(remainder))
 
 
@@ -174,7 +174,11 @@ def compare_integer_float(integer, value):
         if rarithmetic.LONG_BIT <= 32 or -1 <= integer.num >> 48 < 1:
             return term.rcmp(float(integer.num), value)
     truncated = rbigint.fromfloat(value)
-    result = term.bigint_cmp(integer_value(integer), truncated)
+    if isinstance(integer, term.Number):
+        result = -term.bigint_int_cmp(truncated, integer.num)
+    else:
+        assert isinstance(integer, term.BigInt)
+        result = term.bigint_cmp(integer.value, truncated)
     if result:
         return result
     if value != math.floor(value):
@@ -197,6 +201,12 @@ def compare_numbers(left, right):
         return compare_integer_float(left, right.floatval)
     if isinstance(left, term.Number) and isinstance(right, term.Number):
         return term.rcmp(left.num, right.num)
+    if isinstance(left, term.Number):
+        assert isinstance(right, term.BigInt)
+        return -term.bigint_int_cmp(right.value, left.num)
+    if isinstance(right, term.Number):
+        assert isinstance(left, term.BigInt)
+        return term.bigint_int_cmp(left.value, right.num)
     return term.bigint_cmp(integer_value(left), integer_value(right))
 
 
@@ -321,11 +331,11 @@ class __extend__(term.Number):
         try:
             res = rarithmetic.ovfcheck(other_num + self.num)
         except OverflowError:
-            return self.arith_add_bigint(rbigint.fromint(other_num))
+            return term.BigInt(rbigint.add_int_int_bigint_result(other_num, self.num))
         return term.Number(res)
 
     def arith_add_bigint(self, other_value):
-        return make_int(term.BigInt(other_value.add(rbigint.fromint(self.num))))
+        return make_int(term.BigInt(other_value.int_add(self.num)))
     def arith_add_float(self, other_float):
         return make_float(other_float + float(self.num))
 
@@ -340,11 +350,11 @@ class __extend__(term.Number):
         try:
             res = rarithmetic.ovfcheck(other_num - self.num)
         except OverflowError:
-            return self.arith_sub_bigint(rbigint.fromint(other_num))
+            return term.BigInt(rbigint.sub_int_int_bigint_result(other_num, self.num))
         return term.Number(res)
 
     def arith_sub_bigint(self, other_value):
-        return make_int(term.BigInt(other_value.sub(rbigint.fromint(self.num))))
+        return make_int(term.BigInt(other_value.int_sub(self.num)))
 
     def arith_sub_float(self, other_float):
         return make_float(other_float - float(self.num))
@@ -365,11 +375,11 @@ class __extend__(term.Number):
         try:
             res = rarithmetic.ovfcheck(other_num * self.num)
         except OverflowError:
-            return self.arith_mul_bigint(rbigint.fromint(other_num))
+            return term.BigInt(rbigint.mul_int_int_bigint_result(other_num, self.num))
         return term.Number(res)
 
     def arith_mul_bigint(self, other_value):
-        return make_int(term.BigInt(other_value.mul(rbigint.fromint(self.num))))
+        return make_int(term.BigInt(other_value.int_mul(self.num)))
 
     def arith_mul_float(self, other_float):
         return make_float(other_float * float(self.num))
@@ -426,7 +436,9 @@ class __extend__(term.Number):
         return term.Number(quotient)
 
     def arith_func_div_bigint(self, other_value):
-        return bigint_floor_divide(other_value, rbigint.fromint(self.num))
+        if self.num == 0:
+            error.throw_evaluation_error("zero_divisor")
+        return make_int(term.BigInt(other_value.int_floordiv(self.num)))
 
     def arith_func_div_float(self, other_float):
         error.throw_type_error("integer", term.Float(other_float))
@@ -443,7 +455,13 @@ class __extend__(term.Number):
         return term.Number(rarithmetic.int_c_mod(other_num, self.num))
 
     def arith_rem_bigint(self, other_value):
-        return bigint_remainder(other_value, rbigint.fromint(self.num))
+        if self.num == 0:
+            error.throw_evaluation_error("zero_divisor")
+        remainder = other_value.int_mod_int_result(self.num)
+        # Convert floor-division modulo to a remainder with the dividend's sign.
+        if remainder and (other_value.get_sign() < 0) != (self.num < 0):
+            remainder -= self.num
+        return term.Number(remainder)
 
     def arith_rem_float(self, other_float):
         error.throw_type_error("integer", term.Float(other_float))
@@ -478,7 +496,7 @@ class __extend__(term.Number):
         return term.Number(other_num | self.num)
 
     def arith_or_bigint(self, other_value):
-        return make_int(term.BigInt(rbigint.fromint(self.num).or_(other_value)))
+        return make_int(term.BigInt(other_value.int_or_(self.num)))
 
     # ------------------ and ------------------ 
     def arith_and(self, other):
@@ -488,7 +506,7 @@ class __extend__(term.Number):
         return term.Number(other_num & self.num)
 
     def arith_and_bigint(self, other_value):
-        return make_int(term.BigInt(rbigint.fromint(self.num).and_(other_value)))
+        return make_int(term.BigInt(other_value.int_and_(self.num)))
 
     # ------------------ xor ------------------ 
     def arith_xor(self, other):
@@ -498,7 +516,7 @@ class __extend__(term.Number):
         return term.Number(other_num ^ self.num)
 
     def arith_xor_bigint(self, other_value):
-        return make_int(term.BigInt(rbigint.fromint(self.num).xor(other_value)))
+        return make_int(term.BigInt(other_value.int_xor(self.num)))
 
     # ------------------ mod ------------------ 
     def arith_mod(self, other):
@@ -512,7 +530,7 @@ class __extend__(term.Number):
     def arith_mod_bigint(self, other_value):
         if self.num == 0:
             error.throw_evaluation_error("zero_divisor")
-        return make_int(term.BigInt(other_value.mod(rbigint.fromint(self.num))))
+        return term.Number(other_value.int_mod_int_result(self.num))
 
     # ------------------ inversion ------------------
     def arith_not(self):
@@ -533,10 +551,9 @@ class __extend__(term.Number):
         return term.Number(max(other_num, self.num))
 
     def arith_max_bigint(self, other_value):
-        self_value = rbigint.fromint(self.num)
-        if self_value.lt(other_value):
+        if other_value.int_gt(self.num):
             return make_int(term.BigInt(other_value))
-        return make_int(term.BigInt(self_value))
+        return self
 
     def arith_max_float(self, other_float):
         return make_float(max(other_float, float(self.num)))
@@ -549,9 +566,8 @@ class __extend__(term.Number):
         return term.Number(min(other_num, self.num))
 
     def arith_min_bigint(self, other_value):
-        self_value = rbigint.fromint(self.num)
-        if self_value.lt(other_value):
-            return make_int(term.BigInt(self_value))
+        if other_value.int_gt(self.num):
+            return self
         return make_int(term.BigInt(other_value))
 
     def arith_min_float(self, other_float):
@@ -784,7 +800,7 @@ class __extend__(term.BigInt):
         return other.arith_add_bigint(self.value)
 
     def arith_add_number(self, other_num):
-        return make_int(term.BigInt(rbigint.fromint(other_num).add(self.value)))
+        return make_int(term.BigInt(self.value.int_add(other_num)))
 
     def arith_add_bigint(self, other_value):
         return make_int(term.BigInt(other_value.add(self.value)))
@@ -816,7 +832,7 @@ class __extend__(term.BigInt):
         return other.arith_mul_bigint(self.value)
 
     def arith_mul_number(self, other_num):
-        return make_int(term.BigInt(rbigint.fromint(other_num).mul(self.value)))
+        return make_int(term.BigInt(self.value.int_mul(other_num)))
 
     def arith_mul_bigint(self, other_value):
         return make_int(term.BigInt(other_value.mul(self.value)))
@@ -891,7 +907,7 @@ class __extend__(term.BigInt):
         return other.arith_or_bigint(self.value)
 
     def arith_or_number(self, other_num):
-        return make_int(term.BigInt(rbigint.fromint(other_num).or_(self.value)))
+        return make_int(term.BigInt(self.value.int_or_(other_num)))
 
     def arith_or_bigint(self, other_value):
         return make_int(term.BigInt(other_value.or_(self.value)))
@@ -901,7 +917,7 @@ class __extend__(term.BigInt):
         return other.arith_and_bigint(self.value)
 
     def arith_and_number(self, other_num):
-        return make_int(term.BigInt(rbigint.fromint(other_num).and_(self.value)))
+        return make_int(term.BigInt(self.value.int_and_(other_num)))
 
     def arith_and_bigint(self, other_value):
         return make_int(term.BigInt(other_value.and_(self.value)))
@@ -911,7 +927,7 @@ class __extend__(term.BigInt):
         return other.arith_xor_bigint(self.value)
 
     def arith_xor_number(self, other_num):
-        return make_int(term.BigInt(rbigint.fromint(other_num).xor(self.value)))
+        return make_int(term.BigInt(self.value.int_xor(other_num)))
 
     def arith_xor_bigint(self, other_value):
         return make_int(term.BigInt(other_value.xor(self.value)))
@@ -947,10 +963,9 @@ class __extend__(term.BigInt):
         return other.arith_max_bigint(self.value)
 
     def arith_max_number(self, other_num):
-        other_value = rbigint.fromint(other_num)
-        if other_value.lt(self.value):
-            return make_int(term.BigInt(self.value))
-        return make_int(term.BigInt(other_value))
+        if self.value.int_gt(other_num):
+            return make_int(self)
+        return term.Number(other_num)
 
     def arith_max_bigint(self, other_value):
         if other_value.lt(self.value):
@@ -965,10 +980,9 @@ class __extend__(term.BigInt):
         return other.arith_min_bigint(self.value)
 
     def arith_min_number(self, other_num):
-        other_value = rbigint.fromint(other_num)
-        if other_value.lt(self.value):
-            return make_int(term.BigInt(other_value))
-        return make_int(term.BigInt(self.value))
+        if self.value.int_gt(other_num):
+            return term.Number(other_num)
+        return make_int(self)
 
     def arith_min_bigint(self, other_value):
         if other_value.lt(self.value):

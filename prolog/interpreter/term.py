@@ -686,7 +686,7 @@ class Number(Numeric):#, UnboxedValue):
         elif isinstance(other, Float):
             return bigint_float_cmp(rbigint.fromint(self.num), other.floatval)
         elif isinstance(other, BigInt):
-            return bigint_cmp(rbigint.fromint(self.num), other.value)
+            return -bigint_int_cmp(other.value, self.num)
         assert 0
 
     def quick_unify_check(self, other):
@@ -717,7 +717,7 @@ class BigInt(Numeric):
 
     def cmp_standard_order(self, other, heap):
         if isinstance(other, Number):
-            return bigint_cmp(self.value, rbigint.fromint(other.num))
+            return bigint_int_cmp(self.value, other.num)
         elif isinstance(other, Float):
             return bigint_float_cmp(self.value, other.floatval)
         elif isinstance(other, BigInt):
@@ -819,6 +819,13 @@ def bigint_cmp(a, b):
     if a.eq(b):
         return 0
     if a.lt(b):
+        return -1
+    return 1
+
+def bigint_int_cmp(a, b):
+    if a.int_eq(b):
+        return 0
+    if a.int_lt(b):
         return -1
     return 1
 
