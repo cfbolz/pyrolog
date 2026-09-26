@@ -1,5 +1,5 @@
 import py
-from prolog.interpreter import helper, term, error, continuation, arithmetic
+from prolog.interpreter import term, error, continuation, arithmetic
 from prolog.builtin.register import expose_builtin
 # ___________________________________________________________________
 # arithmetic
@@ -43,17 +43,48 @@ def continue_between(Choice, engine, scont, fcont, heap, lower, upper, var):
     var.unify(term.Number(lower), heap)
     return scont, fcont, heap
 
-@expose_builtin("between", unwrap_spec=["int", "int", "obj"],
+@continuation.make_failure_continuation
+def continue_between_bigint(Choice, engine, scont, fcont, heap, lower, upper, var):
+    if arithmetic.compare_numbers(lower, upper) < 0:
+        next_lower = lower.arith_add(term.Number(1))
+        fcont = Choice(engine, scont, fcont, heap, next_lower, upper, var)
+        heap = heap.branch()
+    var.unify(lower, heap)
+    return scont, fcont, heap
+
+
+def ensure_integer(value):
+    if isinstance(value, term.Var):
+        error.throw_instantiation_error()
+    if isinstance(value, term.Number) or isinstance(value, term.BigInt):
+        return value
+    error.throw_type_error('integer', value)
+
+
+@expose_builtin("between", unwrap_spec=["obj", "obj", "obj"],
                handles_continuation=True)
 def impl_between(engine, heap, lower, upper, varorint, scont, fcont):
+    lower = ensure_integer(lower)
+    upper = ensure_integer(upper)
     if isinstance(varorint, term.Var):
-        if lower > upper:
+        if isinstance(lower, term.Number) and isinstance(upper, term.Number):
+            if lower.num > upper.num:
+                raise error.UnificationFailed
+            # The upper bound also fits, so incrementing cannot overflow.
+            return continue_between(engine, scont, fcont, heap,
+                                    lower.num, upper.num, varorint)
+        if arithmetic.compare_numbers(lower, upper) > 0:
             raise error.UnificationFailed
-        return continue_between(engine, scont, fcont, heap,
-                                lower, upper, varorint)
+        return continue_between_bigint(engine, scont, fcont, heap,
+                                       lower, upper, varorint)
     else:
-        integer = helper.unwrap_int(varorint)
-        if not (lower <= integer <= upper):
+        integer = ensure_integer(varorint)
+        if (isinstance(lower, term.Number) and isinstance(upper, term.Number)
+                and isinstance(integer, term.Number)):
+            if not (lower.num <= integer.num <= upper.num):
+                raise error.UnificationFailed
+        elif (arithmetic.compare_numbers(lower, integer) > 0 or
+                arithmetic.compare_numbers(integer, upper) > 0):
             raise error.UnificationFailed
     return scont, fcont, heap
 

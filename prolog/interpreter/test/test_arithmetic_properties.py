@@ -30,6 +30,120 @@ numbers = st.one_of(integers, st.floats())
 
 
 @settings(max_examples=200, deadline=None)
+@given(integers, st.integers(-sys.maxint - 1, sys.maxint))
+@example(10 ** 100, -sys.maxint - 1)
+@example(-10 ** 100, -sys.maxint - 1)
+@example(-sys.maxint - 1, -sys.maxint - 1)
+@example(0, 0)
+@example(1, -1)
+@example(-1, 1)
+@example(sys.maxint + 1, sys.maxint)
+def test_mixed_integer_operations(big, small):
+    big_term, small_term = wrap_number(big, True), wrap_number(small)
+    operations = [
+        ('add', operator.add), ('sub', operator.sub), ('mul', operator.mul),
+        ('and', operator.and_), ('or', operator.or_), ('xor', operator.xor),
+        ('min', min), ('max', max),
+    ]
+    for lhs, rhs, left, right in [(big_term, small_term, big, small),
+                                  (small_term, big_term, small, big)]:
+        for name, operation in operations:
+            expected = operation(left, right)
+            actual = getattr(lhs, 'arith_' + name)(rhs)
+            assert unwrap_integer(actual) == expected
+            assert isinstance(actual, term.Number) == (-sys.maxint - 1 <= expected <= sys.maxint)
+        comparison = (left > right) - (left < right)
+        assert arithmetic.compare_numbers(lhs, rhs) == comparison
+        assert lhs.cmp_standard_order(rhs, None) == comparison
+        if right:
+            assert unwrap_integer(lhs.arith_func_div(rhs)) == left // right
+            assert unwrap_integer(lhs.arith_mod(rhs)) == left % right
+            quotient = abs(left) // abs(right)
+            if (left < 0) != (right < 0):
+                quotient = -quotient
+            assert unwrap_integer(lhs.arith_floordiv(rhs)) == quotient
+            assert unwrap_integer(lhs.arith_rem(rhs)) == left - quotient * right
+
+
+@settings(max_examples=200, deadline=None)
+@given(st.integers(-sys.maxint - 1, sys.maxint),
+       st.integers(-sys.maxint - 1, sys.maxint))
+@example(sys.maxint, 1)
+@example(-sys.maxint - 1, -1)
+@example(sys.maxint, -sys.maxint - 1)
+@example(-sys.maxint - 1, sys.maxint)
+def test_machine_integer_overflow(left, right):
+    lhs, rhs = wrap_number(left), wrap_number(right)
+    for name in ['add', 'sub', 'mul']:
+        expected = getattr(operator, name)(left, right)
+        actual = getattr(lhs, 'arith_' + name)(rhs)
+        assert unwrap_integer(actual) == expected
+        assert isinstance(actual, term.Number) == (-sys.maxint - 1 <= expected <= sys.maxint)
+
+
+@settings(max_examples=200, deadline=None)
+@given(integers, integers.filter(lambda value: value != 0),
+       st.booleans(), st.booleans())
+@example(-5, 2, False, False)
+@example(-sys.maxint - 1, -1, False, False)
+@example(1, -2, True, False)
+@example(-1, 2, False, True)
+def test_integer_truncating_division(left, right, left_big, right_big):
+    lhs, rhs = wrap_number(left, left_big), wrap_number(right, right_big)
+    actual = unwrap_integer(lhs.arith_floordiv(rhs))
+    remainder = left - actual * right
+    assert abs(remainder) < abs(right)
+    assert remainder == 0 or (remainder < 0) == (left < 0)
+
+
+@settings(max_examples=200, deadline=None)
+@given(integers, integers.filter(lambda value: value != 0),
+       st.booleans(), st.booleans())
+@example(-5, 2, False, False)
+@example(-sys.maxint - 1, -1, False, False)
+@example(-1, 2, True, False)
+@example(1, -2, False, True)
+def test_div_mod_and_trunc_rem_identities(left, right, left_big, right_big):
+    lhs, rhs = wrap_number(left, left_big), wrap_number(right, right_big)
+    quotient = unwrap_integer(lhs.arith_func_div(rhs))
+    modulus = unwrap_integer(lhs.arith_mod(rhs))
+    assert quotient == left // right
+    assert left == quotient * right + modulus
+    truncated = unwrap_integer(lhs.arith_floordiv(rhs))
+    remainder = unwrap_integer(lhs.arith_rem(rhs))
+    assert left == truncated * right + remainder
+    assert abs(remainder) < abs(right)
+    assert remainder == 0 or (remainder < 0) == (left < 0)
+
+
+@settings(max_examples=200, deadline=None)
+@given(integers, integers.filter(lambda value: value != 0))
+@example(2 ** 53 + 1, 3)
+@example(-sys.maxint - 1, -1)
+@example(0, -1)
+def test_integer_true_division(left, right):
+    try:
+        expected = operator.truediv(long(left), long(right))
+    except OverflowError:
+        expected = None
+    for force_bigint in [False, True]:
+        lhs = wrap_number(left, force_bigint)
+        rhs = wrap_number(right, force_bigint)
+        try:
+            actual = lhs.arith_div(rhs)
+        except error.CatchableError as exc:
+            assert expected is None
+            err = exc.term.argument_at(0)
+            assert err.name() == 'evaluation_error'
+            assert err.argument_at(0).name() == 'float_overflow'
+        else:
+            assert isinstance(actual, term.Float)
+            assert actual.floatval == expected
+            if expected == 0.0:
+                assert math.copysign(1.0, actual.floatval) == math.copysign(1.0, expected)
+
+
+@settings(max_examples=200, deadline=None)
 @given(st.floats(allow_nan=False, allow_infinity=False),
        st.floats(allow_nan=False, allow_infinity=False))
 @example(1.0e308, 2.0)
