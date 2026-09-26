@@ -1,7 +1,26 @@
+import sys
+
 from prolog.jittest.support import BaseTestPyrologC
 
 
 class TestArithmetic(BaseTestPyrologC):
+    def test_mod_minint_minus_one(self):
+        # Python-level tests cannot catch the translated C division trap.
+        source = """
+            mod_loop(0, _, _).
+            mod_loop(N, A, B) :-
+                N > 0,
+                R is A mod B,
+                R == 0,
+                Next is N - 1,
+                mod_loop(Next, A, B).
+        """
+        log = self.run_and_check(
+            source,
+            'mod_loop(1000, %d, -1), write(check_passed), nl.'
+            % (-sys.maxint - 1))
+        assert 'check_passed\n' in log.result
+
     def test_bigint_int_add(self):
         source = """
             add_int(0, Acc, Acc).

@@ -525,7 +525,12 @@ class __extend__(term.Number):
     def arith_mod_number(self, other_num):
         if self.num == 0:
             error.throw_evaluation_error("zero_divisor")
-        return term.Number(other_num % self.num)
+        try:
+            remainder = rarithmetic.ovfcheck(other_num % self.num)
+        except OverflowError:
+            # MIN_INT % -1 traps in C, but its mathematical remainder is zero.
+            return term.Number(0)
+        return term.Number(remainder)
 
     def arith_mod_bigint(self, other_value):
         if self.num == 0:
