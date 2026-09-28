@@ -152,3 +152,42 @@ def test_generated_control_flow_matches_legacy_executor(monkeypatch):
             answers.append([r['X'].name() for r in
                             collect_all(e, 'p(X), nonvar(X).')])
         assert answers[0] == answers[1], (source, answers)
+
+
+def test_tail_calls_do_not_retain_branch_continuations(monkeypatch):
+    from prolog.interpreter.continuation import Engine
+    from prolog.interpreter.term import Callable
+    original_call = Engine._call
+    depths = []
+
+    def record(engine, query, rule, scont, fcont, heap):
+        if isinstance(query, Callable) and query.name() == 'loop':
+            depth = 0
+            cont = scont
+            while cont is not None:
+                depth += 1
+                cont = cont.nextcont
+            depths.append(depth)
+        return original_call(engine, query, rule, scont, fcont, heap)
+
+    monkeypatch.setattr(Engine, '_call', record)
+    recursive = 'N > 0, !, M is N - 1, loop(M)'
+    for body in [recursive,
+                 '(' + recursive + ' ; fail)',
+                 '((' + recursive + ' ; fail) ; fail)',
+                 '(fail ; (' + recursive + ' ; fail))']:
+        e = get_engine('loop(0) :- !. loop(N) :- ' + body + '.')
+        del depths[:]
+        assert_true('loop(100).', e)
+        # Cut removes alternatives; no return work remains in these tail calls.
+        assert len(depths) == 101
+        assert max(depths) == 2, (body, max(depths))
+
+
+def test_branch_return_still_executes_following_goals():
+    e = get_engine('''
+        build(0, []) :- !.
+        build(N, L) :- (N > 0, !, M is N - 1, build(M, T) ; fail),
+                       L = [N | T].
+    ''')
+    assert_true('build(4, [4, 3, 2, 1]).', e)
