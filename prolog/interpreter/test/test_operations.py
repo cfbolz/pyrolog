@@ -156,6 +156,21 @@ def test_malformed_conjunction_keeps_eager_error():
     prolog_raises('type_error(callable, 42)', 'q', e)
 
 
+def test_unreached_variable_goal_does_not_raise():
+    # Like SWI-Prolog, validate a variable goal only when execution reaches it,
+    # even when head unification supplies a non-callable value directly.
+    e = get_engine('p(G) :- fail, G.')
+    assert_false('p(42).', e)
+
+
+def test_variable_goal_error_follows_preceding_side_effect():
+    from prolog.interpreter.test.tool import prolog_raises
+    e = get_engine('seen(no). p(G) :- assertz(seen(yes)), G.')
+    assert_false('seen(yes).', e)
+    prolog_raises('type_error(callable, 42)', 'p(42)', e)
+    assert_true('seen(yes).', e)
+
+
 def test_rule_introspection_and_database_copies():
     e = get_engine('p(X) :- X = a, X == a.')
     assert_true('retract((p(X) :- B)), B = (X = a, X == a), '
