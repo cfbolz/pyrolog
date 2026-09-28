@@ -966,6 +966,18 @@ def test_meta_predicate_prefixing():
     assert_true("mod:f(user:a, user).", e)
     assert_true("mod:f(mod:user:a, mod).", e)
 
+def test_meta_predicate_preserves_bound_module_qualifier():
+    e = get_engine("""
+    :- module(wrapper, [capture/2]).
+    :- meta_predicate capture(:, '?').
+    capture(Goal, Goal).
+    """)
+    assert_true("Goal = user:target, wrapper:capture(Goal, Qualified), "
+                "Qualified == user:target.", e)
+    assert_true("Goal = target, wrapper:capture(Goal, Qualified), "
+                "Qualified == wrapper:target.", e)
+
+
 def test_meta_predicate_module_chaining():
     m1 = "m1.pl"
     m2 = "m2.pl"
