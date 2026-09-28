@@ -1,6 +1,7 @@
 :- module(system, [term_expand/2, mode/1, (dynamic)/1, retractall/1]).
 
 :- use_module(list).
+:- use_module(sort).
 :- use_module(dcg).
 :- use_module(numbervars).
 :- use_module(structural_comparison).
