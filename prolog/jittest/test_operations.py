@@ -26,3 +26,15 @@ class TestOperations(BaseTestPyrologC):
             loop(N) :- (rejected ; true), M is N - 1, loop(M).
         ''', 'loop(3000).')
         assert 'yes' in log.result
+
+    def test_compiled_disjunction_with_cut_and_retry(self):
+        log = self.run_and_check('''
+            candidate(Y) :- (Y = a ; Y = b), X = Y, X == Y.
+            committed(Y) :- (Y = a, ! ; Y = b), true.
+            committed(c).
+            loop(0) :- !.
+            loop(N) :- findall(Y, candidate(Y), [a,b]),
+                       findall(Z, committed(Z), [a]),
+                       M is N - 1, loop(M).
+        ''', 'loop(3000).')
+        assert 'yes' in log.result

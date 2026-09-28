@@ -122,3 +122,33 @@ def test_cut_inside_disjunction_discards_other_branch_and_clause():
 def test_if_then_else_remains_opaque():
     e = get_engine('p(X) :- (true -> X = a ; X = b), X == a.')
     assert [r['X'].name() for r in collect_all(e, 'p(X).')] == ['a']
+
+
+def test_generated_control_flow_matches_legacy_executor(monkeypatch):
+    import random
+    from prolog.interpreter.continuation import RuleContinuation
+    compiled = RuleContinuation.activate
+
+    def legacy(self, fcont, heap):
+        body = self.rule.clone_body_from_rulecont(heap, self)
+        if body is None:
+            return self.nextcont, fcont, heap
+        return self.engine.call(body, self.rule, self.nextcont, fcont, heap)
+
+    rng = random.Random(9128)
+    leaves = ['X = a', 'X = b', 'true', 'fail', '!']
+
+    def goal(depth):
+        if not depth or rng.randrange(4) == 0:
+            return rng.choice(leaves)
+        return '(' + goal(depth - 1) + rng.choice([', ', ' ; ']) + goal(depth - 1) + ')'
+
+    for i in range(500):
+        source = 'p(X) :- ' + goal(4) + '. p(c).'
+        answers = []
+        for activate in [legacy, compiled]:
+            monkeypatch.setattr(RuleContinuation, 'activate', activate)
+            e = get_engine(source)
+            answers.append([r['X'].name() for r in
+                            collect_all(e, 'p(X), nonvar(X).')])
+        assert answers[0] == answers[1], (source, answers)

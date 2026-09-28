@@ -35,17 +35,18 @@ def main():
             with open(path, 'w') as stream:
                 stream.write(source + '\nloop(0) :- !.\n'
                              'loop(N) :- step, M is N - 1, loop(M).\n'
-                             ':- loop(%d), write(done), nl, halt.\n' % args.count)
+                             ':- loop(%d), write(done), nl.\n' % args.count)
             for mode in ['off', 'threshold=200']:
                 samples = [[], []]
                 for repeat in range(args.rounds):
                     for index in ([0, 1] if repeat % 2 == 0 else [1, 0]):
                         start = time.monotonic()
                         result = subprocess.run([executables[index], '--jit', mode, path],
-                                                input=b'', stdout=subprocess.PIPE,
+                                                input=b'halt.\n', stdout=subprocess.PIPE,
                                                 stderr=subprocess.PIPE, check=True)
                         elapsed = time.monotonic() - start
-                        assert result.stdout.strip() == b'done', (result.stdout, result.stderr)
+                        assert result.stdout.startswith(b'done\n'), (result.stdout, result.stderr)
+                        assert b'ERROR' not in result.stdout, result.stdout
                         assert not result.stderr, result.stderr
                         samples[index].append(elapsed)
                 old, new = [statistics.median(values) for values in samples]
