@@ -8,7 +8,8 @@ from prolog.interpreter.test.tool import assert_true, assert_false, collect_all
 @pytest.mark.parametrize('terminal_alternative', [False, True])
 def test_choice_defers_alternative_success_frame(monkeypatch, terminal_alternative):
     from prolog.interpreter.continuation import (
-        OperationContinuation, DoneSuccessContinuation, DoneFailureContinuation)
+        OperationContinuation, DoneSuccessContinuation, DoneFailureContinuation,
+        FailureContinuation)
     from prolog.interpreter.heap import Heap
     from prolog.interpreter.signature import Signature
     from prolog.interpreter.term import Atom
@@ -36,6 +37,8 @@ def test_choice_defers_alternative_success_frame(monkeypatch, terminal_alternati
     assert constructed == [choice.next_pc]
     assert selected.nextcont is caller
     assert failure.nextcont is caller
+    if terminal_alternative:
+        assert type(failure) is FailureContinuation
     # A binding made on the first branch must be undone before resuming.
     local.unify(Atom.newatom('a'), branch_heap)
     assert local.dereference(branch_heap).name() == 'a'
@@ -52,6 +55,38 @@ def test_choice_defers_alternative_success_frame(monkeypatch, terminal_alternati
         assert resumed.pc == choice.alternative_pc
         assert resumed.nextcont is caller
         assert constructed == [choice.next_pc, choice.alternative_pc]
+
+
+def test_terminal_alternative_does_not_retain_locals():
+    import gc
+    import weakref
+    from prolog.interpreter.continuation import (
+        OperationContinuation, DoneSuccessContinuation, DoneFailureContinuation)
+    from prolog.interpreter.heap import Heap
+    from prolog.interpreter.signature import Signature
+    from prolog.interpreter.term import BindingVar
+
+    class TrackedVar(BindingVar):
+        pass
+
+    def pending_choice():
+        e = get_engine('p(X) :- (X = a ; X = b).')
+        rule = e.modulewrapper.current_module.lookup(Signature.getsignature('p', 1)).rulechain
+        rule.operations[0].alternative_pc = len(rule.operations)
+        heap = Heap()
+        local = TrackedVar()
+        local.created_after_choice_point = heap
+        current = OperationContinuation(e, rule, DoneSuccessContinuation(e), [local], 0)
+        selected, failure, branch_heap = current.activate(DoneFailureContinuation(e), heap)
+        # Let the current/selected success frames go away while keeping the
+        # choice pending. There are no trailed bindings retaining the local.
+        return failure, weakref.ref(local)
+
+    failure, local_ref = pending_choice()
+    gc.collect()
+    gc.collect()
+    assert local_ref() is None
+    assert not failure.is_done()
 
 
 def test_conjunction_does_not_clone_whole_body(monkeypatch):
