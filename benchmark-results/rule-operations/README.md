@@ -145,3 +145,11 @@ count override modifies only the repeated query count and expected result
 count in the copied driver. The adapter was adjusted after the first full run
 to attempt both executables even when the first fails; paired memory-limit
 checks were performed separately and recorded.
+
+## Interpreter-only comparison
+
+The same binaries were subsequently measured with `--jit off`, using one
+sample per process and three alternating pairs. All 23 workloads completed;
+the application geometric mean was 4.7% less elapsed time, with both gains and
+regressions. See the [interpreter-only table and raw measurements](nojit/README.md).
+These results precede the disjunction tail-call fix.

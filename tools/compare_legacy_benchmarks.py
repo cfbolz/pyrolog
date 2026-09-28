@@ -22,6 +22,7 @@ def main():
     parser.add_argument('output')
     parser.add_argument('--rounds', type=int, default=3)
     parser.add_argument('--samples', type=int, default=5)
+    parser.add_argument('--jit', choices=['default', 'off'], default='default')
     parser.add_argument('--benchmarks', nargs='*')
     parser.add_argument('--fix-reducer-escapes', action='store_true')
     parser.add_argument('--iterations', type=int, help='override initialize(integer) in selected workloads')
@@ -90,15 +91,18 @@ def main():
                 logpath = os.path.join(output, '%s-%s-%s.log' % (name, repeat, label))
                 row = dict(benchmark=name, round=repeat, version=label,
                            executable=binaries[index], log=logpath,
-                           samples=args.samples, iterations=args.iterations,
+                           samples=args.samples, iterations=args.iterations, jit=args.jit,
                            reducer_escapes_fixed=args.fix_reducer_escapes)
                 start = time.time()
                 oldout, olderr = sys.stdout, sys.stderr
                 with open(logpath, 'w') as log:
                     try:
                         sys.stdout = sys.stderr = log
+                        command = binaries[index]
+                        if args.jit == 'off':
+                            command += ' --jit off'
                         samples = driver.run_single(driver.py.path.local(name + '.pl'),
-                            (binaries[index], 'pyrologtime.pl'), verbose=True)
+                            (command, 'pyrologtime.pl'), verbose=True)
                         row['samples_ms'] = samples
                     except Exception as exc:
                         row['error'] = repr(exc)

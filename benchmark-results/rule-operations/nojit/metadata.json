@@ -1,0 +1,41 @@
+{
+  "after_runtime_commit": "dc6015f",
+  "application_geomean_time_ratio": 0.9534959912441048,
+  "before_commit": "b689794",
+  "binaries": {
+    "/tmp/pyrolog-operations-baseline-c": "cb896ec5f5dd7c8f6829f3532d3c9ecf8107e9824497fa4affa1120aaf7d0f4c",
+    "/tmp/pyrolog-operations-final-c": "4c13bf98a03b73d1895ae995ddefa11c7bd2f57161d2f89f7c8350d9e40e6821"
+  },
+  "cpu": "AMD Ryzen 7 PRO 7840U",
+  "date": "2026-09-28",
+  "jit": "off (--jit off passed to both binaries)",
+  "platform": "Linux-7.0.0-34-generic-x86_64-with-debian-forky-sid",
+  "python": "2.7.18 (99a72243b541, Jun 11 2024, 22:00:18)\n[PyPy 7.3.17-alpha0 with GCC 10.2.1 20210130 (Red Hat 10.2.1-11)]",
+  "rounds": 3,
+  "samples_per_process": 1,
+  "workload_sha256": {
+    "arithmetic.pl": "b80657726a23d45db843143d2d93b59ae1d4857272ca9c630962212f864cc128",
+    "boyer.pl": "798cc7b4bd47bfdeeec14f75bed264fb5e9876e9f9ea8ffb76840e617dfc8915",
+    "chat_parser.pl": "a0fa5a4195dad7c9e2262a21a936f19a9376afe8e91861e9a44d842dae912b83",
+    "crypt.pl": "4a2a1c0a44e85c36988d730654b587eed6d47982b157be50c2d96a617cbe60c4",
+    "deriv.pl": "7f4894470b1e792ebc97544beb955521b605082cdc14f2f2c241c6a46e6f7d74",
+    "iterate.pl": "41904b6a244f7a8cbfde1ef4e922d90476264d4c4bb43a95b05dc72fc385c3a2",
+    "iterate_assert.pl": "3cdb3eb2d7bbdbd971f2cc9377a6a7344563e3735e7b82f782ffe42b6600a3ed",
+    "iterate_call.pl": "fb58980f977d6d6dd6b46fcebf17dff62a23a3f33dcb35498e8291a5a783959a",
+    "iterate_cut.pl": "18c28dbc05221254bacba2495ae4a841c889392a97d70b294650d2191d985b3d",
+    "iterate_exception.pl": "1ac0969033a815d242deeb4924dc1daff380986761dcd0335841916d978b08eb",
+    "iterate_failure.pl": "99683a1436a7eb72c3d2392b16fd859b56591e20a5edf17d95875d33f6cd9acb",
+    "iterate_findall.pl": "d89f52187b21a0f5dabbe01994730b3fe3432eae6ca41477695ec4f7bade79c3",
+    "iterate_if.pl": "6922016d7c9f135878a5504631c7098924d3034260a1b77b858c2f9e688a78aa",
+    "meta_nrev.pl": "2ed7fc0d9d672e1f4da139e57a58d29cb344ac7be597b6754cb20349f0ee5da9",
+    "mu.pl": "a9f66e0094e61b5e309209fb1cee45a80bf94344146544043dac857fc6360bd6",
+    "nrev.pl": "bf8b6f9b7f2d195e44a413109eeb5063e4a8eca8b4871e090780cd1d68c1906c",
+    "poly.pl": "1b88f992ece55c285f841454a0a480632de30cd1aa97653a1535ef016bf25eaf",
+    "primes.pl": "2960417c662d0ce32d787b1a8dcea8bccfd0be3d66c7d0757459c875f5576e95",
+    "qsort.pl": "4ac1f4800668071fded3d040d34b886d341ee7b1cd5e72741bde3f6531dc5b7c",
+    "queens.pl": "6e3bbb926d9e36072f14332482bf492a3c5e99bbdca4b998bdae9bc01315ab42",
+    "reducer.pl": "2e235c3bf711b9d161ed5932af7d2fb65603ed5663fc83c8015e93772e53f8b9",
+    "tak.pl": "04e216f0e2da9043a5e628c9efd9e43d1e866883319ef69e6b9e42527f74455c",
+    "zebra.pl": "6249575968b01c0d45fbe4c505ed352146ea9928e338c2aa9d96a6870f30b478"
+  }
+}
