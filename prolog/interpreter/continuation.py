@@ -410,10 +410,9 @@ class FailureContinuation(object):
         self.undoheap = heap
 
     def fail(self, heap):
-        """ Needs to be called to get the new success continuation.
-        Returns a tuple (next cont, failure cont, heap)
-        """
-        raise NotImplementedError("abstract base class")
+        """Restore the checkpoint and resume the saved success continuation."""
+        heap = heap.revert_upto(self.undoheap, discard_choicepoint=True)
+        return self.nextcont, self.orig_fcont, heap
 
     def cut(self, upto, heap):
         """ Cut away choice points till upto. """
@@ -566,9 +565,14 @@ class OperationContinuation(ContinuationWithRule):
         pc = jit.promote(self.pc)
         operation = rule.operations[pc]
         if isinstance(operation, ChoiceOperation):
-            fcont = OperationFailureContinuation(
-                self.engine, self.nextcont, fcont, heap, rule, self.locals,
-                operation.alternative_pc)
+            if operation.alternative_pc == len(rule.operations):
+                # A return-only alternative needs no invocation state. In
+                # particular, do not keep otherwise dead locals alive here.
+                fcont = FailureContinuation(self.engine, self.nextcont, fcont, heap)
+            else:
+                fcont = OperationFailureContinuation(
+                    self.engine, self.nextcont, fcont, heap, rule, self.locals,
+                    operation.alternative_pc)
             return self.at(operation.next_pc), fcont, heap.branch()
         if isinstance(operation, JumpOperation):
             return self.at(operation.target_pc), fcont, heap
@@ -582,6 +586,7 @@ class OperationFailureContinuation(FailureContinuation):
     _immutable_fields_ = ['rule', 'locals[*]', 'pc']
 
     def __init__(self, engine, nextcont, orig_fcont, heap, rule, locals, pc):
+        assert 0 <= pc < len(rule.operations)
         FailureContinuation.__init__(self, engine, nextcont, orig_fcont, heap)
         self.rule = rule
         self.locals = locals
@@ -589,12 +594,8 @@ class OperationFailureContinuation(FailureContinuation):
 
     def fail(self, heap):
         heap = heap.revert_upto(self.undoheap, discard_choicepoint=True)
-        if self.pc == len(self.rule.operations):
-            nextcont = self.nextcont
-        else:
-            nextcont = OperationContinuation(self.engine, self.rule,
-                                              self.nextcont, self.locals,
-                                              self.pc)
+        nextcont = OperationContinuation(self.engine, self.rule,
+                                         self.nextcont, self.locals, self.pc)
         return nextcont, self.orig_fcont, heap
 
 
