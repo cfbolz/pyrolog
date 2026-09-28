@@ -78,12 +78,12 @@ def test_rule_introspection_and_database_copies():
     assert_true('assertz(p(b)), p(a), p(b), retract(p(b)), p(a).', e)
 
 
-def test_compiler_flattens_only_conjunction():
+def test_compiler_keeps_meta_calls_opaque():
     from prolog.interpreter.operations import compile_body
     from prolog.interpreter.parsing import parse_query_term
-    body = parse_query_term('(a, b), (c ; d), call((e, f)).')
+    body = parse_query_term('(a, b), call((e, f)).')
     code = compile_body(body)
-    assert [op.template.signature().name for op in code] == ['a', 'b', ';', 'call']
+    assert [op.template.signature().name for op in code] == ['a', 'b', 'call']
     assert compile_body(None) == []
 
 

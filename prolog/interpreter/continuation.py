@@ -552,15 +552,34 @@ class OperationContinuation(ContinuationWithRule):
         self.locals = locals
         self.pc = pc
 
+    def at(self, pc):
+        if pc == len(self.rule.operations):
+            return self.nextcont
+        return OperationContinuation(self.engine, self.rule, self.nextcont,
+                                     self.locals, pc)
+
     def activate(self, fcont, heap):
+        from prolog.interpreter.operations import (
+            CallOperation, ChoiceOperation, JumpOperation)
         rule = jit.promote(self.rule)
         pc = jit.promote(self.pc)
-        query = rule.operations[pc].instantiate(heap, self.locals)
-        nextcont = self.nextcont
-        if pc + 1 < len(rule.operations):
-            nextcont = OperationContinuation(self.engine, rule, nextcont,
-                                             self.locals, pc + 1)
-        return self.engine.call(query, rule, nextcont, fcont, heap)
+        operation = rule.operations[pc]
+        if isinstance(operation, ChoiceOperation):
+            alternative = self.at(operation.alternative_pc)
+            fcont = OperationFailureContinuation(self.engine, alternative,
+                                                  fcont, heap)
+            return self.at(pc + 1), fcont, heap.branch()
+        if isinstance(operation, JumpOperation):
+            return self.at(operation.target_pc), fcont, heap
+        assert isinstance(operation, CallOperation)
+        query = operation.instantiate(heap, self.locals)
+        return self.engine.call(query, rule, self.at(pc + 1), fcont, heap)
+
+
+class OperationFailureContinuation(FailureContinuation):
+    def fail(self, heap):
+        heap = heap.revert_upto(self.undoheap, discard_choicepoint=True)
+        return self.nextcont, self.orig_fcont, heap
 
 
 class CutScopeNotifier(Continuation):

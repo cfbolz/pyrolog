@@ -1,4 +1,4 @@
-"""Immutable rule code; only conjunction has a compiled control-flow form.
+"""Immutable rule code; conjunction and ordinary disjunction have compiled control flow.
 
 Other goals (including control builtins) remain opaque call templates. Their
 arguments are instantiated on demand using the invocation's numbered locals.
@@ -8,9 +8,15 @@ from prolog.interpreter.term import Callable, NumberedVar
 from prolog.interpreter.signature import Signature
 
 andsig = Signature.getsignature(',', 2)
+orsig = Signature.getsignature(';', 2)
+ifsig = Signature.getsignature('->', 2)
 
 
-class CallOperation(object):
+class Operation(object):
+    pass
+
+
+class CallOperation(Operation):
     _immutable_fields_ = ['template']
 
     def __init__(self, template):
@@ -20,10 +26,29 @@ class CallOperation(object):
         return self.template.copy_standardize_apart(heap, locals)[0]
 
 
+class ChoiceOperation(Operation):
+    _immutable_fields_ = ['alternative_pc']
+
+    def __init__(self):
+        self.alternative_pc = 0
+
+
+class JumpOperation(Operation):
+    _immutable_fields_ = ['target_pc']
+
+    def __init__(self):
+        self.target_pc = 0
+
+
 def compile_body(body):
     operations = []
-    if body is None:
-        return operations[:]
+    if body is not None:
+        _compile_body(body, operations)
+    # Immutable RPython array fields cannot contain a resizable list.
+    return operations[:]
+
+
+def _compile_body(body, operations):
     pending = [body]
     while pending:
         goal = pending.pop()
@@ -37,6 +62,20 @@ def compile_body(body):
                 pending.append(right)
                 pending.append(left)
                 continue
+        if isinstance(goal, Callable) and goal.signature().eq(orsig):
+            left = goal.argument_at(0)
+            right = goal.argument_at(1)
+            # Variable operands need the existing builtin's eager validation.
+            # A -> B ; C is a different control construct, not ordinary choice.
+            if (isinstance(left, Callable) and isinstance(right, Callable) and
+                    not left.signature().eq(ifsig)):
+                choice = ChoiceOperation()
+                operations.append(choice)
+                _compile_body(left, operations)
+                jump = JumpOperation()
+                operations.append(jump)
+                choice.alternative_pc = len(operations)
+                _compile_body(right, operations)
+                jump.target_pc = len(operations)
+                continue
         operations.append(CallOperation(goal))
-    # Immutable RPython array fields cannot contain a resizable list.
-    return operations[:]
