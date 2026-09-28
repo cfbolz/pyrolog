@@ -137,4 +137,36 @@ def test_discard_useless_env_suffix():
     # singletons body: E (-1, XXX currently not optimized)
     # just in body: D    (needs index at end of env, appended after matching head)
     func = e.modulewrapper.current_module.lookup(Signature.getsignature("f", 4))
+    rule = func.rulechain
+    query, = e.parse('f(h(a), a, b, c).')[0]
+    shared = rule.unify_and_standardize_apart_head(Heap(), query)
+    assert rule.env_size_shared == 1
+    assert rule.env_size_body > rule.env_size_shared
+    assert len(shared) == 1
+    assert shared[0].dereference(None).name() == 'b'
+
+
+def test_body_only_locals_do_not_enlarge_rule_continuation(monkeypatch):
+    from prolog.interpreter.continuation import RuleContinuation
+    from prolog.interpreter.test.tool import assert_true, collect_all
+    activate = RuleContinuation.activate
+    seen = []
+
+    def record(self, fcont, heap):
+        if self.rule.signature.name == 'p':
+            seen.append(self._get_size_list())
+            assert self._get_size_list() == self.rule.env_size_shared
+        return activate(self, fcont, heap)
+
+    monkeypatch.setattr(RuleContinuation, 'activate', record)
+    # Exercise the arbitrary-size fallback as well as small inline frames.
+    for count in [1, 4, 12]:
+        bindings = ', '.join('V%d = X' % i for i in range(count))
+        checks = ', '.join('V%d == X' % i for i in range(count))
+        e = get_engine('choice(a). choice(b). p(X) :- choice(X), ' +
+                       bindings + ', ' + checks + '.')
+        assert [r['X'].name() for r in collect_all(e, 'p(X).')] == ['a', 'b']
+    e = get_engine('p :- X = a, X == a.')
+    assert_true('p.', e)
+    assert seen == [1, 1, 1, 0]
     
