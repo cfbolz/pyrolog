@@ -2,7 +2,7 @@
 
 Other goals (including control builtins) remain opaque call templates. Their
 arguments are instantiated on demand using the invocation's numbered locals.
-The original body remains available for clause/2 and database operations.
+The original body remains available for database operations.
 """
 from prolog.interpreter.term import Callable, NumberedVar
 from prolog.interpreter.signature import Signature
@@ -38,4 +38,5 @@ def compile_body(body):
                 pending.append(left)
                 continue
         operations.append(CallOperation(goal))
+    # Immutable RPython array fields cannot contain a resizable list.
     return operations[:]

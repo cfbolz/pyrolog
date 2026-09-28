@@ -76,3 +76,49 @@ def test_rule_introspection_and_database_copies():
     assert_true('retract((p(X) :- B)), B = (X = a, X == a), '
                 'assertz((p(X) :- B)).', e)
     assert_true('assertz(p(b)), p(a), p(b), retract(p(b)), p(a).', e)
+
+
+def test_compiler_flattens_only_conjunction():
+    from prolog.interpreter.operations import compile_body
+    from prolog.interpreter.parsing import parse_query_term
+    body = parse_query_term('(a, b), (c ; d), call((e, f)).')
+    code = compile_body(body)
+    assert [op.template.signature().name for op in code] == ['a', 'b', ';', 'call']
+    assert compile_body(None) == []
+
+
+def test_disjunction_does_not_instantiate_control_tree(monkeypatch):
+    from prolog.interpreter.operations import CallOperation
+    instantiate = CallOperation.instantiate
+    def record(self, heap, locals):
+        assert self.template.signature().name != ';'
+        return instantiate(self, heap, locals)
+    monkeypatch.setattr(CallOperation, 'instantiate', record)
+    e = get_engine('p(X) :- (X = a ; X = b), X == b.')
+    assert_true('p(b).', e)
+
+
+def test_nested_disjunction_restores_shared_locals():
+    e = get_engine('''
+        p(X, Y) :- (X = a, (Y = c ; Y = d) ; X = b, Y = e),
+                   Z = pair(X, Y), Z == pair(X, Y).
+    ''')
+    results = collect_all(e, 'p(X, Y).')
+    assert [(r['X'].name(), r['Y'].name()) for r in results] == [
+        ('a', 'c'), ('a', 'd'), ('b', 'e')]
+
+
+def test_cut_inside_disjunction_discards_other_branch_and_clause():
+    e = get_engine('''
+        p(X) :- (X = a, ! ; X = b), true.
+        p(c).
+        q(X) :- (X = a, !, fail ; X = b), true.
+        q(c).
+    ''')
+    assert [r['X'].name() for r in collect_all(e, 'p(X).')] == ['a']
+    assert_false('q(_).', e)
+
+
+def test_if_then_else_remains_opaque():
+    e = get_engine('p(X) :- (true -> X = a ; X = b), X == a.')
+    assert [r['X'].name() for r in collect_all(e, 'p(X).')] == ['a']
