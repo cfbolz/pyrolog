@@ -2,6 +2,10 @@
 
 A Prolog interpreter in RPython.
 
+Run `./pyrolog-c --help` for command-line usage. Start the interactive console
+with `./pyrolog-c`, or use `./pyrolog-c FILE` to consult a source file first.
+Use `./pyrolog-c --jit help` to list JIT parameters and their defaults.
+
 Arithmetic `/` always returns a float, including for exact integer quotients:
 `1 / 2` is `0.5` and `4 / 2` is `2.0`. Use `//` for integer division,
 which truncates toward zero: `-5 // 2` is `-2`.

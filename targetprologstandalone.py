@@ -17,6 +17,34 @@ from rpython.rlib import jit
 e = Engine(load_system=True)
 term.DEBUG = False
 
+HELP_TEXT = """Usage: %s [options] [FILE]
+
+Start the interactive Prolog console. If FILE is given, consult it first.
+
+Options:
+  -h, --help    Show this help message and exit.
+  --jit PARAMS  Set JIT parameters (comma-separated NAME=VALUE, or off).
+  --jit help    Show JIT parameters and their defaults, then exit.
+
+Enter halt. or press Ctrl-D to exit the console.
+"""
+
+
+def _make_jit_help():
+    lines = ['Advanced JIT options: a comma-separated list of NAME=VALUE:', '']
+    for name, value in sorted(jit.PARAMETERS.items()):
+        lines.append('  %s=VALUE' % name)
+        lines.append('    %s (default %s)' % (jit.PARAMETER_DOCS[name], value))
+        lines.append('')
+    lines.extend(['  off', '    Turn off the JIT.',
+                  '  help', '    Show this help message and exit.'])
+    return '\n'.join(lines)
+
+
+# Build this before translation: PARAMETERS contains both integers and strings.
+JIT_HELP_TEXT = _make_jit_help()
+
+
 def entry_point(argv):
     e.clocks.startup()
     # XXX crappy argument handling
@@ -26,9 +54,17 @@ def entry_point(argv):
                 print "missing argument after --jit"
                 return 2
             jitarg = argv[i + 1]
+            if jitarg == "help":
+                print JIT_HELP_TEXT
+                return 0
             del argv[i:i+2]
             jit.set_user_param(jitdriver, jitarg)
             break
+
+    for arg in argv[1:]:
+        if arg == "--help" or arg == "-h":
+            print HELP_TEXT % argv[0]
+            return 0
 
     if len(argv) > 2:
         print "too many arguments"
