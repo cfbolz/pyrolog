@@ -1,4 +1,4 @@
-:- module(system, [term_expand/2]).
+:- module(system, [term_expand/2, mode/1]).
 
 :- use_module(list).
 :- use_module(dcg).
@@ -8,6 +8,9 @@
 :- use_module(freeze).
 :- use_module(when).
 :- use_module(coroutines).
+
+% Accept advisory mode declarations without using them for optimization.
+mode(_).
 
 term_expand(A, A) :-
 	A \= (_X --> _Y).
