@@ -15,11 +15,11 @@ class RuleIdentity(object):
 
 class Rule(object):
     _immutable_ = True
-    _immutable_fields_ = ["headargs[*]", "groundargs[*]"]
+    _immutable_fields_ = ["headargs[*]", "groundargs[*]", "operations[*]"]
     _attrs_ = ['next', 'head', 'headargs', 'groundargs', 'contains_cut',
                'body', 'env_size_shared', 'env_size_body', 'env_size_head',
                'signature', 'module', 'file_name',
-               'line_range', 'source', 'identity']
+               'line_range', 'source', 'identity', 'operations']
     unrolling_attrs = unroll.unrolling_iterable(_attrs_)
 
     def __init__(self, head, body, module, next = None):
@@ -46,6 +46,8 @@ class Rule(object):
         else:
             self.body = None
         memo.assign_numbers()
+        from prolog.interpreter.operations import compile_body
+        self.operations = compile_body(self.body)
         self.env_size_body = memo.nbody
         self.env_size_head = memo.nhead
         self.env_size_shared = memo.nshared

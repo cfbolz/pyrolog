@@ -526,15 +526,42 @@ class RuleContinuation(ContinuationWithRule):
     def activate(self, fcont, heap):
         nextcont = self.nextcont
         rule = jit.promote(self.rule)
-        nextcall = rule.clone_body_from_rulecont(heap, self)
-        if nextcall is not None:
-            return self.engine.call(nextcall, self.rule, nextcont, fcont, heap)
-        else:
-            cont = nextcont
+        if not rule.operations:
+            return nextcont, fcont, heap
+        locals = [None] * rule.env_size_body
+        for i in range(rule.env_size_shared):
+            locals[i] = self._get_list(i)
+        # Allocate before any body goal can create a choice point. Lazily
+        # allocating into a shared array would retain young, untrailed variables
+        # when an earlier goal is retried.
+        for i in range(rule.env_size_body):
+            if locals[i] is None:
+                locals[i] = heap.newvar()
+        cont = OperationContinuation(self.engine, rule, nextcont, locals, 0)
         return cont, fcont, heap
 
     def __repr__(self):
         return "<RuleContinuation rule=%r query=%r>" % (self.rule, self.query)
+
+class OperationContinuation(ContinuationWithRule):
+    """A persistent program counter; choice points may reuse this continuation."""
+    _immutable_fields_ = ['locals[*]', 'pc']
+
+    def __init__(self, engine, rule, nextcont, locals, pc):
+        ContinuationWithRule.__init__(self, engine, nextcont, rule)
+        self.locals = locals
+        self.pc = pc
+
+    def activate(self, fcont, heap):
+        rule = jit.promote(self.rule)
+        pc = jit.promote(self.pc)
+        query = rule.operations[pc].instantiate(heap, self.locals)
+        nextcont = self.nextcont
+        if pc + 1 < len(rule.operations):
+            nextcont = OperationContinuation(self.engine, rule, nextcont,
+                                             self.locals, pc + 1)
+        return self.engine.call(query, rule, nextcont, fcont, heap)
+
 
 class CutScopeNotifier(Continuation):
     def __init__(self, engine, nextcont, fcont_after_cut):
