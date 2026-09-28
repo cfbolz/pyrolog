@@ -236,8 +236,7 @@ def ensure_atomic(obj):
     return obj
 
 def is_atomic(obj):
-    return (isinstance(obj, term.Atom) or isinstance(obj, term.Float) or 
-            isinstance(obj, term.Number))
+    return isinstance(obj, term.Atom) or isinstance(obj, term.Numeric)
 
 def is_term(obj):
     return isinstance(obj, term.Callable) and obj.argument_count() > 0
