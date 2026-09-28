@@ -23,7 +23,7 @@ class CallOperation(object):
 def compile_body(body):
     operations = []
     if body is None:
-        return operations
+        return operations[:]
     pending = [body]
     while pending:
         goal = pending.pop()
@@ -32,10 +32,10 @@ def compile_body(body):
             right = goal.argument_at(1)
             # Keep malformed conjunctions opaque: impl_and checks its operands
             # before executing the left goal, even when that goal would fail.
-            if (isinstance(left, (Callable, NumberedVar)) and
-                    isinstance(right, (Callable, NumberedVar))):
+            if ((isinstance(left, Callable) or isinstance(left, NumberedVar)) and
+                    (isinstance(right, Callable) or isinstance(right, NumberedVar))):
                 pending.append(right)
                 pending.append(left)
                 continue
         operations.append(CallOperation(goal))
-    return operations
+    return operations[:]
