@@ -2,6 +2,96 @@ import pytest
 from prolog.interpreter.heap import Heap
 from prolog.interpreter.term import AttVar, BindingVar, Callable, Number, Atom, AttMap
 
+
+def make_forwarding_chain(parent, length):
+    current = parent.branch()
+    removed = []
+    for _ in range(length):
+        next_heap = current.branch()
+        removed.append(current)
+        assert current.discard(next_heap) is next_heap
+        current = next_heap
+    return removed, current
+
+
+def test_find_not_discarded_compresses_forwarding_chain():
+    root = Heap()
+    removed, current = make_forwarding_chain(root, 100)
+    assert removed[0]._find_not_discarded() is current
+    assert all(h.prev is current for h in removed)
+    assert current.prev is root
+    assert not current.discarded
+
+    # The representative can itself be removed by a later cut.
+    next_heap = current.branch()
+    current.discard(next_heap)
+    assert removed[0]._find_not_discarded() is next_heap
+    assert removed[0].prev is next_heap
+    assert next_heap.prev is root
+
+
+def test_find_not_discarded_preserves_retained_heaps():
+    root = Heap()
+    x, y = root.newvar(), root.newvar()
+    older = root.branch()
+    x.unify(Number(1), older)
+    removed, retained = make_forwarding_chain(older, 10)
+    y.unify(Number(2), retained)
+    current = retained.branch().branch()
+    # Non-adjacent discards retain their trails and backward parent links.
+    assert retained.discard(current) is retained
+    assert older.discard(current) is older
+    assert retained.discarded and retained.i >= 0
+    assert older.discarded and older.i >= 0
+
+    # Lookup still skips every marked heap, but compression stops at the
+    # first retained heap rather than bypassing its undo records.
+    assert removed[0]._find_not_discarded() is root
+    assert all(h.prev is retained for h in removed)
+    assert retained.prev is older
+    assert older.prev is root
+    current.revert_upto(root)
+    assert x.binding is None
+    assert y.binding is None
+
+
+def test_find_not_discarded_during_discard(monkeypatch):
+    root = Heap()
+    removed, older = make_forwarding_chain(root, 10)
+    current = older.branch()
+    move = Heap._discard_move_bindings_to_current
+    seen = []
+
+    def inspect(self, target):
+        assert self is older
+        assert self.discarded and self.i >= 0
+        assert removed[0]._find_not_discarded() is root
+        assert all(h.prev is older for h in removed)
+        assert older.prev is root
+        seen.append(True)
+        return move(self, target)
+
+    monkeypatch.setattr(Heap, '_discard_move_bindings_to_current', inspect)
+    older.discard(current)
+    assert seen == [True]
+    assert removed[0]._find_not_discarded() is current
+    assert removed[0].prev is current
+
+
+def test_nested_cuts_preserve_retained_heap_undo_records():
+    from prolog.interpreter.parsing import get_engine
+    from prolog.interpreter.test.tool import assert_true
+    e = get_engine('''
+        inner(X,V) :- X=a, V=f(_), (true;true), catch(true,_,true), !.
+        middle(X,Y,V) :- Y=b, (true;true), inner(X,V), !.
+        outer(X,Y,Z,V) :- Z=c, (true;true), middle(X,Y,V), !,
+                         V=f(W), W=d.
+    ''')
+    # Compressing retained heaps loses Z's undo record and leaves Z=c.
+    assert_true('(outer(X,Y,Z,V), fail ; '
+                'var(X), var(Y), var(Z), var(V)).', e)
+
+
 def test_heap():
     h1 = Heap()
     v1 = h1.newvar()
