@@ -523,6 +523,7 @@ class RuleContinuation(ContinuationWithRule):
     def __init__(self, engine, nextcont, rule):
         ContinuationWithRule.__init__(self, engine, nextcont, rule)
 
+    @jit.unroll_safe
     def activate(self, fcont, heap):
         nextcont = self.nextcont
         rule = jit.promote(self.rule)
