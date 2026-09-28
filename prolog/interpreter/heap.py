@@ -24,7 +24,20 @@ class Heap(object):
     # interface that term.py uses
     def _find_not_discarded(self):
         while self is not None and self.discarded:
-            self = self.prev
+            if self.i != -1:
+                # A marked heap may still own undo records, or be in the
+                # middle of discard(). Its prev is a backtracking parent.
+                self = self.prev
+                continue
+            start = self
+            while self is not None and self.discarded and self.i == -1:
+                self = self.prev
+            # Only this run has forwarding links. Keep its first retained
+            # heap as the boundary, even if lookup continues past it.
+            while start is not self:
+                next_heap = start.prev
+                start.prev = self
+                start = next_heap
         return self
 
     def add_trail_atts(self, attvar, attr_name):
