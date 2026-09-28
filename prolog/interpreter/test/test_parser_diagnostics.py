@@ -6,10 +6,10 @@ from prolog.interpreter.termparser import Parser
 from prolog.interpreter.syntaxerror import SyntaxError
 
 
-def diagnostic(source):
+def diagnostic(source, operators=default_operator_table):
     tokens = UnicodeLexer().tokenize(source, eof=True)
     with pytest.raises(SyntaxError) as exc:
-        Parser(tokens, default_operator_table).parse()
+        Parser(tokens, operators).parse()
     return exc.value
 
 
@@ -280,7 +280,12 @@ def test_extra_separator_after_list_tail(source):
     ('- - X.', 0, 2, 'right'),
 ])
 def test_precedence_clash_identifies_both_operators(source, primary, secondary, side):
-    exc = diagnostic(source)
+    from prolog.interpreter.parsing import make_operator_table, default_operations
+    operators = make_operator_table(default_operations)
+    # Default unary minus is fy and permits repetition. Use an explicit fx
+    # declaration to exercise the right-operand precedence diagnostic.
+    operators.add('-', 500, 'fx')
+    exc = diagnostic(source, operators)
     assert exc.kind == 'precedence_clash'
     assert exc.primary.start.i == primary
     assert exc.secondary.start.i == secondary

@@ -15,6 +15,18 @@ def is_64_bit():
     return sys.maxint > 2147483647
 
 
+@pytest.mark.parametrize('goal', [
+    'X is - - 3, X =:= 3',
+    'X is + + 3, X =:= 3',
+    'X is \\ \\ 3, X =:= 3',
+    'X is \\1*2, X =:= -4',
+    'X is 1+2 xor 3, X =:= 2',
+    'X is 1 xor 2*3, X =:= 9',
+])
+def test_default_operator_precedence_in_arithmetic(goal):
+    assert_true(goal + '.')
+
+
 @pytest.mark.parametrize('left, right, expected', [
     (1, 2, 0.5), (4, 2, 2.0), (0, 2, 0.0),
     (-1, 2, -0.5), (1, -2, -0.5), (-4, -2, 2.0),

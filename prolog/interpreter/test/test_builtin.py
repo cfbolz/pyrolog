@@ -555,7 +555,8 @@ def test_is():
 def test_parser_access():
     assert_true("current_op(200, xfx, **).")
     f = collect_all(Engine(), "current_op(200, Form, X).")
-    assert len(f) == 2
+    assert sorted((row['Form'].name(), row['X'].name()) for row in f) == [
+        ('fy', '+'), ('fy', '-'), ('fy', '\\'), ('xfx', '**'), ('xfy', '^')]
     e = get_engine("""
         foo(a, b).
     """)

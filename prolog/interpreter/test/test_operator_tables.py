@@ -6,7 +6,7 @@ def test_module_operator_tables_are_independent():
     first.operators.add('+', 350, 'xfy')
     assert first.operators.infix_ops['+'].precedence == 350
     assert second.operators.infix_ops['+'].precedence == 500
-    assert first.operators.prefix_ops['+'].precedence == 500
+    assert first.operators.prefix_ops['+'].precedence == 200
 
 
 def test_remove_operator_by_kind():
@@ -24,6 +24,6 @@ def test_operator_enumeration():
     table.add('testop', 400, 'xf')
     found = [(op.name, op.precedence, op.form) for op in table.all_operators()]
     assert ('+', 500, 'yfx') in found
-    assert ('+', 500, 'fx') in found
+    assert ('+', 200, 'fy') in found
     assert ('testop', 400, 'xf') in found
     assert len(found) == len(set(found))
