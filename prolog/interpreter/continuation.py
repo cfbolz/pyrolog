@@ -410,10 +410,9 @@ class FailureContinuation(object):
         self.undoheap = heap
 
     def fail(self, heap):
-        """ Needs to be called to get the new success continuation.
-        Returns a tuple (next cont, failure cont, heap)
-        """
-        raise NotImplementedError("abstract base class")
+        """Restore the checkpoint and resume the saved success continuation."""
+        heap = heap.revert_upto(self.undoheap, discard_choicepoint=True)
+        return self.nextcont, self.orig_fcont, heap
 
     def cut(self, upto, heap):
         """ Cut away choice points till upto. """
@@ -523,18 +522,82 @@ class RuleContinuation(ContinuationWithRule):
     def __init__(self, engine, nextcont, rule):
         ContinuationWithRule.__init__(self, engine, nextcont, rule)
 
+    @jit.unroll_safe
     def activate(self, fcont, heap):
         nextcont = self.nextcont
         rule = jit.promote(self.rule)
-        nextcall = rule.clone_body_from_rulecont(heap, self)
-        if nextcall is not None:
-            return self.engine.call(nextcall, self.rule, nextcont, fcont, heap)
-        else:
-            cont = nextcont
+        if not rule.operations:
+            return nextcont, fcont, heap
+        locals = [None] * rule.env_size_body
+        for i in range(rule.env_size_shared):
+            locals[i] = self._get_list(i)
+        # Allocate before any body goal can create a choice point. Lazily
+        # allocating into a shared array would retain young, untrailed variables
+        # when an earlier goal is retried.
+        for i in range(rule.env_size_body):
+            if locals[i] is None:
+                locals[i] = heap.newvar()
+        cont = OperationContinuation(self.engine, rule, nextcont, locals, 0)
         return cont, fcont, heap
 
     def __repr__(self):
         return "<RuleContinuation rule=%r query=%r>" % (self.rule, self.query)
+
+class OperationContinuation(ContinuationWithRule):
+    """A persistent program counter; choice points may reuse this continuation."""
+    _immutable_fields_ = ['locals[*]', 'pc']
+
+    def __init__(self, engine, rule, nextcont, locals, pc):
+        ContinuationWithRule.__init__(self, engine, nextcont, rule)
+        self.locals = locals
+        self.pc = pc
+
+    def at(self, pc):
+        if pc == len(self.rule.operations):
+            return self.nextcont
+        return OperationContinuation(self.engine, self.rule, self.nextcont,
+                                     self.locals, pc)
+
+    def activate(self, fcont, heap):
+        from prolog.interpreter.operations import (
+            CallOperation, ChoiceOperation, JumpOperation)
+        rule = jit.promote(self.rule)
+        pc = jit.promote(self.pc)
+        operation = rule.operations[pc]
+        if isinstance(operation, ChoiceOperation):
+            if operation.alternative_pc == len(rule.operations):
+                # A return-only alternative needs no invocation state. In
+                # particular, do not keep otherwise dead locals alive here.
+                fcont = FailureContinuation(self.engine, self.nextcont, fcont, heap)
+            else:
+                fcont = OperationFailureContinuation(
+                    self.engine, self.nextcont, fcont, heap, rule, self.locals,
+                    operation.alternative_pc)
+            return self.at(operation.next_pc), fcont, heap.branch()
+        if isinstance(operation, JumpOperation):
+            return self.at(operation.target_pc), fcont, heap
+        assert isinstance(operation, CallOperation)
+        query = operation.instantiate(heap, self.locals)
+        return self.engine.call(query, rule, self.at(operation.next_pc), fcont, heap)
+
+
+class OperationFailureContinuation(FailureContinuation):
+    """Save an alternative's state without allocating its success frame yet."""
+    _immutable_fields_ = ['rule', 'locals[*]', 'pc']
+
+    def __init__(self, engine, nextcont, orig_fcont, heap, rule, locals, pc):
+        assert 0 <= pc < len(rule.operations)
+        FailureContinuation.__init__(self, engine, nextcont, orig_fcont, heap)
+        self.rule = rule
+        self.locals = locals
+        self.pc = pc
+
+    def fail(self, heap):
+        heap = heap.revert_upto(self.undoheap, discard_choicepoint=True)
+        nextcont = OperationContinuation(self.engine, self.rule,
+                                         self.nextcont, self.locals, self.pc)
+        return nextcont, self.orig_fcont, heap
+
 
 class CutScopeNotifier(Continuation):
     def __init__(self, engine, nextcont, fcont_after_cut):
