@@ -17,20 +17,22 @@ class Operation(object):
 
 
 class CallOperation(Operation):
-    _immutable_fields_ = ['template']
+    _immutable_fields_ = ['template', 'next_pc']
 
     def __init__(self, template):
         self.template = template
+        self.next_pc = 0
 
     def instantiate(self, heap, locals):
         return self.template.copy_standardize_apart(heap, locals)[0]
 
 
 class ChoiceOperation(Operation):
-    _immutable_fields_ = ['alternative_pc']
+    _immutable_fields_ = ['alternative_pc', 'next_pc']
 
     def __init__(self):
         self.alternative_pc = 0
+        self.next_pc = 0
 
 
 class JumpOperation(Operation):
@@ -44,8 +46,34 @@ def compile_body(body):
     operations = []
     if body is not None:
         _compile_body(body, operations)
+    _thread_jumps(operations)
     # Immutable RPython array fields cannot contain a resizable list.
     return operations[:]
+
+
+def _skip_jump(operations, pc):
+    if pc < len(operations):
+        operation = operations[pc]
+        if isinstance(operation, JumpOperation):
+            return operation.target_pc
+    return pc
+
+
+def _thread_jumps(operations):
+    # All edges go forward. Resolve from the end, so even nested branch exits
+    # reach their final destination with one lookup. A tail call must receive
+    # the caller's continuation, not a frame that merely executes a jump.
+    for pc in range(len(operations) - 1, -1, -1):
+        operation = operations[pc]
+        if isinstance(operation, JumpOperation):
+            operation.target_pc = _skip_jump(operations, operation.target_pc)
+        elif isinstance(operation, ChoiceOperation):
+            operation.next_pc = _skip_jump(operations, pc + 1)
+            operation.alternative_pc = _skip_jump(operations,
+                                                  operation.alternative_pc)
+        else:
+            assert isinstance(operation, CallOperation)
+            operation.next_pc = _skip_jump(operations, pc + 1)
 
 
 def _compile_body(body, operations):

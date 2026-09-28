@@ -569,12 +569,12 @@ class OperationContinuation(ContinuationWithRule):
             alternative = self.at(operation.alternative_pc)
             fcont = OperationFailureContinuation(self.engine, alternative,
                                                   fcont, heap)
-            return self.at(pc + 1), fcont, heap.branch()
+            return self.at(operation.next_pc), fcont, heap.branch()
         if isinstance(operation, JumpOperation):
             return self.at(operation.target_pc), fcont, heap
         assert isinstance(operation, CallOperation)
         query = operation.instantiate(heap, self.locals)
-        return self.engine.call(query, rule, self.at(pc + 1), fcont, heap)
+        return self.engine.call(query, rule, self.at(operation.next_pc), fcont, heap)
 
 
 class OperationFailureContinuation(FailureContinuation):

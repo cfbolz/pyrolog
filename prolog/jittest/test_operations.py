@@ -38,3 +38,14 @@ class TestOperations(BaseTestPyrologC):
                        M is N - 1, loop(M).
         ''', 'loop(3000).')
         assert 'yes' in log.result
+
+    def test_tail_branch_does_not_allocate_return_frames(self):
+        log = self.run_and_check('''
+            loop(0) :- !.
+            loop(N) :- ((N > 0, !, M is N - 1, loop(M) ; fail) ; fail).
+        ''', 'loop(3000).')
+        assert 'yes' in log.result
+        loop, = log.filter_loops('loop/1')
+        assert not any(op.name == 'setfield_gc' and
+                       'OperationContinuation' in (op.descr or '')
+                       for op in loop.allops())
