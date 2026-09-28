@@ -2,6 +2,21 @@ from prolog.jittest.support import BaseTestPyrologC
 
 
 class TestOperations(BaseTestPyrologC):
+    def test_pending_choices_do_not_allocate_alternative_success_frames(self):
+        log = self.run_and_check('''
+            loop(0) :- !.
+            loop(N) :- (M is N - 1, loop(M) ; fail).
+        ''', 'loop(500).')
+        assert 'yes' in log.result
+        loop, = log.filter_loops('loop/1')
+        stores = [op for op in loop.allops() if op.name == 'setfield_gc']
+        # The alternatives really escape: they remain pending through the
+        # recursive call. Only the selected branch needs a success frame now.
+        assert any('FailureContinuation.inst_orig_fcont' in (op.descr or '')
+                   for op in stores)
+        assert not any('OperationContinuation.' in (op.descr or '')
+                       for op in stores)
+
     def test_meta_append_continuations_have_no_body_only_slots(self):
         from rpython.tool import logparser
         from rpython.tool.jitlogparser.parser import SimpleParser

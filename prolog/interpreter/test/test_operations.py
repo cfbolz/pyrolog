@@ -1,7 +1,57 @@
 """Rule operations: execution must preserve sharing across calls and retries."""
+import pytest
 from prolog.interpreter.parsing import get_engine
 from prolog.interpreter.function import Rule
 from prolog.interpreter.test.tool import assert_true, assert_false, collect_all
+
+
+@pytest.mark.parametrize('terminal_alternative', [False, True])
+def test_choice_defers_alternative_success_frame(monkeypatch, terminal_alternative):
+    from prolog.interpreter.continuation import (
+        OperationContinuation, DoneSuccessContinuation, DoneFailureContinuation)
+    from prolog.interpreter.heap import Heap
+    from prolog.interpreter.signature import Signature
+    from prolog.interpreter.term import Atom
+    e = get_engine('p(X) :- (X = a ; X = b), X == X.')
+    rule = e.modulewrapper.current_module.lookup(Signature.getsignature('p', 1)).rulechain
+    choice = rule.operations[0]
+    if terminal_alternative:
+        # Exercise at(end)'s direct return as well as an ordinary alternative.
+        choice.alternative_pc = len(rule.operations)
+    heap = Heap()
+    local = heap.newvar()
+    locals = [local]
+    caller = DoneSuccessContinuation(e)
+    original_failure = DoneFailureContinuation(e)
+    current = OperationContinuation(e, rule, caller, locals, 0)
+    constructed = []
+    init = OperationContinuation.__init__
+
+    def record(self, *args):
+        init(self, *args)
+        constructed.append(self.pc)
+
+    monkeypatch.setattr(OperationContinuation, '__init__', record)
+    selected, failure, branch_heap = current.activate(original_failure, heap)
+    assert constructed == [choice.next_pc]
+    assert selected.nextcont is caller
+    assert failure.nextcont is caller
+    # A binding made on the first branch must be undone before resuming.
+    local.unify(Atom.newatom('a'), branch_heap)
+    assert local.dereference(branch_heap).name() == 'a'
+    resumed, next_failure, restored_heap = failure.fail(branch_heap)
+    assert restored_heap is heap
+    assert local.binding is None
+    assert next_failure is original_failure
+    if terminal_alternative:
+        assert resumed is caller
+        assert constructed == [choice.next_pc]
+    else:
+        assert resumed.rule is rule
+        assert resumed.locals is locals
+        assert resumed.pc == choice.alternative_pc
+        assert resumed.nextcont is caller
+        assert constructed == [choice.next_pc, choice.alternative_pc]
 
 
 def test_conjunction_does_not_clone_whole_body(monkeypatch):
