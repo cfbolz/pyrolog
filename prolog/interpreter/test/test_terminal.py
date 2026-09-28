@@ -82,6 +82,55 @@ def test_standalone_eof_returns_success(monkeypatch):
     assert targetprologstandalone.entry_point(['pyrolog']) == 0
 
 
+@pytest.mark.parametrize('args', [
+    ['--help'],
+    ['-h'],
+    ['--help', 'missing.pl'],
+    ['missing.pl', '--help'],
+    ['--jit', 'off', '--help'],
+    ['--help', '--jit', 'off'],
+])
+def test_standalone_help(monkeypatch, capsys, args):
+    import targetprologstandalone
+
+    def unexpected_console(engine, filename):
+        pytest.fail('help must not load a file or start the console')
+
+    monkeypatch.setattr(targetprologstandalone, 'run_console', unexpected_console)
+    monkeypatch.setattr(targetprologstandalone.jit, 'set_user_param',
+                        lambda driver, params: None)
+    assert targetprologstandalone.entry_point(['pyrolog-c'] + args) == 0
+    out, err = capsys.readouterr()
+    assert 'Usage: pyrolog-c [options] [FILE]' in out
+    assert 'consult' in out
+    assert '-h, --help' in out
+    assert '--jit PARAMS' in out
+    assert err == ''
+
+
+@pytest.mark.parametrize('args', [
+    ['--jit', 'help'],
+    ['--jit', 'help', 'missing.pl'],
+    ['missing.pl', '--jit', 'help'],
+])
+def test_standalone_jit_help(monkeypatch, capsys, args):
+    import targetprologstandalone
+
+    def unexpected_call(*args):
+        pytest.fail('JIT help must not set parameters or start the console')
+
+    monkeypatch.setattr(targetprologstandalone, 'run_console', unexpected_call)
+    monkeypatch.setattr(targetprologstandalone.jit, 'set_user_param', unexpected_call)
+    assert targetprologstandalone.entry_point(['pyrolog-c'] + args) == 0
+    out, err = capsys.readouterr()
+    for name, value in targetprologstandalone.jit.PARAMETERS.items():
+        assert '  %s=VALUE\n' % name in out
+        assert '%s (default %s)' % (
+            targetprologstandalone.jit.PARAMETER_DOCS[name], value) in out
+    assert 'Turn off the JIT' in out
+    assert err == ''
+
+
 def test_query_editor_cancellation_and_eof(monkeypatch):
     output = terminal_input(monkeypatch, '')
 
