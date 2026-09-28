@@ -566,9 +566,9 @@ class OperationContinuation(ContinuationWithRule):
         pc = jit.promote(self.pc)
         operation = rule.operations[pc]
         if isinstance(operation, ChoiceOperation):
-            alternative = self.at(operation.alternative_pc)
-            fcont = OperationFailureContinuation(self.engine, alternative,
-                                                  fcont, heap)
+            fcont = OperationFailureContinuation(
+                self.engine, self.nextcont, fcont, heap, rule, self.locals,
+                operation.alternative_pc)
             return self.at(operation.next_pc), fcont, heap.branch()
         if isinstance(operation, JumpOperation):
             return self.at(operation.target_pc), fcont, heap
@@ -578,9 +578,24 @@ class OperationContinuation(ContinuationWithRule):
 
 
 class OperationFailureContinuation(FailureContinuation):
+    """Save an alternative's state without allocating its success frame yet."""
+    _immutable_fields_ = ['rule', 'locals[*]', 'pc']
+
+    def __init__(self, engine, nextcont, orig_fcont, heap, rule, locals, pc):
+        FailureContinuation.__init__(self, engine, nextcont, orig_fcont, heap)
+        self.rule = rule
+        self.locals = locals
+        self.pc = pc
+
     def fail(self, heap):
         heap = heap.revert_upto(self.undoheap, discard_choicepoint=True)
-        return self.nextcont, self.orig_fcont, heap
+        if self.pc == len(self.rule.operations):
+            nextcont = self.nextcont
+        else:
+            nextcont = OperationContinuation(self.engine, self.rule,
+                                              self.nextcont, self.locals,
+                                              self.pc)
+        return nextcont, self.orig_fcont, heap
 
 
 class CutScopeNotifier(Continuation):
