@@ -1,4 +1,4 @@
-:- module(system, [term_expand/2, mode/1]).
+:- module(system, [term_expand/2, mode/1, (dynamic)/1]).
 
 :- use_module(list).
 :- use_module(dcg).
@@ -11,6 +11,9 @@
 
 % Accept advisory mode declarations without using them for optimization.
 mode(_).
+
+% User predicates already permit runtime modification without a declaration.
+dynamic(_).
 
 term_expand(A, A) :-
 	A \= (_X --> _Y).
