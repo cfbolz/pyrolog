@@ -9,7 +9,7 @@ def make_default_operations():
     operations = [
          (1200, [("xfx", ["-->", ":-"]),
                  ("fx",  [":-", "?-"])]),
-         (1150, [("fx",  ["meta_predicate"])]),
+         (1150, [("fx",  ["meta_predicate", "dynamic"])]),
          (1100, [("xfy", [";"])]),
          (1050, [("xfy", ["->"]),
                  ("fx",  ["block"])]), 

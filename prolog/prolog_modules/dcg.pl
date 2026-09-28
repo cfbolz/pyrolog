@@ -30,9 +30,14 @@ trans_body_call(X, X0, XE, Emit, false, _LastRule, R) :-
 
 trans_body_call(A, X0, XE, _, true, _LastRule, R) :-
 	callable(A),
+	A \= !,
 	\+ functor(A, {}, _),
 	\+ is_list(A),
 	add_arguments(A, X0, XE, R).
+
+% Keep the cut in the expanded predicate and subsequent list checks after it.
+trans_body_call(!, X0, XE, _, true, LastRule, R) :-
+	trans_braces(!, X0, XE, LastRule, R).
 
 trans_body_call({X}, X0, XE, _, true, LastRule, R) :-
 	trans_braces(X, X0, XE, LastRule, R).
