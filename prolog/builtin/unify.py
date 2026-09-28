@@ -202,6 +202,12 @@ def impl_variant(engine, heap, left, right):
 
 
 def check_order_operand(engine, heap, obj):
+    # Keep these leaf cases visible to the JIT instead of entering the
+    # recursive cycle checker. Attributes are not part of term ordering.
+    if isinstance(obj, term.Var) and obj.getbinding() is None:
+        return
+    if isinstance(obj, term.Numeric) or isinstance(obj, term.Atom):
+        return
     from prolog.builtin.type import impl_acyclic_term
     try:
         impl_acyclic_term(engine, heap, obj)
