@@ -64,6 +64,10 @@ The median-of-means result should therefore not be interpreted as a stable
 14% slowdown without further measurements. Millisecond-scale `iterate*`
 results also have limited resolution.
 
+A subsequent [perf and trace investigation of nrev/meta_nrev](../nrev-profile/README.md)
+found GC-dominated execution and matching allocations on the quadratic append
+paths. Longer repeated comparisons did not establish a stable slowdown.
+
 [Raw samples](samples.jsonl), [summary CSV](summary.csv), and
 [environment and binary hashes](metadata.json) are retained. The CSV additionally
 summarizes samples 2-5 separately; that does not guarantee complete JIT warmup.

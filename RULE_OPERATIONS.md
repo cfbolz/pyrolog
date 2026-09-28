@@ -135,3 +135,8 @@ compares the original baseline against the tail-call build. All 23 workloads
 completed; the 15 application workloads show 2.6% lower elapsed time by
 geometric mean, including an 18.6% reduction for qsort. Per-process variability
 means differences from the earlier run cannot be attributed solely to this fix.
+
+The [nrev/meta_nrev profiling investigation](benchmark-results/rule-operations/nrev-profile/README.md)
+records perf profiles, optimized trace diffs, execution counts, and repeated
+timings. Both quadratic append paths preserve their allocation patterns; GC
+dominates these workloads and the earlier slowdowns were not stable across runs.
