@@ -1,6 +1,7 @@
 from prolog.interpreter.test.tool import assert_true, \
 get_engine, assert_false, collect_all
 from prolog.interpreter.continuation import Engine
+import pytest
 
 #loc = "../../prolog_modules/"
 #e = get_engine("""
@@ -112,6 +113,56 @@ def test_curly_goal_preserves_difference_list_when_executed():
     ''', load_system=True)
     assert_true('goals(X,G,[]), X == bound, '
                 'G == [first(bound),second(bound)].', engine)
+
+
+@pytest.mark.parametrize('body, prefix', [
+    ('!', '[]'),
+    ('!, [a]', '[a]'),
+    ('[a], !', '[a]'),
+    ('[a], !, [b]', '[a,b]'),
+    ('token, !, [b]', '[a,b]'),
+])
+def test_dcg_cut_preserves_difference_list(body, prefix):
+    engine = get_engine('token --> [a]. rule --> %s.' % body,
+                        load_system=True)
+    assert_true('rule(Input, Tail), var(Tail), '
+                'append(%s, Tail, Expected), Input == Expected.' % prefix,
+                engine)
+
+
+@pytest.mark.parametrize('body, input_list', [
+    ('!, [a]', '[b]'),
+    ('!', '[b]'),
+    ('[a], !', '[a,b]'),
+])
+def test_dcg_cut_precedes_terminal_and_tail_checks(body, input_list):
+    engine = get_engine('rule --> %s. rule --> %s.' % (body, input_list),
+                        load_system=True)
+    assert_false('rule(%s, []).' % input_list, engine)
+
+
+def test_dcg_cut_prunes_prior_choices_but_preserves_later_choices():
+    engine = get_engine('''
+        rule(X, Y) --> before(X), !, after(Y).
+        rule(fallback, fallback) --> [].
+        before(first) --> [].
+        before(second) --> [].
+        after(left) --> [].
+        after(right) --> [].
+    ''', load_system=True)
+    answers = collect_all(engine, 'rule(X, Y, [], []).')
+    assert [(a['X'].name(), a['Y'].name()) for a in answers] == [
+        ('first', 'left'), ('first', 'right')]
+
+
+def test_dcg_cut_does_not_prune_callers_clauses():
+    engine = get_engine('''
+        outer --> inner, [b].
+        outer --> [a,c].
+        inner --> [a], !.
+    ''', load_system=True)
+    assert_true('outer([a,c], []).', engine)
+
 
 def test_dcg_integration_1():
     assert_true("""
