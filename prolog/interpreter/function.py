@@ -122,7 +122,10 @@ class Rule(object):
                     arg2.unify(arg1, heap)
                 else:
                     arg2.unify_and_standardize_apart(arg1, heap, env)
-        shared_env = [None] * self.env_size_body
+        # RuleContinuation only carries values supplied by head unification.
+        # Body-only locals are allocated when the rule is activated; reserving
+        # their slots here enlarges frames that escape from compiled bridges.
+        shared_env = [None] * self.env_size_shared
         for i in range(self.env_size_shared):
             shared_env[i] = env[i]
         return shared_env

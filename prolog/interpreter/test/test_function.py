@@ -159,7 +159,8 @@ def test_body_only_locals_do_not_enlarge_rule_continuation(monkeypatch):
         return activate(self, fcont, heap)
 
     monkeypatch.setattr(RuleContinuation, 'activate', record)
-    # Exercise the arbitrary-size fallback as well as small inline frames.
+    # Body-local counts may exceed the inline-frame limit without enlarging
+    # the single shared slot in the rule frame.
     for count in [1, 4, 12]:
         bindings = ', '.join('V%d = X' % i for i in range(count))
         checks = ', '.join('V%d == X' % i for i in range(count))
@@ -168,5 +169,10 @@ def test_body_only_locals_do_not_enlarge_rule_continuation(monkeypatch):
         assert [r['X'].name() for r in collect_all(e, 'p(X).')] == ['a', 'b']
     e = get_engine('p :- X = a, X == a.')
     assert_true('p.', e)
-    assert seen == [1, 1, 1, 0]
+    # Genuinely large shared environments still use the arbitrary-size case.
+    variables = ', '.join('X%d' % i for i in range(12))
+    body = 'Y = f(%s), Y == f(%s)' % (variables, variables)
+    e = get_engine('p(%s) :- %s.' % (variables, body))
+    assert_true('p(%s).' % ', '.join(str(i) for i in range(12)), e)
+    assert seen == [1, 1, 1, 0, 12]
     
