@@ -101,3 +101,31 @@ Python 2 driver, run with PyPy, found about 5.1% lower elapsed time across its
 See the [complete legacy-suite results](benchmark-results/rule-operations/README.md)
 for all 23 workloads, longer-run checks, compatibility fixes, raw measurements,
 and reproduction commands.
+
+## Tail calls through disjunctions
+
+After the recorded benchmark runs, a continuation-space regression was fixed
+in `ea103bf`. A call at the end of a disjunction's left branch used to return
+to a `JumpOperation`, even when the jump led directly out of the rule. This
+retained both an operation continuation and additional cut-scope continuations
+on each recursive call. The driver still used a loop, but the heap-resident
+success-continuation chain grew with recursion depth.
+
+The compiler now resolves forward jump chains, from the end of the operation
+array backward, and stores the final successor on each call and choice. Tail
+calls pass the caller's continuation directly. There is no runtime jump-chain
+walk. Real work following a disjunction remains a continuation.
+
+For 100 recursive calls after a cut inside a branch, the previous maximum
+success-continuation depth was 201; it is now 2, matching legacy execution.
+Tests also cover nested branch exits, entry through a right branch, ordinary
+conjunctions, and recursive calls with genuine work left afterward.
+
+The full Prolog suite passes: 3,186 passed, 11 skipped, 74 expected failures.
+The benchmark tables above intentionally retain their original, pre-fix
+binaries and measurements.
+
+The tail-call build also passes all 239 translated/JIT tests. The new translated
+regression rejects stores into newly allocated `OperationContinuation` frames
+in the recursive hot loop; it fails on the pre-fix binary and passes after jump
+threading. Existing exact trace expectations pass without further changes.
