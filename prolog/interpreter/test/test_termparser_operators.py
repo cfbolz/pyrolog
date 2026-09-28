@@ -308,3 +308,21 @@ def test_numeric_sign_vs_prefix_operator(source, expected):
     table.add('-', 200, 'fy')
     table.add('+', 200, 'fy')
     assert shape(parse(source, table)) == expected
+
+
+@pytest.mark.parametrize('source, expected', [
+    ('2 ^ -x.', ('^', 2, ('-', 'x'))),
+    ('- - x.', ('-', ('-', 'x'))),
+    ('+ + x.', ('+', ('+', 'x'))),
+    ('\\ \\ x.', ('\\', ('\\', 'x'))),
+    ('-a*b.', ('*', ('-', 'a'), 'b')),
+    ('+a*b.', ('*', ('+', 'a'), 'b')),
+    ('\\1*2.', ('*', ('\\', 1), 2)),
+    ('a- - -b.', ('-', 'a', ('-', ('-', 'b')))),
+    ('1+2 xor 3.', ('+', 1, ('xor', 2, 3))),
+    ('1 xor 2*3.', ('*', ('xor', 1, 2), 3)),
+    ('1*2 xor 3.', ('xor', ('*', 1, 2), 3)),
+])
+def test_default_unary_and_xor_precedence(source, expected):
+    from prolog.interpreter.parsing import parse_query_term
+    assert shape(parse_query_term(source)) == expected

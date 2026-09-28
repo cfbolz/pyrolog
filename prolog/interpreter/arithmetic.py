@@ -66,6 +66,7 @@ simple_functions = [
     ("div", 2, "func_div"),
     ("rem", 2, "rem"),
     ("**", 2, "pow"),
+    ("^", 2, "pow"),
     ("sqrt", 1, "sqrt"),
     (">>", 2, "shr"),
     ("<<", 2, "shl"),

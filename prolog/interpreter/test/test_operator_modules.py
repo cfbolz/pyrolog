@@ -138,7 +138,7 @@ def test_zero_priority_export_removes_only_its_kind(tmpdir):
     engine = Engine()
     assert_true("use_module('%s')." % path, engine)
     assert_false('current_op(_,yfx,+).', engine)
-    assert_true('current_op(500,fx,+).', engine)
+    assert_true('current_op(200,fy,+).', engine)
 
 
 def test_nested_import_and_reexport(operator_library, tmpdir):
