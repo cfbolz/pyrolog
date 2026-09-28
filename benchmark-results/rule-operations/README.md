@@ -1,5 +1,8 @@
 # Legacy Pyrolog benchmark comparison, 2026-09-28
 
+For fresh measurements after the disjunction tail-call fix, see the
+[JIT rerun](tail-jit/README.md). The measurements below precede that fix.
+
 The operation-based interpreter took about **5.1% less elapsed time** across
 this suite's 15 application benchmarks (geometric mean of after/before ratios,
 0.9494). This excludes the eight `iterate*` microbenchmarks. The benefit is

@@ -129,3 +129,9 @@ The tail-call build also passes all 239 translated/JIT tests. The new translated
 regression rejects stores into newly allocated `OperationContinuation` frames
 in the recursive hot loop; it fails on the pre-fix binary and passes after jump
 threading. Existing exact trace expectations pass without further changes.
+
+A fresh [JIT benchmark rerun](benchmark-results/rule-operations/tail-jit/README.md)
+compares the original baseline against the tail-call build. All 23 workloads
+completed; the 15 application workloads show 2.6% lower elapsed time by
+geometric mean, including an 18.6% reduction for qsort. Per-process variability
+means differences from the earlier run cannot be attributed solely to this fix.
