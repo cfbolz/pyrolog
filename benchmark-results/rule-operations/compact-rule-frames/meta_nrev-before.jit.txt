@@ -1,0 +1,253 @@
+[588d79e42e33] {jit-log-opt-loop
+# Loop 1 (range/3 RuleContinuationSize4) : loop with 46 ops
+[p0, p1, p2]
++264: label(p0, p1, p2, descr=TargetToken(128392378106272))
+debug_merge_point(0, 0, 'range/3 RuleContinuationSize4')
++285: guard_class(p0, 100091141928336, descr=<Guard0x74c5ae174020>) [p0, p1, p2]
++304: p4 = getfield_gc_r(p0, descr=<FieldP prolog.interpreter.continuation.Continuation.inst_nextcont 8>)
++308: p5 = getfield_gc_r(p0, descr=<FieldP prolog.interpreter.continuation.ContinuationWithRule.inst_rule 16>)
++319: guard_value(p5, ConstPtr(ptr6), descr=<Guard0x74c5ae16e4b8>) [p0, p1, p2]
++328: p7 = getfield_gc_r(p0, descr=<FieldP prolog.interpreter.continuation.RuleContinuationSize4.inst__list_0 24 pure>)
++332: p8 = getfield_gc_r(p0, descr=<FieldP prolog.interpreter.continuation.RuleContinuationSize4.inst__list_1 32 pure>)
++336: p9 = getfield_gc_r(p0, descr=<FieldP prolog.interpreter.continuation.RuleContinuationSize4.inst__list_2 40 pure>)
++340: guard_nonnull_class(p7, 100091141916832, descr=<Guard0x74c5ae174070>) [p0, p1, p2]
++358: guard_nonnull(p8, descr=<Guard0x74c5ae16e4f0>) [p0, p1, p2]
++367: guard_nonnull(p9, descr=<Guard0x74c5ae16e528>) [p0, p1, p2]
++376: p11 = getfield_gc_r(p2, descr=<FieldP prolog.interpreter.heap.Heap.inst_hook 8>)
++387: guard_isnull(p11, descr=<Guard0x74c5ae16e560>) [p0, p1, p2]
++396: guard_not_invalidated(descr=<Guard0x74c5ae16e598>) [p0, p1, p2]
+debug_merge_point(0, 0, 'range/3 OperationContinuation')
+debug_merge_point(0, 0, 'range/3 BuiltinContinuation')
++396: p12 = getfield_gc_r(p7, descr=<FieldP prolog.interpreter.term.BindingVar.inst_binding 16>)
++400: guard_nonnull_class(p12, ConstClass(Number), descr=<Guard0x74c5ae1740c0>) [p0, p1, p2]
++418: i14 = getfield_gc_i(p12, descr=<FieldS prolog.interpreter.term.Number.inst_num 8 pure>)
++422: i16 = int_sub_ovf(i14, 1)
++426: guard_no_overflow(descr=<Guard0x74c5ae16e5d0>) [p0, p1, p2]
+debug_merge_point(0, 0, 'range/3 OperationContinuation')
++432: i17 = int_is_zero(i16)
++435: guard_false(i17, descr=<Guard0x74c5ae16e608>) [p0, p1, p2]
+debug_merge_point(0, 0, 'range/3 RuleContinuationSize4')
++441: label(p4, p2, i16, p7, p8, p9, p1, descr=TargetToken(128392378106336))
+debug_merge_point(0, 0, 'range/3 RuleContinuationSize4')
++477: guard_not_invalidated(descr=<Guard0x74c5ae174110>) [p1, p2, p8, p7, i16, p9, p4]
+debug_merge_point(0, 0, 'range/3 OperationContinuation')
+debug_merge_point(0, 0, 'range/3 BuiltinContinuation')
++477: i19 = int_sub_ovf(i16, 1)
++484: guard_no_overflow(descr=<Guard0x74c5ae16e640>) [p1, p2, p8, p7, i16, p9, p4]
+debug_merge_point(0, 0, 'range/3 OperationContinuation')
++490: i20 = int_is_zero(i19)
++493: guard_false(i20, descr=<Guard0x74c5ae16e678>) [p1, p2, p8, p7, i16, p9, p4]
+debug_merge_point(0, 0, 'range/3 RuleContinuationSize4')
++499: p21 = new_with_vtable(descr=<SizeDescr 24>)
++537: p22 = new_with_vtable(descr=<SizeDescr 16>)
++548: setfield_gc(p22, i16, descr=<FieldS prolog.interpreter.term.Number.inst_num 8 pure>)
++552: p23 = new_with_vtable(descr=<SizeDescr 24>)
++563: setfield_gc(p21, p22, descr=<FieldP prolog.interpreter.term.BindingVar.inst_binding 16>)
++567: setfield_gc(p21, p2, descr=<FieldP prolog.interpreter.term.Var.inst_created_after_choice_point 8>)
++578: setfield_gc(p23, p7, descr=<FieldP prolog.interpreter.term.Abstract2.inst_val_0 8 pure>)
++582: setfield_gc(p23, p8, descr=<FieldP prolog.interpreter.term.Abstract2.inst_val_1 16 pure>)
++586: jump(p4, p2, i19, p21, p23, p9, p1, descr=TargetToken(128392378106336))
++608: --end of the loop--
+[588d79e851f0] jit-log-opt-loop}
+[588d7a361dd3] {jit-log-opt-loop
+# Loop 2 (interpret/1 RuleContinuationSize3) : loop with 54 ops
+[p0, p1, p2]
++312: label(p0, p1, p2, descr=TargetToken(128392378107168))
+debug_merge_point(0, 0, 'interpret/1 RuleContinuationSize3')
++333: guard_class(p0, 100091141928224, descr=<Guard0x74c5ae174160>) [p0, p1, p2]
++352: p4 = getfield_gc_r(p0, descr=<FieldP prolog.interpreter.continuation.Continuation.inst_nextcont 8>)
++356: p5 = getfield_gc_r(p0, descr=<FieldP prolog.interpreter.continuation.ContinuationWithRule.inst_rule 16>)
++367: guard_value(p5, ConstPtr(ptr6), descr=<Guard0x74c5ae16ecd0>) [p0, p1, p2]
++376: p7 = getfield_gc_r(p0, descr=<FieldP prolog.interpreter.continuation.RuleContinuationSize3.inst__list_0 24 pure>)
++380: p8 = getfield_gc_r(p0, descr=<FieldP prolog.interpreter.continuation.RuleContinuationSize3.inst__list_1 32 pure>)
++384: guard_nonnull_class(p7, 100091141918056, descr=<Guard0x74c5ae1741b0>) [p0, p1, p2]
++402: guard_nonnull(p8, descr=<Guard0x74c5ae16ed08>) [p0, p1, p2]
++411: p10 = getfield_gc_r(p2, descr=<FieldP prolog.interpreter.heap.Heap.inst_hook 8>)
++422: guard_isnull(p10, descr=<Guard0x74c5ae16ed40>) [p0, p1, p2]
++431: guard_not_invalidated(descr=<Guard0x74c5ae16ed78>) [p0, p1, p2]
+debug_merge_point(0, 0, 'interpret/1 OperationContinuation')
++431: p11 = getfield_gc_r(p7, descr=<FieldP prolog.interpreter.term.Generic2.inst__signature 24 pure>)
++442: guard_value(p11, ConstPtr(ptr12), descr=<Guard0x74c5ae16edb0>) [p0, p1, p2]
++451: p13 = getfield_gc_r(p7, descr=<FieldP prolog.interpreter.term.Abstract2.inst_val_0 8 pure>)
++455: guard_class(p13, 100091141924576, descr=<Guard0x74c5ae16ede8>) [p0, p1, p2]
++468: p15 = getfield_gc_r(p13, descr=<FieldP prolog.interpreter.term.Abstract2.inst_val_0 8 pure>)
++472: p16 = getfield_gc_r(p13, descr=<FieldP prolog.interpreter.term.Abstract2.inst_val_1 16 pure>)
++476: p17 = getfield_gc_r(p7, descr=<FieldP prolog.interpreter.term.Abstract2.inst_val_1 16 pure>)
++480: guard_nonnull(p16, descr=<Guard0x74c5ae16ee20>) [p0, p1, p2]
++489: guard_nonnull(p15, descr=<Guard0x74c5ae16ee58>) [p0, p1, p2]
++498: guard_nonnull(p17, descr=<Guard0x74c5ae16ee90>) [p0, p1, p2]
+debug_merge_point(0, 0, 'my_clause/3 RuleContinuationSize0')
+debug_merge_point(0, 0, 'interpret/1 OperationContinuation')
+debug_merge_point(0, 0, 'interpret/1 RuleContinuationSize3')
++507: label(p4, p16, p2, p15, p17, p8, p1, descr=TargetToken(128392378107232))
+debug_merge_point(0, 0, 'interpret/1 RuleContinuationSize3')
++541: guard_not_invalidated(descr=<Guard0x74c5ae174200>) [p1, p2, p15, p17, p8, p16, p4]
+debug_merge_point(0, 0, 'interpret/1 OperationContinuation')
++541: guard_class(p16, 100091141924576, descr=<Guard0x74c5ae16eec8>) [p1, p2, p15, p17, p8, p16, p4]
++554: p19 = getfield_gc_r(p16, descr=<FieldP prolog.interpreter.term.Abstract2.inst_val_0 8 pure>)
++558: p20 = getfield_gc_r(p16, descr=<FieldP prolog.interpreter.term.Abstract2.inst_val_1 16 pure>)
++562: guard_nonnull(p20, descr=<Guard0x74c5ae16ef00>) [p1, p2, p15, p17, p8, p16, p4]
++571: guard_nonnull(p19, descr=<Guard0x74c5ae16ef38>) [p1, p2, p15, p17, p8, p16, p4]
+debug_merge_point(0, 0, 'my_clause/3 RuleContinuationSize0')
+debug_merge_point(0, 0, 'interpret/1 OperationContinuation')
+debug_merge_point(0, 0, 'interpret/1 RuleContinuationSize3')
++580: p21 = new_with_vtable(descr=<SizeDescr 24>)
++618: p22 = new_with_vtable(descr=<SizeDescr 24>)
++629: p23 = new_with_vtable(descr=<SizeDescr 40>)
++640: setfield_gc(p23, p21, descr=<FieldP prolog.interpreter.term.Abstract3.inst_val_0 8 pure>)
++644: p24 = new_with_vtable(descr=<SizeDescr 24>)
++656: setfield_gc(p24, p15, descr=<FieldP prolog.interpreter.term.Abstract2.inst_val_0 8 pure>)
++668: setfield_gc(p24, ConstPtr(ptr25), descr=<FieldP prolog.interpreter.term.Abstract2.inst_val_1 16 pure>)
++673: setfield_gc(p23, p24, descr=<FieldP prolog.interpreter.term.Abstract3.inst_val_1 16 pure>)
++677: setfield_gc(p23, p17, descr=<FieldP prolog.interpreter.term.Abstract3.inst_val_2 24 pure>)
++688: setfield_gc(p23, ConstPtr(ptr26), descr=<FieldP prolog.interpreter.term.Generic3.inst__signature 32 pure>)
++692: setfield_gc(p22, p23, descr=<FieldP prolog.interpreter.term.Abstract2.inst_val_0 8 pure>)
++696: setfield_gc(p22, p8, descr=<FieldP prolog.interpreter.term.Abstract2.inst_val_1 16 pure>)
++700: setfield_gc(p21, p2, descr=<FieldP prolog.interpreter.term.Var.inst_created_after_choice_point 8>)
++711: setfield_gc(p21, ConstPtr(null), descr=<FieldP prolog.interpreter.term.BindingVar.inst_binding 16>)
++719: jump(p4, p20, p2, p19, p21, p22, p1, descr=TargetToken(128392378107232))
++752: --end of the loop--
+[588d7a39b4ed] jit-log-opt-loop}
+[588d7a67e1c2] {jit-log-opt-bridge
+# bridge out of Guard 0x74c5ae1741b0 with 53 ops
+[p0, p1, p2]
++171: guard_class(p0, 100091141928224, descr=<Guard0x74c5ae174610>) [p0, p1, p2]
++183: p4 = getfield_gc_r(p0, descr=<FieldP prolog.interpreter.continuation.Continuation.inst_nextcont 8>)
++187: p5 = getfield_gc_r(p0, descr=<FieldP prolog.interpreter.continuation.ContinuationWithRule.inst_rule 16>)
++198: guard_value(p5, ConstPtr(ptr6), descr=<Guard0x74c5ae16f600>) [p0, p1, p2]
++207: p7 = getfield_gc_r(p0, descr=<FieldP prolog.interpreter.continuation.RuleContinuationSize3.inst__list_0 24 pure>)
++211: p8 = getfield_gc_r(p0, descr=<FieldP prolog.interpreter.continuation.RuleContinuationSize3.inst__list_1 32 pure>)
++215: guard_nonnull_class(p7, 100091141920456, descr=<Guard0x74c5ae174660>) [p0, p1, p2]
++233: guard_nonnull(p8, descr=<Guard0x74c5ae16f638>) [p0, p1, p2]
++242: p10 = getfield_gc_r(p2, descr=<FieldP prolog.interpreter.heap.Heap.inst_hook 8>)
++254: guard_isnull(p10, descr=<Guard0x74c5ae16f670>) [p0, p1, p2]
++263: guard_not_invalidated(descr=<Guard0x74c5ae16f6a8>) [p0, p1, p2]
+debug_merge_point(0, 0, 'interpret/1 OperationContinuation')
++263: p11 = getfield_gc_r(p7, descr=<FieldP prolog.interpreter.term.Generic3.inst__signature 32 pure>)
++274: guard_value(p11, ConstPtr(ptr12), descr=<Guard0x74c5ae16f6e0>) [p0, p1, p2]
++283: p13 = getfield_gc_r(p7, descr=<FieldP prolog.interpreter.term.Abstract3.inst_val_0 8 pure>)
++287: guard_class(p13, 100091141916832, descr=<Guard0x74c5ae16f718>) [p0, p1, p2]
++300: p15 = getfield_gc_r(p13, descr=<FieldP prolog.interpreter.term.BindingVar.inst_binding 16>)
++304: guard_nonnull_class(p15, 100091141924576, descr=<Guard0x74c5ae1746b0>) [p0, p1, p2]
++323: p17 = getfield_gc_r(p15, descr=<FieldP prolog.interpreter.term.Abstract2.inst_val_0 8 pure>)
++327: p18 = getfield_gc_r(p15, descr=<FieldP prolog.interpreter.term.Abstract2.inst_val_1 16 pure>)
++331: p19 = getfield_gc_r(p7, descr=<FieldP prolog.interpreter.term.Abstract3.inst_val_1 16 pure>)
++335: p20 = getfield_gc_r(p7, descr=<FieldP prolog.interpreter.term.Abstract3.inst_val_2 24 pure>)
++339: guard_class(p20, 100091141916832, descr=<Guard0x74c5ae16f750>) [p0, p1, p2]
++351: p22 = getfield_gc_r(p20, descr=<FieldP prolog.interpreter.term.BindingVar.inst_binding 16>)
++355: guard_isnull(p22, descr=<Guard0x74c5ae16f788>) [p0, p1, p2]
++364: guard_nonnull(p17, descr=<Guard0x74c5ae16f7c0>) [p0, p1, p2]
++373: p23 = getfield_gc_r(p20, descr=<FieldP prolog.interpreter.term.Var.inst_created_after_choice_point 8>)
++377: i24 = instance_ptr_eq(p2, p23)
++380: guard_true(i24, descr=<Guard0x74c5ae16f7f8>) [p0, p1, p2]
++386: guard_nonnull(p18, descr=<Guard0x74c5ae16f830>) [p0, p1, p2]
++395: guard_nonnull(p19, descr=<Guard0x74c5ae16f868>) [p0, p1, p2]
+debug_merge_point(0, 0, 'my_clause/3 RuleContinuationSize0')
+debug_merge_point(0, 0, 'interpret/1 OperationContinuation')
+debug_merge_point(0, 0, 'interpret/1 RuleContinuationSize3')
++404: p25 = new_with_vtable(descr=<SizeDescr 24>)
++444: setfield_gc(p25, p17, descr=<FieldP prolog.interpreter.term.Abstract2.inst_val_0 8 pure>)
++448: p26 = new_with_vtable(descr=<SizeDescr 24>)
++459: setfield_gc(p26, p2, descr=<FieldP prolog.interpreter.term.Var.inst_created_after_choice_point 8>)
++463: setfield_gc(p26, ConstPtr(null), descr=<FieldP prolog.interpreter.term.BindingVar.inst_binding 16>)
++471: setfield_gc(p25, p26, descr=<FieldP prolog.interpreter.term.Abstract2.inst_val_1 16 pure>)
++485: setfield_gc(p20, p25, descr=<FieldP prolog.interpreter.term.BindingVar.inst_binding 16>)
++489: p28 = new_with_vtable(descr=<SizeDescr 48>)
++500: p29 = new_with_vtable(descr=<SizeDescr 40>)
++511: setfield_gc(p29, p18, descr=<FieldP prolog.interpreter.term.Abstract3.inst_val_0 8 pure>)
++515: setfield_gc(p29, p19, descr=<FieldP prolog.interpreter.term.Abstract3.inst_val_1 16 pure>)
++519: setfield_gc(p29, p26, descr=<FieldP prolog.interpreter.term.Abstract3.inst_val_2 24 pure>)
++523: setfield_gc(p29, ConstPtr(ptr30), descr=<FieldP prolog.interpreter.term.Generic3.inst__signature 32 pure>)
++527: setfield_gc(p28, p4, descr=<FieldP prolog.interpreter.continuation.Continuation.inst_nextcont 8>)
++531: setfield_gc(p28, ConstPtr(ptr31), descr=<FieldP prolog.interpreter.continuation.ContinuationWithRule.inst_rule 16>)
++535: setfield_gc(p28, p29, descr=<FieldP prolog.interpreter.continuation.RuleContinuationSize3.inst__list_0 24 pure>)
++539: setfield_gc(p28, p8, descr=<FieldP prolog.interpreter.continuation.RuleContinuationSize3.inst__list_1 32 pure>)
++543: setfield_gc(p28, ConstPtr(null), descr=<FieldP prolog.interpreter.continuation.RuleContinuationSize3.inst__list_2 40 pure>)
++551: jump(p28, p1, p2, descr=TargetToken(128392378107168))
++592: --end of the loop--
+[588d7a695523] jit-log-opt-bridge}
+[588d7ac74a03] {jit-log-opt-bridge
+# bridge out of Guard 0x74c5ae16f718 with 40 ops
+[p0, p1, p2]
++155: guard_class(p0, 100091141928224, descr=<Guard0x74c5ae175010>) [p0, p1, p2]
++167: p4 = getfield_gc_r(p0, descr=<FieldP prolog.interpreter.continuation.Continuation.inst_nextcont 8>)
++171: p5 = getfield_gc_r(p0, descr=<FieldP prolog.interpreter.continuation.ContinuationWithRule.inst_rule 16>)
++182: guard_value(p5, ConstPtr(ptr6), descr=<Guard0x74c5ae1da058>) [p0, p1, p2]
++191: p7 = getfield_gc_r(p0, descr=<FieldP prolog.interpreter.continuation.RuleContinuationSize3.inst__list_0 24 pure>)
++195: p8 = getfield_gc_r(p0, descr=<FieldP prolog.interpreter.continuation.RuleContinuationSize3.inst__list_1 32 pure>)
++199: guard_nonnull_class(p7, 100091141920456, descr=<Guard0x74c5ae1756f0>) [p0, p1, p2]
++217: guard_nonnull_class(p8, 100091141924576, descr=<Guard0x74c5ae175650>) [p0, p1, p2]
++237: p11 = getfield_gc_r(p2, descr=<FieldP prolog.interpreter.heap.Heap.inst_hook 8>)
++242: guard_isnull(p11, descr=<Guard0x74c5ae1da020>) [p0, p1, p2]
++251: guard_not_invalidated(descr=<Guard0x74c5ae16ffa0>) [p0, p1, p2]
+debug_merge_point(0, 0, 'interpret/1 OperationContinuation')
++251: p12 = getfield_gc_r(p7, descr=<FieldP prolog.interpreter.term.Generic3.inst__signature 32 pure>)
++262: guard_value(p12, ConstPtr(ptr13), descr=<Guard0x74c5ae16ff30>) [p0, p1, p2]
++271: p14 = getfield_gc_r(p7, descr=<FieldP prolog.interpreter.term.Abstract3.inst_val_0 8 pure>)
++275: guard_class(p14, ConstClass(Atom), descr=<Guard0x74c5ae16fef8>) [p0, p1, p2]
++288: p16 = getfield_gc_r(p14, descr=<FieldP prolog.interpreter.term.Atom.inst__signature 8 pure>)
++299: guard_value(p16, ConstPtr(ptr17), descr=<Guard0x74c5ae16fec0>) [p0, p1, p2]
++308: p18 = getfield_gc_r(p7, descr=<FieldP prolog.interpreter.term.Abstract3.inst_val_1 16 pure>)
++312: p19 = getfield_gc_r(p7, descr=<FieldP prolog.interpreter.term.Abstract3.inst_val_2 24 pure>)
++316: guard_nonnull_class(p18, 100091141924576, descr=<Guard0x74c5ae175240>) [p0, p1, p2]
++335: guard_class(p19, 100091141916832, descr=<Guard0x74c5ae16fe88>) [p0, p1, p2]
++348: p22 = getfield_gc_r(p19, descr=<FieldP prolog.interpreter.term.BindingVar.inst_binding 16>)
++352: guard_isnull(p22, descr=<Guard0x74c5ae16fe50>) [p0, p1, p2]
++361: p23 = getfield_gc_r(p19, descr=<FieldP prolog.interpreter.term.Var.inst_created_after_choice_point 8>)
++365: i24 = instance_ptr_eq(p2, p23)
++368: guard_true(i24, descr=<Guard0x74c5ae16fe18>) [p0, p1, p2]
++385: setfield_gc(p19, p18, descr=<FieldP prolog.interpreter.term.BindingVar.inst_binding 16>)
+debug_merge_point(0, 0, 'my_clause/3 RuleContinuationSize0')
+debug_merge_point(0, 0, 'interpret/1 OperationContinuation')
++389: p25 = getfield_gc_r(p8, descr=<FieldP prolog.interpreter.term.Abstract2.inst_val_0 8 pure>)
++393: p26 = getfield_gc_r(p8, descr=<FieldP prolog.interpreter.term.Abstract2.inst_val_1 16 pure>)
+debug_merge_point(0, 0, 'interpret/1 RuleContinuationSize3')
++397: p27 = new_with_vtable(descr=<SizeDescr 48>)
++434: setfield_gc(p27, p4, descr=<FieldP prolog.interpreter.continuation.Continuation.inst_nextcont 8>)
++438: setfield_gc(p27, ConstPtr(ptr28), descr=<FieldP prolog.interpreter.continuation.ContinuationWithRule.inst_rule 16>)
++442: setfield_gc(p27, p25, descr=<FieldP prolog.interpreter.continuation.RuleContinuationSize3.inst__list_0 24 pure>)
++446: setfield_gc(p27, p26, descr=<FieldP prolog.interpreter.continuation.RuleContinuationSize3.inst__list_1 32 pure>)
++450: setfield_gc(p27, ConstPtr(null), descr=<FieldP prolog.interpreter.continuation.RuleContinuationSize3.inst__list_2 40 pure>)
++458: jump(p27, p1, p2, descr=TargetToken(128392378107168))
++496: --end of the loop--
+[588d7ac8328f] jit-log-opt-bridge}
+[58900a91881a] {jit-summary
+Tracing:      	4	0.001670
+Backend:      	4	0.001651
+TOTAL:      		3.345815
+ops:             	2251
+heapcached ops:  	685
+recorded ops:    	644
+  calls:         	16
+guards:          	99
+opt ops:         	197
+opt guards:      	64
+opt guards shared:	50
+forcings:        	0
+abort: trace too long:	0
+abort: compiling:	0
+abort: vable escape:	0
+abort: bad loop: 	0
+abort: force quasi-immut:	0
+abort: segmenting trace:	0
+virtualizables forced:	0
+nvirtuals:       	14
+nvholes:         	0
+nvreused:        	0
+vecopt tried:    	0
+vecopt success:  	0
+Total # of loops:	2
+Total # of bridges:	2
+Freed # of loops:	0
+Freed # of bridges:	0
+[58900a925dd4] jit-summary}
+[58900a92a7d2] {jit-backend-counts
+entry 1:20
+TargetToken(128392378106272):20
+TargetToken(128392378106336):32919
+entry 2:498
+TargetToken(128392378107168):28917037
+TargetToken(128392378107232):32940
+bridge 128392378139056:28916798
+bridge 128392378119960:33762
+[58900a92dabd] jit-backend-counts}

@@ -140,3 +140,16 @@ The [nrev/meta_nrev profiling investigation](benchmark-results/rule-operations/n
 records perf profiles, optimized trace diffs, execution counts, and repeated
 timings. Both quadratic append paths preserve their allocation patterns; GC
 dominates these workloads and the earlier slowdowns were not stable across runs.
+
+## Compact rule-entry frames
+
+`3016590` removes body-only variable slots from `RuleContinuation`: head
+unification now returns an environment sized to `env_size_shared`, not the full
+body environment. Activation already creates the full locals array, so this
+requires no additional copy. The escaping meta-append frame shrinks from 48 to
+40 bytes on the 64-bit build. All 240 translated/JIT tests pass.
+
+[Measurements and traces](benchmark-results/rule-operations/compact-rule-frames/README.md)
+show 15-19% lower elapsed time for `meta_nrev` in two paired experiments against
+the tail-call-fixed version, with fewer minor collections. `nrev` and `qsort`
+were essentially unchanged.
