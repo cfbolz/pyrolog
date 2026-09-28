@@ -1,0 +1,15 @@
+--- a/iterate_assert.pl
++++ b/iterate_assert.pl
+@@ -3 +3 @@
+-initialize(10000000) :- assert(iterate(0)), assert((iterate(X) :- (Y is X - 1, iterate(Y)))).
++initialize(100000) :- assert(iterate(0)), assert((iterate(X) :- (Y is X - 1, iterate(Y)))).
+--- a/iterate_cut.pl
++++ b/iterate_cut.pl
+@@ -5 +5 @@
+-initialize(10000000).
++initialize(100000).
+--- a/iterate_exception.pl
++++ b/iterate_exception.pl
+@@ -5 +5 @@
+-initialize(10000000).
++initialize(100000).

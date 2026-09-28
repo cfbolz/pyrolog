@@ -92,3 +92,12 @@ Validation:
 loops have rule-constant bounds. Without this hint the JIT treats activation
 as an opaque call, forces interpreter allocations, and loses the old tight
 loops. The annotation is essential to the experiment's JIT behavior.
+
+## Existing benchmark suite
+
+A subsequent before/after run of `benchmarks-pyrolog` under its original
+Python 2 driver, run with PyPy, found about 5.1% lower elapsed time across its
+15 application workloads with the JIT enabled. The gains vary by workload.
+See the [complete legacy-suite results](benchmark-results/rule-operations/README.md)
+for all 23 workloads, longer-run checks, compatibility fixes, raw measurements,
+and reproduction commands.
