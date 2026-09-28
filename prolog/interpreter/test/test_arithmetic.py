@@ -431,14 +431,27 @@ def test_left_shift_exact(base, shift):
     (3, 34), (3, 35), (-3, 35), (sys.maxint, 1),
     (-sys.maxint - 1, 1), (2, 100), (0, 0), (5, 0),
 ])
-def test_integer_power_exact(base, exponent):
-    result = assert_true("X is (%s) ** %s." % (base, exponent))['X']
+@pytest.mark.parametrize('operator', ['**', '^'])
+def test_integer_power_exact(base, exponent, operator):
+    result = assert_true("X is (%s) %s %s." % (base, operator, exponent))['X']
     if isinstance(result, BigInt):
         actual = long(result.value.str())
     else:
         assert isinstance(result, Number)
         actual = result.num
     assert actual == base ** exponent
+
+
+@pytest.mark.parametrize('goal', [
+    'X is 2 ^ 3 ^ 2, X == 512',
+    'X is (2 ^ 3) ^ 2, X == 64',
+    'Y=2, X is 2 ^ -Y, X == 0.25',
+    'X is 9 ^ 0.5, X == 3.0',
+    'X is 2.0 ^ 3, X == 8.0',
+    'X is 1 ^ 18446744073709551616, X == 1',
+])
+def test_caret_exponentiation(goal):
+    assert_true(goal + '.')
 
 
 @pytest.mark.parametrize('value', [
@@ -459,13 +472,15 @@ def test_bigint_parts(value, operation):
 
 @pytest.mark.parametrize('expression', [
     'sqrt(-1)', 'sqrt(-1.0)', 'sqrt(-1267650600228229401496703205376)',
-    '(-2.0) ** 0.5',
+    '(-2.0) ** 0.5', '(-2.0) ^ 0.5',
 ])
 def test_power_domain_error_is_catchable(expression):
     prolog_raises("evaluation_error(undefined)", "X is %s" % expression)
 
 
-@pytest.mark.parametrize('expression', ['10.0 ** 1000', '10 ** 1000.0'])
+@pytest.mark.parametrize('expression', [
+    '10.0 ** 1000', '10 ** 1000.0', '10.0 ^ 1000', '10 ^ 1000.0',
+])
 def test_power_float_overflow_is_catchable(expression):
     prolog_raises("evaluation_error(float_overflow)", "X is %s" % expression)
 
@@ -480,6 +495,8 @@ def test_negative_integer_power(base_big, exponent_big):
     assert result.floatval == 0.125
 
 
-@pytest.mark.parametrize('expression', ['0 ** -1', '0.0 ** -1', '0 ** -1.0'])
+@pytest.mark.parametrize('expression', [
+    '0 ** -1', '0.0 ** -1', '0 ** -1.0', '0 ^ -1', '0.0 ^ -1', '0 ^ -1.0',
+])
 def test_zero_to_negative_power_is_catchable(expression):
     prolog_raises("evaluation_error(zero_divisor)", "X is %s" % expression)
