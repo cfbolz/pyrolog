@@ -47,3 +47,25 @@ def test_shared_graph_validation():
     goals += ['X%d=f(X%d,X%d)' % (i, i-1, i-1) for i in range(1, 25)]
     goals += ['compare(>,X24,a)', 'var(A)']
     assert_true(', '.join(goals) + '.')
+
+
+@pytest.mark.parametrize('query', [
+    'compare(=, X, X), var(X)',
+    'compare(_, X, Y), var(X), var(Y), X \\== Y',
+    'X = a, Y = b, compare(<, X, Y)',
+    'compare(<, 1, 2)',
+    'compare(<, 1.5, 2.5)',
+    'compare(<, 100000000000000000000, 100000000000000000001)',
+    'X @< a, a @=< b, 2 @> 1, 2.0 @>= 1.0, var(X)',
+    'put_attr(X, m, X), compare(=, X, X), var(X), get_attr(X, m, V), V == X',
+])
+def test_standard_order_leaf_operands_skip_cycle_traversal(monkeypatch, query):
+    from prolog.builtin import type as prolog_type
+    from prolog.interpreter.continuation import Engine
+    engine = Engine(load_system=True)
+
+    def unexpected_traversal(engine, heap, obj):
+        pytest.fail('leaf operand entered the recursive cycle checker')
+
+    monkeypatch.setattr(prolog_type, 'impl_acyclic_term', unexpected_traversal)
+    assert_true(query + '.', engine)

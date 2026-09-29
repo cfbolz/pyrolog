@@ -95,6 +95,12 @@ def identity_visit(left, right, memoized):
 
 
 def identical(left, right):
+    left = left.dereference(None)
+    right = right.dereference(None)
+    if left is right:
+        return True
+    if helper.is_atomic(left) and helper.is_atomic(right):
+        return term.cmp_standard_order(left, right, None) == 0
     identity_state.reset()
     try:
         return identity_visit(left, right, False)
@@ -202,6 +208,12 @@ def impl_variant(engine, heap, left, right):
 
 
 def check_order_operand(engine, heap, obj):
+    # Keep these leaf cases visible to the JIT instead of entering the
+    # recursive cycle checker. Attributes are not part of term ordering.
+    if isinstance(obj, term.Var) and obj.getbinding() is None:
+        return
+    if helper.is_atomic(obj):
+        return
     from prolog.builtin.type import impl_acyclic_term
     try:
         impl_acyclic_term(engine, heap, obj)
