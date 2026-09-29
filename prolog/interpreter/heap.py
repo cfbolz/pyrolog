@@ -220,10 +220,17 @@ class Heap(object):
             return
         # Older undo records must precede newer ones: _revert walks backwards.
         # Path compression can trail the same variable in both frames.
-        # _double_size expects every nonempty allocation to have >= 2 slots.
-        size = max(2, self.i + current_heap.i)
-        trail_var = [None] * size
-        trail_binding = [None] * size
+        reuse_trail = current_heap.i == 0
+        if reuse_trail:
+            # discard() releases our arrays after transferring ownership.
+            # Keep their spare capacity for subsequent trailing.
+            trail_var = self.trail_var
+            trail_binding = self.trail_binding
+        else:
+            # _double_size expects every nonempty allocation to have >= 2 slots.
+            size = max(2, self.i + current_heap.i)
+            trail_var = [None] * size
+            trail_binding = [None] * size
         targetpos = 0
         for i in range(jit.promote(self.i)):
             var = self.trail_var[i]
@@ -231,6 +238,11 @@ class Heap(object):
                 trail_var[targetpos] = var
                 trail_binding[targetpos] = self.trail_binding[i]
                 targetpos += 1
+        if reuse_trail:
+            # Compaction must not leave references in the unused capacity.
+            for i in range(targetpos, len(trail_var)):
+                trail_var[i] = None
+                trail_binding[i] = None
         for i in range(jit.promote(current_heap.i)):
             trail_var[targetpos] = current_heap.trail_var[i]
             trail_binding[targetpos] = current_heap.trail_binding[i]

@@ -214,6 +214,67 @@ def test_trailing_after_discard_with_one_binding():
         assert var.binding is None
 
 
+@pytest.mark.parametrize('removed', [(), (0,), (1,), (2,), (0, 1, 2)])
+def test_discard_into_empty_trail_filters_in_place(removed):
+    root = Heap()
+    older = root.branch()
+    current = older.branch()
+    # Exercise the filter explicitly, including entries owned by current.
+    variables = [current.newvar() if i in removed else root.newvar()
+                 for i in range(3)]
+    bindings = [Number(i) for i in range(3)]
+    for var, binding in zip(variables, bindings):
+        var.binding = binding
+        older.add_trail(var)
+        var.binding = Number(10)
+    trail_var = older.trail_var
+    trail_binding = older.trail_binding
+    assert len(trail_var) == 4
+
+    older.discard(current)
+    kept = [i for i in range(3) if i not in removed]
+    assert current.trail_var is trail_var
+    assert current.trail_binding is trail_binding
+    assert current.i == len(kept)
+    assert trail_var[:current.i] == [variables[i] for i in kept]
+    assert trail_binding[:current.i] == [bindings[i] for i in kept]
+    assert trail_var[current.i:] == [None] * (4 - current.i)
+    assert trail_binding[current.i:] == [None] * (4 - current.i)
+    assert older.trail_var is older.trail_binding is None
+
+    # Fill the retained spare capacity, then exercise ordinary trail growth.
+    extra = [root.newvar() for _ in range(5)]
+    for var in extra:
+        var.unify(Number(20), current)
+    current.revert_upto(root)
+    for i, var in enumerate(variables):
+        if i in removed:
+            assert var.binding.num == 10
+        else:
+            assert var.binding is bindings[i]
+    assert all(var.binding is None for var in extra)
+
+
+def test_discard_reuses_trail_after_pruning_current():
+    root = Heap()
+    var = root.newvar()
+    older = root.branch()
+    var.unify(Number(1), older)
+    trail_var, trail_binding = older.trail_var, older.trail_binding
+    local = older.newvar()
+    current = older.branch()
+    local.unify(Number(2), current)
+    assert current.i == 1
+
+    older.discard(current)
+    assert current.i == 1
+    assert current.trail_var is trail_var
+    assert current.trail_binding is trail_binding
+    current.revert_upto(root)
+    assert var.binding is None
+    assert local.binding.num == 2
+
+
 def test_heap_discard_variable_shunting():
     h0 = Heap()
     v0 = h0.newvar()
