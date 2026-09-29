@@ -52,88 +52,109 @@ class JumpOperation(Operation):
 
 
 def compile_body(body):
-    operations = []
-    if body is not None:
-        _compile_body(body, operations)
-    _thread_jumps(operations)
-    # Immutable RPython array fields cannot contain a resizable list.
-    return operations[:]
+    return BodyCompiler().compile(body)
 
 
-def _skip_jump(operations, pc):
-    if pc < len(operations):
-        operation = operations[pc]
-        if isinstance(operation, JumpOperation):
-            return operation.target_pc
-    return pc
+class BodyCompiler(object):
+    """Build rule operations, then resolve their forward control-flow edges.
 
+    Operations are mutable while being compiled. Only the finished code is
+    published to a rule, whose operation array and operation fields are immutable.
+    """
 
-def _thread_jumps(operations):
-    # All edges go forward. Resolve from the end, so even nested branch exits
-    # reach their final destination with one lookup. A tail call must receive
-    # the caller's continuation, not a frame that merely executes a jump.
-    for pc in range(len(operations) - 1, -1, -1):
-        operation = operations[pc]
-        if isinstance(operation, JumpOperation):
-            operation.target_pc = _skip_jump(operations, operation.target_pc)
-        elif isinstance(operation, ChoiceOperation):
-            operation.next_pc = _skip_jump(operations, pc + 1)
-            operation.alternative_pc = _skip_jump(operations,
-                                                  operation.alternative_pc)
-        elif isinstance(operation, IfOperation):
-            operation.next_pc = _skip_jump(operations, pc + 1)
-            if operation.else_pc >= 0:
-                operation.else_pc = _skip_jump(operations, operation.else_pc)
+    def __init__(self):
+        self.operations = []
+
+    def compile(self, body):
+        self.operations = []
+        if body is not None:
+            self._compile_body(body)
+        self._thread_jumps()
+        # Immutable RPython array fields cannot contain a resizable list.
+        return self.operations[:]
+
+    def _compile_body(self, body):
+        pending = [body]
+        while pending:
+            goal = pending.pop()
+            if isinstance(goal, Callable) and goal.signature().eq(andsig):
+                left = goal.argument_at(0)
+                right = goal.argument_at(1)
+                # Keep malformed conjunctions opaque: impl_and checks its
+                # operands even when the left goal would fail.
+                if ((isinstance(left, Callable) or isinstance(left, NumberedVar)) and
+                        (isinstance(right, Callable) or isinstance(right, NumberedVar))):
+                    pending.append(right)
+                    pending.append(left)
+                    continue
+            if isinstance(goal, Callable) and goal.signature().eq(ifsig):
+                condition = goal.argument_at(0)
+                # Preserve validation for variable/invalid conditions.
+                if isinstance(condition, Callable):
+                    self.operations.append(IfOperation(condition))
+                    pending.append(goal.argument_at(1))
+                    continue
+            if isinstance(goal, Callable) and goal.signature().eq(orsig):
+                if self._compile_disjunction(goal):
+                    continue
+            self.operations.append(CallOperation(goal))
+
+    def _compile_disjunction(self, goal):
+        """Return False when the disjunction must remain an opaque call."""
+        left = goal.argument_at(0)
+        right = goal.argument_at(1)
+        # Variable operands need the existing builtin's eager validation.
+        if not isinstance(left, Callable) or not isinstance(right, Callable):
+            return False
+        if left.signature().eq(ifsig):
+            condition = left.argument_at(0)
+            if not isinstance(condition, Callable):
+                return False
+            choice = IfOperation(condition)
+            left = left.argument_at(1)
         else:
-            assert isinstance(operation, CallOperation)
-            operation.next_pc = _skip_jump(operations, pc + 1)
+            choice = ChoiceOperation()
+        self.operations.append(choice)
+        alternative_pc = self._compile_branches(left, right)
+        if isinstance(choice, IfOperation):
+            choice.else_pc = alternative_pc
+        else:
+            assert isinstance(choice, ChoiceOperation)
+            choice.alternative_pc = alternative_pc
+        return True
 
+    def _compile_branches(self, left, right):
+        """Emit two branches that join at the end; return the right branch PC."""
+        self._compile_body(left)
+        jump = JumpOperation()
+        self.operations.append(jump)
+        alternative_pc = len(self.operations)
+        self._compile_body(right)
+        jump.target_pc = len(self.operations)
+        return alternative_pc
 
-def _compile_body(body, operations):
-    pending = [body]
-    while pending:
-        goal = pending.pop()
-        if isinstance(goal, Callable) and goal.signature().eq(andsig):
-            left = goal.argument_at(0)
-            right = goal.argument_at(1)
-            # Keep malformed conjunctions opaque: impl_and checks its operands
-            # before executing the left goal, even when that goal would fail.
-            if ((isinstance(left, Callable) or isinstance(left, NumberedVar)) and
-                    (isinstance(right, Callable) or isinstance(right, NumberedVar))):
-                pending.append(right)
-                pending.append(left)
-                continue
-        if isinstance(goal, Callable) and goal.signature().eq(ifsig):
-            condition = goal.argument_at(0)
-            # Preserve the builtin's validation for variable/invalid conditions.
-            if isinstance(condition, Callable):
-                operations.append(IfOperation(condition))
-                pending.append(goal.argument_at(1))
-                continue
-        if isinstance(goal, Callable) and goal.signature().eq(orsig):
-            left = goal.argument_at(0)
-            right = goal.argument_at(1)
-            # Variable operands need the existing builtin's eager validation.
-            if isinstance(left, Callable) and isinstance(right, Callable):
-                if left.signature().eq(ifsig):
-                    condition = left.argument_at(0)
-                    if not isinstance(condition, Callable):
-                        operations.append(CallOperation(goal))
-                        continue
-                    choice = IfOperation(condition)
-                    left = left.argument_at(1)
-                else:
-                    choice = ChoiceOperation()
-                operations.append(choice)
-                _compile_body(left, operations)
-                jump = JumpOperation()
-                operations.append(jump)
-                if isinstance(choice, IfOperation):
-                    choice.else_pc = len(operations)
-                else:
-                    assert isinstance(choice, ChoiceOperation)
-                    choice.alternative_pc = len(operations)
-                _compile_body(right, operations)
-                jump.target_pc = len(operations)
-                continue
-        operations.append(CallOperation(goal))
+    def _thread_jumps(self):
+        # All edges go forward. Resolve from the end, so even nested branch
+        # exits reach their final destination with one lookup. A tail call
+        # must receive the caller's continuation, not a jump-only frame.
+        for pc in range(len(self.operations) - 1, -1, -1):
+            operation = self.operations[pc]
+            if isinstance(operation, JumpOperation):
+                operation.target_pc = self._skip_jump(operation.target_pc)
+            elif isinstance(operation, ChoiceOperation):
+                operation.next_pc = self._skip_jump(pc + 1)
+                operation.alternative_pc = self._skip_jump(operation.alternative_pc)
+            elif isinstance(operation, IfOperation):
+                operation.next_pc = self._skip_jump(pc + 1)
+                if operation.else_pc >= 0:
+                    operation.else_pc = self._skip_jump(operation.else_pc)
+            else:
+                assert isinstance(operation, CallOperation)
+                operation.next_pc = self._skip_jump(pc + 1)
+
+    def _skip_jump(self, pc):
+        if pc < len(self.operations):
+            operation = self.operations[pc]
+            if isinstance(operation, JumpOperation):
+                return operation.target_pc
+        return pc
