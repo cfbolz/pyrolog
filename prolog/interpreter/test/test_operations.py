@@ -5,6 +5,41 @@ from prolog.interpreter.function import Rule
 from prolog.interpreter.test.tool import assert_true, assert_false, collect_all
 
 
+@pytest.mark.parametrize('source, expected', [
+    ('p.', '0000  RETURN'),
+    ('p :- a, b.', """\
+0000  CALL Atom('a') next=0001
+0001  CALL Atom('b') next=0002
+0002  RETURN"""),
+    ('p :- (a ; b), c.', """\
+0000  CHOICE next=0001 alternative=0003
+0001  CALL Atom('a') next=0004
+0002  JUMP 0004
+0003  CALL Atom('b') next=0004
+0004  CALL Atom('c') next=0005
+0005  RETURN"""),
+    ('p :- a -> b.', """\
+0000  IF Atom('a') then=0001 else=FAIL
+0001  CALL Atom('b') next=0002
+0002  RETURN"""),
+    ('p :- a -> b ; c.', """\
+0000  IF Atom('a') then=0001 else=0003
+0001  CALL Atom('b') next=0004
+0002  JUMP 0004
+0003  CALL Atom('c') next=0004
+0004  RETURN"""),
+    ('p :- G, G.', """\
+0000  CALL NumberedVar(0) next=0001
+0001  CALL NumberedVar(0) next=0002
+0002  RETURN"""),
+])
+def test_rule_disassemble(source, expected):
+    from prolog.interpreter.signature import Signature
+    e = get_engine(source)
+    rule = e.modulewrapper.current_module.lookup(Signature.getsignature('p', 0)).rulechain
+    assert rule._disassemble() == expected
+
+
 @pytest.mark.parametrize('terminal_alternative', [False, True])
 def test_choice_defers_alternative_success_frame(monkeypatch, terminal_alternative):
     from prolog.interpreter.continuation import (

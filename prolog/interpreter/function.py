@@ -135,6 +135,36 @@ class Rule(object):
             return "%s." % (self.head, )
         return "%s :- %s." % (self.head, self.body)
 
+    @objectmodel.not_rpython
+    def _disassemble(self):
+        """Return debug bytecode, including threaded edges and the return PC.
+
+        Templates use their repr so numbered locals remain visible. RETURN is
+        the implicit end of the operation array, not a stored instruction.
+        """
+        from prolog.interpreter.operations import (
+            CallOperation, ChoiceOperation, IfOperation, JumpOperation)
+        lines = []
+        for pc, operation in enumerate(self.operations):
+            if isinstance(operation, IfOperation):
+                alternative = 'FAIL'
+                if operation.else_pc >= 0:
+                    alternative = '%04d' % operation.else_pc
+                instruction = 'IF %r then=%04d else=%s' % (
+                    operation.template, operation.next_pc, alternative)
+            elif isinstance(operation, CallOperation):
+                instruction = 'CALL %r next=%04d' % (
+                    operation.template, operation.next_pc)
+            elif isinstance(operation, ChoiceOperation):
+                instruction = 'CHOICE next=%04d alternative=%04d' % (
+                    operation.next_pc, operation.alternative_pc)
+            else:
+                assert isinstance(operation, JumpOperation)
+                instruction = 'JUMP %04d' % operation.target_pc
+            lines.append('%04d  %s' % (pc, instruction))
+        lines.append('%04d  RETURN' % len(self.operations))
+        return '\n'.join(lines)
+
     def instance_copy(self):
         other = objectmodel.instantiate(Rule)
         for f in Rule.unrolling_attrs:
