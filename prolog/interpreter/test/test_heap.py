@@ -2,6 +2,96 @@ import pytest
 from prolog.interpreter.heap import Heap
 from prolog.interpreter.term import AttVar, BindingVar, Callable, Number, Atom, AttMap
 
+
+def make_forwarding_chain(parent, length):
+    current = parent.branch()
+    removed = []
+    for _ in range(length):
+        next_heap = current.branch()
+        removed.append(current)
+        assert current.discard(next_heap) is next_heap
+        current = next_heap
+    return removed, current
+
+
+def test_find_not_discarded_compresses_forwarding_chain():
+    root = Heap()
+    removed, current = make_forwarding_chain(root, 100)
+    assert removed[0]._find_not_discarded() is current
+    assert all(h.prev is current for h in removed)
+    assert current.prev is root
+    assert not current.discarded
+
+    # The representative can itself be removed by a later cut.
+    next_heap = current.branch()
+    current.discard(next_heap)
+    assert removed[0]._find_not_discarded() is next_heap
+    assert removed[0].prev is next_heap
+    assert next_heap.prev is root
+
+
+def test_find_not_discarded_preserves_retained_heaps():
+    root = Heap()
+    x, y = root.newvar(), root.newvar()
+    older = root.branch()
+    x.unify(Number(1), older)
+    removed, retained = make_forwarding_chain(older, 10)
+    y.unify(Number(2), retained)
+    current = retained.branch().branch()
+    # Non-adjacent discards retain their trails and backward parent links.
+    assert retained.discard(current) is retained
+    assert older.discard(current) is older
+    assert retained.discarded and retained.i >= 0
+    assert older.discarded and older.i >= 0
+
+    # Lookup still skips every marked heap, but compression stops at the
+    # first retained heap rather than bypassing its undo records.
+    assert removed[0]._find_not_discarded() is root
+    assert all(h.prev is retained for h in removed)
+    assert retained.prev is older
+    assert older.prev is root
+    current.revert_upto(root)
+    assert x.binding is None
+    assert y.binding is None
+
+
+def test_find_not_discarded_during_discard(monkeypatch):
+    root = Heap()
+    removed, older = make_forwarding_chain(root, 10)
+    current = older.branch()
+    move = Heap._discard_move_bindings_to_current
+    seen = []
+
+    def inspect(self, target):
+        assert self is older
+        assert self.discarded and self.i >= 0
+        assert removed[0]._find_not_discarded() is root
+        assert all(h.prev is older for h in removed)
+        assert older.prev is root
+        seen.append(True)
+        return move(self, target)
+
+    monkeypatch.setattr(Heap, '_discard_move_bindings_to_current', inspect)
+    older.discard(current)
+    assert seen == [True]
+    assert removed[0]._find_not_discarded() is current
+    assert removed[0].prev is current
+
+
+def test_nested_cuts_preserve_retained_heap_undo_records():
+    from prolog.interpreter.parsing import get_engine
+    from prolog.interpreter.test.tool import assert_true
+    e = get_engine('''
+        inner(X,V) :- X=a, V=f(_), (true;true), catch(true,_,true), !.
+        middle(X,Y,V) :- Y=b, (true;true), inner(X,V), !.
+        outer(X,Y,Z,V) :- Z=c, (true;true), middle(X,Y,V), !,
+                         V=f(W), W=d.
+    ''')
+    # Compressing retained heaps loses Z's undo record and leaves Z=c.
+    assert_true('(outer(X,Y,Z,V), fail ; '
+                'var(X), var(Y), var(Z), var(V)).', e)
+
+
 def test_heap():
     h1 = Heap()
     v1 = h1.newvar()
@@ -122,6 +212,74 @@ def test_trailing_after_discard_with_one_binding():
     current.revert_upto(root)
     for var in variables:
         assert var.binding is None
+
+
+@pytest.mark.parametrize('local_indices', [(), (0,), (1,), (2,), (0, 1, 2)])
+@pytest.mark.parametrize('newer_count', [0, 1, 3, 8])
+def test_discard_retains_older_records_and_appends(local_indices, newer_count):
+    root = Heap()
+    older = root.branch()
+    current = older.branch()
+    # Synthetically trail newer-owned variables in the older frame. Retaining
+    # these otherwise unnecessary undo records is conservative.
+    variables = [current.newvar() if i in local_indices else root.newvar()
+                 for i in range(3)]
+    bindings = [Number(i) for i in range(3)]
+    for var, binding in zip(variables, bindings):
+        var.binding = binding
+        older.add_trail(var)
+        var.binding = Number(10)
+    trail_var = older.trail_var
+    trail_binding = older.trail_binding
+    assert len(trail_var) == 4
+    newer = [root.newvar() for _ in range(newer_count)]
+    for var in newer:
+        var.unify(Number(30), current)
+
+    older.discard(current)
+    needed = len(variables) + newer_count
+    capacity = 4 if needed <= 4 else max(8, needed)
+    assert (current.trail_var is trail_var) == (needed <= 4)
+    assert (current.trail_binding is trail_binding) == (needed <= 4)
+    assert current.i == needed
+    assert len(current.trail_var) == len(current.trail_binding) == capacity
+    assert current.trail_var[:needed] == variables + newer
+    assert current.trail_binding[:needed] == bindings + [None] * newer_count
+    assert current.trail_var[needed:] == [None] * (capacity - needed)
+    assert current.trail_binding[needed:] == [None] * (capacity - needed)
+    assert older.trail_var is older.trail_binding is None
+
+    # Fill the retained spare capacity, then exercise ordinary trail growth.
+    extra = [root.newvar() for _ in range(5)]
+    for var in extra:
+        var.unify(Number(20), current)
+    current.revert_upto(root)
+    for i, var in enumerate(variables):
+        # Python keeps these variables observable even after their lifetime
+        # in the reverted Prolog computation has ended.
+        assert var.binding is bindings[i]
+    assert all(var.binding is None for var in extra)
+    assert all(var.binding is None for var in newer)
+
+
+def test_discard_reuses_trail_after_pruning_current():
+    root = Heap()
+    var = root.newvar()
+    older = root.branch()
+    var.unify(Number(1), older)
+    trail_var, trail_binding = older.trail_var, older.trail_binding
+    local = older.newvar()
+    current = older.branch()
+    local.unify(Number(2), current)
+    assert current.i == 1
+
+    older.discard(current)
+    assert current.i == 1
+    assert current.trail_var is trail_var
+    assert current.trail_binding is trail_binding
+    current.revert_upto(root)
+    assert var.binding is None
+    assert local.binding.num == 2
 
 
 def test_heap_discard_variable_shunting():
