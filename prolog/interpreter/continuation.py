@@ -559,7 +559,7 @@ class OperationContinuation(ContinuationWithRule):
 
     def activate(self, fcont, heap):
         from prolog.interpreter.operations import (
-            CallOperation, ChoiceOperation, JumpOperation)
+            CallOperation, ChoiceOperation, IfOperation, JumpOperation)
         rule = jit.promote(self.rule)
         pc = jit.promote(self.pc)
         operation = rule.operations[pc]
@@ -575,6 +575,23 @@ class OperationContinuation(ContinuationWithRule):
             return self.at(operation.next_pc), fcont, heap.branch()
         if isinstance(operation, JumpOperation):
             return self.at(operation.target_pc), fcont, heap
+        if isinstance(operation, IfOperation):
+            from prolog.builtin.control import IfScopeNotifier
+            outer_fcont = fcont
+            query = operation.instantiate(heap, self.locals)
+            if operation.else_pc >= 0:
+                fcont = OperationFailureContinuation(
+                    self.engine, self.nextcont, fcont, heap, rule, self.locals,
+                    operation.else_pc)
+                heap = heap.branch()
+            # Cuts in the condition stop before the else alternative. Its
+            # first success drops both that alternative and condition choices,
+            # retaining successful bindings and the enclosing failure chain.
+            scont = IfScopeNotifier(self.engine, self.at(operation.next_pc),
+                                    fcont, outer_fcont)
+            # Install the failure chain before calling: clause lookup itself
+            # can fail, and the driver must already know the else alternative.
+            return BodyContinuation(self.engine, rule, scont, query), fcont, heap
         assert isinstance(operation, CallOperation)
         query = operation.instantiate(heap, self.locals)
         return self.engine.call(query, rule, self.at(operation.next_pc), fcont, heap)

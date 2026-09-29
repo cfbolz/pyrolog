@@ -1,6 +1,6 @@
-"""Immutable rule code; conjunction and ordinary disjunction have compiled control flow.
+"""Immutable rule code with compiled conjunction, disjunction and conditional branches.
 
-Other goals (including control builtins) remain opaque call templates. Their
+Conditions and other goals remain opaque call templates. Their
 arguments are instantiated on demand using the invocation's numbered locals.
 The original body remains available for database operations.
 """
@@ -33,6 +33,15 @@ class ChoiceOperation(Operation):
     def __init__(self):
         self.alternative_pc = 0
         self.next_pc = 0
+
+
+class IfOperation(CallOperation):
+    _immutable_fields_ = ['else_pc']
+
+    def __init__(self, condition):
+        CallOperation.__init__(self, condition)
+        # No else branch: condition failure uses the enclosing failure chain.
+        self.else_pc = -1
 
 
 class JumpOperation(Operation):
@@ -71,6 +80,10 @@ def _thread_jumps(operations):
             operation.next_pc = _skip_jump(operations, pc + 1)
             operation.alternative_pc = _skip_jump(operations,
                                                   operation.alternative_pc)
+        elif isinstance(operation, IfOperation):
+            operation.next_pc = _skip_jump(operations, pc + 1)
+            if operation.else_pc >= 0:
+                operation.else_pc = _skip_jump(operations, operation.else_pc)
         else:
             assert isinstance(operation, CallOperation)
             operation.next_pc = _skip_jump(operations, pc + 1)
@@ -90,19 +103,36 @@ def _compile_body(body, operations):
                 pending.append(right)
                 pending.append(left)
                 continue
+        if isinstance(goal, Callable) and goal.signature().eq(ifsig):
+            condition = goal.argument_at(0)
+            # Preserve the builtin's validation for variable/invalid conditions.
+            if isinstance(condition, Callable):
+                operations.append(IfOperation(condition))
+                pending.append(goal.argument_at(1))
+                continue
         if isinstance(goal, Callable) and goal.signature().eq(orsig):
             left = goal.argument_at(0)
             right = goal.argument_at(1)
             # Variable operands need the existing builtin's eager validation.
-            # A -> B ; C is a different control construct, not ordinary choice.
-            if (isinstance(left, Callable) and isinstance(right, Callable) and
-                    not left.signature().eq(ifsig)):
-                choice = ChoiceOperation()
+            if isinstance(left, Callable) and isinstance(right, Callable):
+                if left.signature().eq(ifsig):
+                    condition = left.argument_at(0)
+                    if not isinstance(condition, Callable):
+                        operations.append(CallOperation(goal))
+                        continue
+                    choice = IfOperation(condition)
+                    left = left.argument_at(1)
+                else:
+                    choice = ChoiceOperation()
                 operations.append(choice)
                 _compile_body(left, operations)
                 jump = JumpOperation()
                 operations.append(jump)
-                choice.alternative_pc = len(operations)
+                if isinstance(choice, IfOperation):
+                    choice.else_pc = len(operations)
+                else:
+                    assert isinstance(choice, ChoiceOperation)
+                    choice.alternative_pc = len(operations)
                 _compile_body(right, operations)
                 jump.target_pc = len(operations)
                 continue

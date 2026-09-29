@@ -2,6 +2,26 @@ from prolog.jittest.support import BaseTestPyrologC
 
 
 class TestOperations(BaseTestPyrologC):
+    def test_compiled_conditionals(self):
+        log = self.run_and_check('''
+            committed(X) :- ((X = a ; X = b) -> true ; X = c).
+            restored(X) :- ((X = a, fail) -> fail ; X = b).
+            scoped(X) :- ((!, fail) -> X = a ; X = b).
+            scoped(c).
+            rejected :- (true -> fail ; true).
+            only(a).
+            loop(0) :- !.
+            loop(N) :- (N > 0 ->
+                findall(X, committed(X), [a]),
+                findall(Y, restored(Y), [b]),
+                findall(Z, scoped(Z), [b,c]),
+                \\+ rejected,
+                (only(b) -> fail ; true),
+                (true -> M is N - 1), loop(M)
+                ; fail).
+        ''', 'loop(3000).')
+        assert 'yes' in log.result
+
     def test_pending_choices_do_not_allocate_alternative_success_frames(self):
         log = self.run_and_check('''
             loop(0) :- !.
