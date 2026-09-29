@@ -22,6 +22,10 @@ class AttributeStateMachine(RuleBasedStateMachine):
         # store only the value, never the implementation's binding-chain shape.
         self.bindings = [('var', i) for i in range(len(self.variables))]
         self.snapshots = []
+        # Physical undo frames include discarded but retained heaps. They are
+        # distinct from the choice points we can still backtrack to.
+        self.frames = [self.heap]
+        self.marked = set()
 
     @rule()
     def create_variable(self):
@@ -89,12 +93,14 @@ class AttributeStateMachine(RuleBasedStateMachine):
         attributes = [model.copy() for model in self.attributes]
         self.snapshots.append((self.heap, attributes, self.bindings[:]))
         self.heap = self.heap.branch()
+        self.frames.append(self.heap)
 
     @precondition(lambda self: bool(self.snapshots))
     @rule()
     def backtrack(self):
         parent, attributes, bindings = self.snapshots.pop()
         self.heap = self.heap.revert_upto(parent, discard_choicepoint=True)
+        self.frames = self.frames[:self.frames.index(parent) + 1]
         self.attributes = attributes
         self.bindings = bindings
         # Variables created since this boundary are no longer live. Cuts keep
@@ -113,9 +119,62 @@ class AttributeStateMachine(RuleBasedStateMachine):
         continuation = stop
         for parent, _, _ in self.snapshots[-count:]:
             continuation = FailureContinuation(None, None, continuation, parent)
+        # Model the cut walk using frame identities, without consulting prev.
+        current = self.heap
+        for parent, _, _ in reversed(self.snapshots[-count:]):
+            self.marked.add(parent)
+            index = self.frames.index(current)
+            if index > 0 and self.frames[index - 1] is parent:
+                self.frames.remove(parent)
+            else:
+                current = parent
         continuation.cut(stop, self.heap)
         del self.snapshots[-count:]
-        assert self.heap.prev is self.snapshots[-1][0]
+
+    @precondition(lambda self: len(self.snapshots) >= 3)
+    @rule(data=st.data())
+    def discard_nonadjacent(self, data):
+        # Drop an internal choice point while keeping newer ones. The heap
+        # must remain on the undo chain until an enclosing rollback or cut.
+        index = data.draw(st.integers(1, len(self.snapshots) - 2))
+        parent = self.snapshots[index][0]
+        assert self.frames.index(parent) < len(self.frames) - 2
+        assert parent.discard(self.heap) is parent
+        self.marked.add(parent)
+        del self.snapshots[index]
+
+    @rule(data=st.data())
+    def lookup_owner(self, data):
+        variables = self.variables + self.attvars
+        index = data.draw(st.integers(0, len(variables) - 1))
+        variable = variables[index]
+        # Compute the representative without compression. Lookup may rewrite
+        # forwarding links, but the physical undo chain must remain intact.
+        expected = variable.created_after_choice_point
+        seen = set()
+        while expected is not None and expected.discarded:
+            assert expected not in seen
+            seen.add(expected)
+            expected = expected.prev
+        assert self.heap._is_created_in_self(variable) == (expected is self.heap)
+        assert variable.created_after_choice_point is expected
+
+    @invariant()
+    def heap_structure_matches_model(self):
+        current = self.heap
+        for frame in reversed(self.frames):
+            assert current is frame
+            assert frame.discarded == (frame in self.marked)
+            assert 0 <= frame.i <= len(frame.trail_var)
+            assert len(frame.trail_var) == len(frame.trail_binding)
+            assert len(frame.trail_var) != 1
+            assert all(var is not None for var in frame.trail_var[:frame.i])
+            current = current.prev
+        assert current is None
+        # Surviving choice points are an ordered subset of the physical chain.
+        indices = [self.frames.index(parent) for parent, _, _ in self.snapshots]
+        assert indices == sorted(set(indices))
+        assert all(parent not in self.marked for parent, _, _ in self.snapshots)
 
     @invariant()
     def bindings_match_model(self):
