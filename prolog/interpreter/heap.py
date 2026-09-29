@@ -220,33 +220,34 @@ class Heap(object):
             return
         # Older undo records must precede newer ones: _revert walks backwards.
         # Path compression can trail the same variable in both frames.
-        reuse_trail = current_heap.i == 0
-        if reuse_trail:
-            # discard() releases our arrays after transferring ownership.
-            # Keep their spare capacity for subsequent trailing.
-            trail_var = self.trail_var
-            trail_binding = self.trail_binding
-        else:
-            # _double_size expects every nonempty allocation to have >= 2 slots.
-            size = max(2, self.i + current_heap.i)
-            trail_var = [None] * size
-            trail_binding = [None] * size
-        targetpos = 0
-        for i in range(jit.promote(self.i)):
-            var = self.trail_var[i]
-            if not current_heap._is_created_in_self(var):
-                trail_var[targetpos] = var
-                trail_binding[targetpos] = self.trail_binding[i]
-                targetpos += 1
-        if reuse_trail:
-            # Compaction must not leave references in the unused capacity.
-            for i in range(targetpos, len(trail_var)):
-                trail_var[i] = None
-                trail_binding[i] = None
+        # discard() releases our arrays after transferring ownership.
+        trail_var = self.trail_var
+        trail_binding = self.trail_binding
+        # Keep all older undo records. Checking ownership here scans the
+        # entire older trail on every merge; redundant records are safe to
+        # retain until backtracking ends the variables' Prolog lifetime.
+        targetpos = self.i
+        needed = targetpos + current_heap.i
+        reuse_trail = needed <= len(trail_var)
+        if not reuse_trail:
+            # Grow geometrically so repeated small merges retain spare space.
+            size = max(len(trail_var) * 2, needed)
+            new_trail_var = [None] * size
+            new_trail_binding = [None] * size
+            for i in range(targetpos):
+                new_trail_var[i] = trail_var[i]
+                new_trail_binding[i] = trail_binding[i]
+            trail_var = new_trail_var
+            trail_binding = new_trail_binding
         for i in range(jit.promote(current_heap.i)):
             trail_var[targetpos] = current_heap.trail_var[i]
             trail_binding[targetpos] = current_heap.trail_binding[i]
             targetpos += 1
+        if reuse_trail:
+            # Earlier pruning may have left references in unused capacity.
+            for i in range(targetpos, len(trail_var)):
+                trail_var[i] = None
+                trail_binding[i] = None
         current_heap.trail_var = trail_var
         current_heap.trail_binding = trail_binding
         current_heap.i = targetpos

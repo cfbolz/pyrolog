@@ -214,13 +214,15 @@ def test_trailing_after_discard_with_one_binding():
         assert var.binding is None
 
 
-@pytest.mark.parametrize('removed', [(), (0,), (1,), (2,), (0, 1, 2)])
-def test_discard_into_empty_trail_filters_in_place(removed):
+@pytest.mark.parametrize('local_indices', [(), (0,), (1,), (2,), (0, 1, 2)])
+@pytest.mark.parametrize('newer_count', [0, 1, 3, 8])
+def test_discard_retains_older_records_and_appends(local_indices, newer_count):
     root = Heap()
     older = root.branch()
     current = older.branch()
-    # Exercise the filter explicitly, including entries owned by current.
-    variables = [current.newvar() if i in removed else root.newvar()
+    # Synthetically trail newer-owned variables in the older frame. Retaining
+    # these otherwise unnecessary undo records is conservative.
+    variables = [current.newvar() if i in local_indices else root.newvar()
                  for i in range(3)]
     bindings = [Number(i) for i in range(3)]
     for var, binding in zip(variables, bindings):
@@ -230,16 +232,21 @@ def test_discard_into_empty_trail_filters_in_place(removed):
     trail_var = older.trail_var
     trail_binding = older.trail_binding
     assert len(trail_var) == 4
+    newer = [root.newvar() for _ in range(newer_count)]
+    for var in newer:
+        var.unify(Number(30), current)
 
     older.discard(current)
-    kept = [i for i in range(3) if i not in removed]
-    assert current.trail_var is trail_var
-    assert current.trail_binding is trail_binding
-    assert current.i == len(kept)
-    assert trail_var[:current.i] == [variables[i] for i in kept]
-    assert trail_binding[:current.i] == [bindings[i] for i in kept]
-    assert trail_var[current.i:] == [None] * (4 - current.i)
-    assert trail_binding[current.i:] == [None] * (4 - current.i)
+    needed = len(variables) + newer_count
+    capacity = 4 if needed <= 4 else max(8, needed)
+    assert (current.trail_var is trail_var) == (needed <= 4)
+    assert (current.trail_binding is trail_binding) == (needed <= 4)
+    assert current.i == needed
+    assert len(current.trail_var) == len(current.trail_binding) == capacity
+    assert current.trail_var[:needed] == variables + newer
+    assert current.trail_binding[:needed] == bindings + [None] * newer_count
+    assert current.trail_var[needed:] == [None] * (capacity - needed)
+    assert current.trail_binding[needed:] == [None] * (capacity - needed)
     assert older.trail_var is older.trail_binding is None
 
     # Fill the retained spare capacity, then exercise ordinary trail growth.
@@ -248,11 +255,11 @@ def test_discard_into_empty_trail_filters_in_place(removed):
         var.unify(Number(20), current)
     current.revert_upto(root)
     for i, var in enumerate(variables):
-        if i in removed:
-            assert var.binding.num == 10
-        else:
-            assert var.binding is bindings[i]
+        # Python keeps these variables observable even after their lifetime
+        # in the reverted Prolog computation has ended.
+        assert var.binding is bindings[i]
     assert all(var.binding is None for var in extra)
+    assert all(var.binding is None for var in newer)
 
 
 def test_discard_reuses_trail_after_pruning_current():
