@@ -72,7 +72,8 @@ def driver(scont, fcont, heap):
         except error.CatchableError, exc:
             scont, fcont, heap = scont.engine.throw(exc, scont, fcont, heap, rule)
         else:
-            scont, fcont, heap = _process_hooks(scont, fcont, heap)
+            if heap.hook:
+                scont, fcont, heap = _process_hooks(scont, fcont, heap)
     assert isinstance(scont, DoneSuccessContinuation)
 
     if scont.failed:
@@ -80,7 +81,6 @@ def driver(scont, fcont, heap):
 
 @jit.unroll_safe
 def _process_hooks(scont, fcont, heap):
-    if heap.hook:
         e = scont.engine
         hookcell = heap.hook
         heap.hook = None
@@ -102,7 +102,7 @@ def _process_hooks(scont, fcont, heap):
                 heap.add_trail_atts(attvar, module)
             hookcell = hookcell.next
             attvar.value_list = None # XXX?
-    return scont, fcont, heap
+        return scont, fcont, heap
 
 class Engine(object):
     def __init__(self, load_system=False):
@@ -246,8 +246,7 @@ class Engine(object):
         rulechain = startrulechain.find_applicable_rule(query)
         if rulechain is None:
             raise error.UnificationFailed
-        scont, fcont, heap = _make_rule_conts(self, scont, fcont, heap, query, rulechain)
-        return scont, fcont, heap
+        return _make_rule_conts(self, scont, fcont, heap, query, rulechain)
 
     def call_in_module(self, query, module, scont, fcont, heap):
         return self.call(query, module._toplevel_rule, scont, fcont, heap)
