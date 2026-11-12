@@ -5,6 +5,41 @@ from prolog.interpreter.function import Rule
 from prolog.interpreter.test.tool import assert_true, assert_false, collect_all
 
 
+@pytest.mark.parametrize('source, expected', [
+    ('p.', '0000  RETURN'),
+    ('p :- a, b.', """\
+0000  CALL Atom('a') next=0001
+0001  CALL Atom('b') next=0002
+0002  RETURN"""),
+    ('p :- (a ; b), c.', """\
+0000  CHOICE next=0001 alternative=0003
+0001  CALL Atom('a') next=0004
+0002  JUMP 0004
+0003  CALL Atom('b') next=0004
+0004  CALL Atom('c') next=0005
+0005  RETURN"""),
+    ('p :- a -> b.', """\
+0000  IF Atom('a') then=0001 else=FAIL
+0001  CALL Atom('b') next=0002
+0002  RETURN"""),
+    ('p :- a -> b ; c.', """\
+0000  IF Atom('a') then=0001 else=0003
+0001  CALL Atom('b') next=0004
+0002  JUMP 0004
+0003  CALL Atom('c') next=0004
+0004  RETURN"""),
+    ('p :- G, G.', """\
+0000  CALL NumberedVar(0) next=0001
+0001  CALL NumberedVar(0) next=0002
+0002  RETURN"""),
+])
+def test_rule_disassemble(source, expected):
+    from prolog.interpreter.signature import Signature
+    e = get_engine(source)
+    rule = e.modulewrapper.current_module.lookup(Signature.getsignature('p', 0)).rulechain
+    assert rule._disassemble() == expected
+
+
 @pytest.mark.parametrize('terminal_alternative', [False, True])
 def test_choice_defers_alternative_success_frame(monkeypatch, terminal_alternative):
     from prolog.interpreter.continuation import (
@@ -219,9 +254,79 @@ def test_cut_inside_disjunction_discards_other_branch_and_clause():
     assert_false('q(_).', e)
 
 
-def test_if_then_else_remains_opaque():
+def test_if_then_else_compiles_branches(monkeypatch):
+    from prolog.interpreter.operations import CallOperation, IfOperation
+    instantiate = CallOperation.instantiate
+    calls = []
+
+    def record(self, heap, locals):
+        calls.append(self.template.signature().name)
+        return instantiate(self, heap, locals)
+
+    monkeypatch.setattr(CallOperation, 'instantiate', record)
     e = get_engine('p(X) :- (true -> X = a ; X = b), X == a.')
     assert [r['X'].name() for r in collect_all(e, 'p(X).')] == ['a']
+    assert calls == ['true', '=', '==']
+    from prolog.interpreter.signature import Signature
+    rule = e.modulewrapper.current_module.lookup(Signature.getsignature('p', 1)).rulechain
+    assert isinstance(rule.operations[0], IfOperation)
+
+
+@pytest.mark.parametrize('body, expected', [
+    ('(X = a ; X = b) -> true', ['a']),
+    ('((X = a ; X = b) -> fail ; X = c)', []),
+    ('((X = a ; X = b) -> (Y = c ; Y = d)), X = a', ['a', 'a']),
+    ('((X = a, fail) -> true ; X = b)', ['b']),
+    ('(fail -> X = a)', []),
+    ('((!, fail) -> X = a ; X = b)', ['b']),
+    ('((X = a ; X = b) -> (true -> true ; fail) ; X = c)', ['a']),
+    ('((X = a ; X = b), (true -> true ; fail))', ['a', 'b']),
+])
+def test_conditional_commitment_and_bindings(body, expected):
+    e = get_engine('p(X) :- ' + body + '.')
+    assert [r['X'].name() for r in collect_all(e, 'p(X).')] == expected
+
+
+@pytest.mark.parametrize('body, expected', [
+    ('(! -> X = a ; X = b)', ['a', 'c']),
+    ('(! -> X = a)', ['a', 'c']),
+    ('((!, fail) -> X = a ; X = b)', ['b', 'c']),
+    ('(true -> !, X = a ; X = b)', ['a']),
+    ('(fail -> X = a ; !, X = b)', ['b']),
+    ('(true -> !, fail ; X = b)', []),
+])
+def test_conditional_cut_scopes(body, expected):
+    e = get_engine('p(X) :- ' + body + '. p(c).')
+    assert [r['X'].name() for r in collect_all(e, 'p(X).')] == expected
+
+
+def test_conditional_validation_and_variable_branches():
+    from prolog.interpreter.test.tool import prolog_raises
+    e = get_engine('''
+        p(G) :- (true -> true ; G).
+        q(G) :- (G -> true ; fail).
+        r(G) :- (true -> G).
+        s :- (fail -> 42 ; true).
+        t :- (true -> 42 ; true).
+    ''')
+    prolog_raises('type_error(callable, 42)', 'p(42)', e)
+    prolog_raises('instantiation_error', 'p(_)', e)
+    prolog_raises('type_error(callable, 42)', 'q(42)', e)
+    prolog_raises('type_error(callable, 42)', 'r(42)', e)
+    prolog_raises('type_error(callable, 42)', 't', e)
+    assert_true('q(true), r(true), s.', e)
+    assert_false('r(fail).', e)
+
+
+def test_conditional_condition_fails_during_clause_lookup():
+    e = get_engine('''
+        only(a).
+        p(X) :- (only(b) -> X = then ; X = else).
+        q(X) :- (only(b) -> X = then).
+        q(fallback).
+    ''')
+    assert [r['X'].name() for r in collect_all(e, 'p(X).')] == ['else']
+    assert [r['X'].name() for r in collect_all(e, 'q(X).')] == ['fallback']
 
 
 def test_generated_control_flow_matches_legacy_executor(monkeypatch):
@@ -241,7 +346,12 @@ def test_generated_control_flow_matches_legacy_executor(monkeypatch):
     def goal(depth):
         if not depth or rng.randrange(4) == 0:
             return rng.choice(leaves)
-        return '(' + goal(depth - 1) + rng.choice([', ', ' ; ']) + goal(depth - 1) + ')'
+        left = goal(depth - 1)
+        operator = rng.choice([', ', ' ; ', ' -> ', 'if_else'])
+        right = goal(depth - 1)
+        if operator == 'if_else':
+            return '(' + left + ' -> ' + right + ' ; ' + goal(depth - 1) + ')'
+        return '(' + left + operator + right + ')'
 
     for i in range(500):
         source = 'p(X) :- ' + goal(4) + '. p(c).'
@@ -275,7 +385,10 @@ def test_tail_calls_do_not_retain_branch_continuations(monkeypatch):
     for body in [recursive,
                  '(' + recursive + ' ; fail)',
                  '((' + recursive + ' ; fail) ; fail)',
-                 '(fail ; (' + recursive + ' ; fail))']:
+                 '(fail ; (' + recursive + ' ; fail))',
+                 '(true -> (' + recursive + '))',
+                 '(true -> (' + recursive + ') ; fail)',
+                 '(fail -> fail ; (' + recursive + '))']:
         e = get_engine('loop(0) :- !. loop(N) :- ' + body + '.')
         del depths[:]
         assert_true('loop(100).', e)
