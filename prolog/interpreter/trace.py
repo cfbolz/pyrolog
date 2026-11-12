@@ -201,7 +201,8 @@ def debug_driver(scont, fcont, heap):
         except error.CatchableError, exc:
             scont, fcont, heap = scont.engine.throw(exc, scont, fcont, heap, rule)
         else:
-            scont, fcont, heap = _process_hooks(scont, fcont, heap)
+            if heap.hook:
+                scont, fcont, heap = _process_hooks(scont, fcont, heap)
     assert isinstance(scont, DoneSuccessContinuation)
     if scont.failed:
         raise error.UnificationFailed
