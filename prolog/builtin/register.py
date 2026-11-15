@@ -47,8 +47,8 @@ def make_wrapper(func, name, unwrap_spec=[], handles_continuation=False,
     else:
         expose_as = [name]
     if not name.isalnum():
-        name = func.func_name
-    orig_funcargs = inspect.getargs(func.func_code)[0]
+        name = func.__name__
+    orig_funcargs = inspect.getargs(func.__code__)[0]
     funcname = "wrap_%s_%s" % (name, numargs)
     code = ["def %s(engine, query, rule, scont, fcont, heap):" % (funcname, )]
     code.append("    module = rule.module")
@@ -111,7 +111,7 @@ def make_wrapper(func, name, unwrap_spec=[], handles_continuation=False,
         subargs.append("fcont")
         assert orig_funcargs[subargs.index("scont")] == "scont"
         assert orig_funcargs[subargs.index("fcont")] == "fcont"
-    call = "    result = %s(%s)" % (func.func_name, ", ".join(subargs))
+    call = "    result = %s(%s)" % (func.__name__, ", ".join(subargs))
     code.append(call)
     if not handles_continuation:
         code.append("    return scont, fcont, heap")
@@ -120,8 +120,8 @@ def make_wrapper(func, name, unwrap_spec=[], handles_continuation=False,
 
     used_globals = ["helper", "error", "term", "eval_arithmetic"]
     miniglobals = {key: globals()[key] for key in used_globals}
-    miniglobals[func.func_name] = func
-    exec py.code.Source("\n".join(code)).compile() in miniglobals
+    miniglobals[func.__name__] = func
+    exec(py.code.Source("\n".join(code)).compile(), miniglobals)
     for name in expose_as:
         signature = Signature.getsignature(name, numargs)
         b = Builtin(miniglobals[funcname], funcname, numargs, signature)

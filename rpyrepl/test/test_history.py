@@ -13,7 +13,7 @@ def test_roundtrip_and_incremental_save(tmpdir):
         history.save(path)
         history.save(path)
     assert tmpdir.join('history').read_binary() == 'first\ncaf\xc3\xa9\r\n\xe7\x95\x8c\nthird\n'
-    assert os.stat(path).st_mode & 0777 == 0600
+    assert os.stat(path).st_mode & 0o777 == 0o600
     loaded = History()
     loaded.load(path)
     assert loaded.entries == entries

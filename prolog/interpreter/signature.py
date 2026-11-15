@@ -43,7 +43,7 @@ class SignatureFactory(object):
             assert default is None
             self.extra_attr_names.append(ename)
             self.extra_attrs.append((ename, None))
-        for signature in self.cache.itervalues():
+        for signature in self.cache.values():
             setattr(signature, aname, default)
             if engine:
                 setattr(signature, ename, None)

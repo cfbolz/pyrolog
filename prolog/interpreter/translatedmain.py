@@ -123,12 +123,12 @@ def run(query, var_to_pos, engine, query_source=None):
                 ContinueContinuation(engine, var_to_pos, printmessage))
     except error.UnificationFailed:
         printmessage(styled('Nein', 'FAILURE') + '\n')
-    except error.UncaughtError, e:
+    except error.UncaughtError as e:
         printmessage("%s\n%s\n" % (styled('ERROR:', 'ERROR_LABEL'),
                                       e.format_traceback(engine, query_source=query_source)))
-    except error.CatchableError, e:
+    except error.CatchableError as e:
         printmessage("ERROR: %s\n" % e.get_errstr(engine))
-    except error.PrologParseError, exc:
+    except error.PrologParseError as exc:
         printmessage(exc.format_message() + "\n")
     # except error.UncatchableError, e:
     #     printmessage("INTERNAL ERROR: %s\n" % (e.message, ))
@@ -193,10 +193,10 @@ def repl(engine):
             break
         try:
             goals, var_to_pos = engine.parse(line, file_name="<stdin>")
-        except error.CatchableError, exc:
+        except error.CatchableError as exc:
             printmessage("ERROR: %s\n" % exc.get_errstr(engine))
             continue
-        except error.PrologParseError, exc:
+        except error.PrologParseError as exc:
             printmessage(exc.format_message() + "\n")
             continue
         for goal in goals:

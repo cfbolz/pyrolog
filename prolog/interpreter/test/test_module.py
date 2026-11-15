@@ -664,7 +664,7 @@ def test_nonexisting_predicates_in_import_list():
 
 def test_existing_system_module():
     e = Engine(load_system=True)
-    assert e.modulewrapper.modules.has_key("system")
+    assert "system" in e.modulewrapper.modules
 
 # needs list module
 def test_access_system_predicate():

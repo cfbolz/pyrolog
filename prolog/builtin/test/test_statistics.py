@@ -1,5 +1,6 @@
 import pytest
 import time
+from rpython.rlib import rtime
 from prolog.interpreter.continuation import Engine
 from prolog.interpreter.test.tool import assert_true
 
@@ -12,13 +13,13 @@ def test_statistics_builds_list():
     assert_true('statistics(runtime, [A,B]), number(A), number(B).', Engine())
 
 
-@pytest.mark.parametrize('stat, clock', [
-    ('runtime', 'clock'), ('walltime', 'time'),
+@pytest.mark.parametrize('stat, module, clock', [
+    ('runtime', rtime, 'clock'), ('walltime', time, 'time'),
 ])
-def test_statistics_elapsed_milliseconds(monkeypatch, stat, clock):
+def test_statistics_elapsed_milliseconds(monkeypatch, stat, module, clock):
     engine = Engine()
     now = [100.0]
-    monkeypatch.setattr(time, clock, lambda: now[0])
+    monkeypatch.setattr(module, clock, lambda: now[0])
     engine.clocks.startup()
 
     # A first query in the same millisecond legitimately returns zero.
@@ -35,13 +36,13 @@ def test_statistics_elapsed_milliseconds(monkeypatch, stat, clock):
     assert_true('statistics(%s, [250, 250]).' % stat, engine)
 
 
-@pytest.mark.parametrize('stat, clock', [
-    ('runtime', 'clock'), ('walltime', 'time'),
+@pytest.mark.parametrize('stat, module, clock', [
+    ('runtime', rtime, 'clock'), ('walltime', time, 'time'),
 ])
-def test_statistics_first_call_reports_total(monkeypatch, stat, clock):
+def test_statistics_first_call_reports_total(monkeypatch, stat, module, clock):
     engine = Engine()
     now = [100.0]
-    monkeypatch.setattr(time, clock, lambda: now[0])
+    monkeypatch.setattr(module, clock, lambda: now[0])
     engine.clocks.startup()
     now[0] += 2.0
     assert_true('statistics(%s, [2000, 2000]).' % stat, engine)

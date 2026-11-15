@@ -62,7 +62,7 @@ class History(object):
         """
         if self.saved_count == len(self.entries):
             return
-        fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_APPEND, 0600)
+        fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_APPEND, 0o600)
         try:
             # lockf locks from the current offset (zero on this new fd) through
             # EOF, including later appends. Closing the fd releases the lock.

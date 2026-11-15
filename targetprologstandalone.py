@@ -1,6 +1,7 @@
 """
 A simple standalone target for the prolog interpreter.
 """
+from __future__ import print_function
 
 import sys
 from prolog.interpreter.translatedmain import run_console
@@ -51,11 +52,11 @@ def entry_point(argv):
     for i in range(len(argv)):
         if argv[i] == "--jit":
             if len(argv) == i + 1:
-                print "missing argument after --jit"
+                print("missing argument after --jit")
                 return 2
             jitarg = argv[i + 1]
             if jitarg == "help":
-                print JIT_HELP_TEXT
+                print(JIT_HELP_TEXT)
                 return 0
             del argv[i:i+2]
             jit.set_user_param(jitdriver, jitarg)
@@ -63,11 +64,11 @@ def entry_point(argv):
 
     for arg in argv[1:]:
         if arg == "--help" or arg == "-h":
-            print HELP_TEXT % argv[0]
+            print(HELP_TEXT % argv[0])
             return 0
 
     if len(argv) > 2:
-        print "too many arguments"
+        print("too many arguments")
         return 2
     filename = None
     if len(argv) == 2:

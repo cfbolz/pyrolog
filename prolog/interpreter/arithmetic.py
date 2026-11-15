@@ -50,7 +50,7 @@ def wrap_builtin_operation(name, num_args):
         fcode.emit('return var0.arith_%s(var1)' % name)
     fcode.end_block('def')
     miniglobals = globals().copy()
-    exec py.code.Source(fcode.tostring()).compile() in miniglobals
+    exec(py.code.Source(fcode.tostring()).compile(), miniglobals)
     result = miniglobals['prolog_' + name]
     return result
 
@@ -414,7 +414,7 @@ class __extend__(term.Number):
         if self.num == 0:
             error.throw_evaluation_error("zero_divisor")
         # Guard the one overflowing quotient before using C-style division.
-        if other_num == -sys.maxint - 1 and self.num == -1:
+        if other_num == -sys.maxsize - 1 and self.num == -1:
             return self.arith_floordiv_bigint(rbigint.fromint(other_num))
         return term.Number(rarithmetic.int_c_div(other_num, self.num))
 

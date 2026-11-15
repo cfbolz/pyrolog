@@ -98,7 +98,7 @@ for ext, prolog, python in [("eq", "=:=", "=="),
                             ("le", "=<", "<="),
                             ("gt", ">", ">"),
                             ("ge", ">=", ">=")]:
-    exec py.code.Source("""
+    exec(py.code.Source("""
 @expose_builtin(prolog, unwrap_spec=["arithmetic", "arithmetic"])
 def impl_arith_%s(engine, heap, num1, num2):
     # Compare machine integers directly so the JIT emits one comparison.
@@ -112,5 +112,5 @@ def impl_arith_%s(engine, heap, num1, num2):
     else:
         matches = comparison %s 0
     if not matches:
-        raise error.UnificationFailed()""" % (ext, python, ext == "ne", python)).compile()
+        raise error.UnificationFailed()""" % (ext, python, ext == "ne", python)).compile())
  

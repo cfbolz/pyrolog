@@ -1,6 +1,16 @@
 # coding: utf-8
 """Source diagnostics rendered as UTF-8 text, independently of terminal I/O."""
 
+# XXX: The box-drawing characters below are spelled as their UTF-8 bytes, so that
+# the strings are the same byte strings on a Python 2 and a Python 3 host:
+#   \xe2\x8b\xae  ⋮  vertical ellipsis
+#   \xe2\x94\x80  ─  box drawings light horizontal
+#   \xe2\x94\x82  │  box drawings light vertical
+#   \xe2\x94\xac  ┬  box drawings light down and horizontal
+#   \xe2\x95\xad  ╭  box drawings light arc down and right
+#   \xe2\x95\xaf  ╯  box drawings light arc up and left
+#   \xe2\x95\xb0  ╰  box drawings light arc up and right
+
 from rpython.rlib import rutf8
 from rpyrepl.layout import char_width
 
@@ -114,9 +124,9 @@ def _annotation_rows(annotations, margin, color):
         column = 0
         for a in annotations:
             row += ' ' * (a.start - column)
-            marks = '─' * (a.end - a.start)
+            marks = '\xe2\x94\x80' * (a.end - a.start)
             if a.label:
-                marks = '─' * (a.attach - a.start) + '┬' + '─' * (a.end - a.attach - 1)
+                marks = '\xe2\x94\x80' * (a.attach - a.start) + '\xe2\x94\xac' + '\xe2\x94\x80' * (a.end - a.attach - 1)
             row += _paint(marks, a.primary, color)
             column = a.end
         rows.append(margin + row)
@@ -128,10 +138,10 @@ def _annotation_rows(annotations, margin, color):
             row = ''
             column = 0
             for a in pending:
-                row += ' ' * (a.attach - column) + _paint('│', a.primary, color)
+                row += ' ' * (a.attach - column) + _paint('\xe2\x94\x82', a.primary, color)
                 column = a.attach + 1
             row += ' ' * (current.attach - column)
-            row += _paint('╰' + '─' * (right_edge - current.attach) + ' ' + current.label,
+            row += _paint('\xe2\x95\xb0' + '\xe2\x94\x80' * (right_edge - current.attach) + ' ' + current.label,
                           current.primary, color)
             rows.append(margin + row)
     return rows
@@ -148,8 +158,8 @@ def format_syntax_error(source, filename, error, color=False):
     first = lines.get(primary_line)
     primary_column = first.character_columns[min(first.size, max(0, error.primary.start.i - first.start))]
     width = len(str(count))
-    margin = ' ' * (width + 2) + '│ '
-    rows = [' ' * (width + 2) + '╭─[%s:%d:%d]' %
+    margin = ' ' * (width + 2) + '\xe2\x94\x82 '
+    rows = [' ' * (width + 2) + '\xe2\x95\xad\xe2\x94\x80[%s:%d:%d]' %
             (filename, primary_line + 1, primary_column + 1), margin.rstrip()]
     last_shown = -1
     for i in range(count):
@@ -179,12 +189,12 @@ def format_syntax_error(source, filename, error, color=False):
         assert line is not None
         if last_shown >= 0:
             if i - last_shown == 2:
-                rows.append(' ' + (' ' * (width - len(str(i))) + str(i)) + ' │ ' + lines.get(i - 1).text)
+                rows.append(' ' + (' ' * (width - len(str(i))) + str(i)) + ' \xe2\x94\x82 ' + lines.get(i - 1).text)
             elif i - last_shown > 2:
-                rows.append(' ' * (width + 2) + '⋮')
-        rows.append(' ' + (' ' * (width - len(str(i + 1))) + str(i + 1)) + ' │ ' + line.text)
+                rows.append(' ' * (width + 2) + '\xe2\x8b\xae')
+        rows.append(' ' + (' ' * (width - len(str(i + 1))) + str(i + 1)) + ' \xe2\x94\x82 ' + line.text)
         rows.extend(_annotation_rows(annotations, margin, color))
         last_shown = i
-    rows.append('─' * (width + 2) + '╯')
+    rows.append('\xe2\x94\x80' * (width + 2) + '\xe2\x95\xaf')
     rows.append(_paint('SyntaxError: ' + error.msg, True, color))
     return '\n'.join(rows) + '\n'

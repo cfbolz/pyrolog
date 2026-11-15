@@ -118,7 +118,7 @@ def get_engine(source, create_files=False, load_system=False, **modules):
     from prolog.interpreter.continuation import Engine
     from prolog.interpreter.test.tool import create_file, delete_file
     e = Engine(load_system)
-    for name, module in modules.iteritems():
+    for name, module in modules.items():
         if create_files:
             create_file(name, module)
         else:

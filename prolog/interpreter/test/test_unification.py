@@ -1,3 +1,4 @@
+from __future__ import print_function
 import pytest
 from prolog.interpreter.error import UnificationFailed
 from prolog.interpreter.term import Atom, Var, Number, Callable, Term
@@ -46,7 +47,7 @@ def test_term():
     t1 = Callable.build("f", [Callable.build("hallo"), X])
     t2 = Callable.build("f", [Y, Callable.build("HALLO")])
     heap = Heap()
-    print t1, t2
+    print(t1, t2)
     t1.unify(t2, heap)
     assert X.dereference(heap).name()== "HALLO"
     assert Y.dereference(heap).name()== "hallo"

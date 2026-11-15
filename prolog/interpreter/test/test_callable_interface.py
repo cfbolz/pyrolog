@@ -1,3 +1,4 @@
+from __future__ import print_function
 from prolog.interpreter.parsing import parse_file
 from prolog.interpreter.term import Atom, Number, Term, Callable, \
         specialized_term_classes, NumberedVar
@@ -28,7 +29,7 @@ def test_atom_get_argument_at():
     
 def test_term_get_signature():
     r = term.get_prolog_signature()
-    print r
+    print(r)
     assert r.name() == '/'
     r.name() == '/'
     assert r.argument_at(0).signature().string() == 't/0'

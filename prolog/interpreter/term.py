@@ -1,9 +1,11 @@
+from __future__ import print_function
 import math
 from prolog.interpreter.error import UnificationFailed
 from prolog.interpreter import error
 from prolog.interpreter.signature import Signature
 from rpython.rlib.objectmodel import we_are_translated, UnboxedValue
 from rpython.rlib.objectmodel import compute_unique_id
+from rpython.tool.twothree import with_metaclass
 from rpython.rlib.objectmodel import specialize
 from rpython.rlib.debug import make_sure_not_resized
 from rpython.rlib import jit, debug
@@ -15,12 +17,11 @@ OPTIMIZED_TERM_SIZE_MAX = 10
 
 def debug_print(*args):
     if DEBUG and not we_are_translated():
-        print " ".join([str(a) for a in args])
+        print(" ".join([str(a) for a in args]))
 
 
-class PrologObject(object):
+class PrologObject(with_metaclass(extendabletype, object)):
     __slots__ = ()
-    __metaclass__ = extendabletype
 
     def dereference(self, heap):
         raise NotImplementedError("abstract base class")

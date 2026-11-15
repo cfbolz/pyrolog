@@ -1,3 +1,4 @@
+from __future__ import print_function
 import pytest
 from prolog.interpreter.signature import Signature
 from prolog.interpreter.parsing import parse_file
@@ -58,7 +59,7 @@ greater_than(succ(X), succ(Y)) :- greater_than(X, Y).
     e = Engine()
     m = e.modulewrapper
     for fact in facts:
-        print fact
+        print(fact)
         e.add_rule(fact)
     assert m.modules["user"].lookup(Signature.getsignature("add_numeral", 3)).rulechain.head.argument_at(1).name() == "null"
     four = Callable.build("succ", [Callable.build("succ", [Callable.build("succ",

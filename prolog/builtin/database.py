@@ -108,7 +108,7 @@ def continue_retract(Choice, engine, scont, fcont, heap,
             body.unify(deleted_body, candidate_heap)
         except error.UnificationFailed:
             candidate_heap.revert_upto(heap)
-        except error.CatchableError, exc:
+        except error.CatchableError as exc:
             candidate_heap.revert_upto(heap)
             return engine.throw(exc, scont, fcont, heap)
         else:

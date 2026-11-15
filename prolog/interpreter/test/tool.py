@@ -1,3 +1,4 @@
+from __future__ import print_function
 import pytest
 import os
 from prolog.interpreter.error import UnificationFailed
@@ -35,7 +36,7 @@ class CollectAllContinuation(Continuation):
     def activate(self, fcont, heap):
         self.heaps.append(dict([(name, var.dereference(heap))
                                     for name, var in self.vars.iteritems()]))
-        print "restarting computation"
+        print("restarting computation")
         raise UnificationFailed
 
 def collect_all(engine, s):

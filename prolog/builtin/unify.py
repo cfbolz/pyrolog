@@ -234,12 +234,12 @@ for ext, prolog, python in [("lt", "@<", "== -1"),
                             ("le", "@=<", "!= 1"),
                             ("gt", "@>", "== 1"),
                             ("ge", "@>=", "!= -1")]:
-    exec py.code.Source("""
+    exec(py.code.Source("""
 @expose_builtin(prolog, unwrap_spec=["obj", "obj"])
 def impl_standard_comparison_%s(engine, heap, obj1, obj2):
     c = checked_standard_order(engine, heap, obj1, obj2)
     if not c %s:
-        raise error.UnificationFailed()""" % (ext, python)).compile()
+        raise error.UnificationFailed()""" % (ext, python)).compile())
  
 @expose_builtin("compare", unwrap_spec=["raw", "obj", "obj"])
 def impl_compare(engine, heap, result, obj1, obj2):

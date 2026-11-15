@@ -1,5 +1,6 @@
 import prolog
 import time
+from rpython.rlib import rtime
 from prolog.interpreter import helper, term, error
 from prolog.builtin.register import expose_builtin
 
@@ -10,7 +11,7 @@ class Clocks(object):
     def startup(self):
         self.startup_wall = time.time()
         self.last_wall = 0
-        self.startup_cpu = time.clock()
+        self.startup_cpu = rtime.clock()
         self.last_cpu = 0
 
     def get_walltime(self):
@@ -21,7 +22,7 @@ class Clocks(object):
         return res
 
     def get_cputime(self):
-        t = time.clock() - self.startup_cpu
+        t = rtime.clock() - self.startup_cpu
         t = int(t * 1000)
         res = [t, t - self.last_cpu]
         self.last_cpu = t

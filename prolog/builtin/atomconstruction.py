@@ -68,7 +68,7 @@ def sub_atom_index(value):
             return value.value.toint()
         except OverflowError:
             # An offset larger than any byte string cannot match.
-            return sys.maxint
+            return sys.maxsize
     if not isinstance(value, term.Number):
         error.throw_type_error('integer', value)
     result = value.num

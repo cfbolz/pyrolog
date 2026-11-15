@@ -1,4 +1,5 @@
 # coding: utf-8
+from __future__ import print_function
 from __future__ import with_statement
 import pytest
 import py
@@ -34,7 +35,7 @@ class TestInteraction:
     def _spawn(self, *args, **kwds):
         try:
             import pexpect
-        except ImportError, e:
+        except ImportError as e:
             pytest.skip(str(e))
         else:
             version = map(int, pexpect.__version__.split('.'))
@@ -44,7 +45,7 @@ class TestInteraction:
                         pexpect.__version__,))
 
         kwds.setdefault('timeout', 10)
-        print 'SPAWN:', args, kwds
+        print('SPAWN:', args, kwds)
         child = pexpect.spawn(*args, **kwds)
         child.logfile = sys.stdout
         return child

@@ -198,7 +198,7 @@ def debug_driver(scont, fcont, heap):
             scont, fcont, heap = scont.activate(fcont, heap)
         except error.UnificationFailed:
             scont, fcont, heap = fcont.fail(heap)
-        except error.CatchableError, exc:
+        except error.CatchableError as exc:
             scont, fcont, heap = scont.engine.throw(exc, scont, fcont, heap, rule)
         else:
             if heap.hook:

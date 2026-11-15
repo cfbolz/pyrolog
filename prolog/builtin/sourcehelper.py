@@ -3,9 +3,15 @@ import sys
 from prolog.interpreter.error import throw_existence_error, throw_domain_error
 from prolog.interpreter.term import Callable
 from rpython.rlib import rstring
+from rpython.rlib.objectmodel import we_are_translated
 
 path = os.path.dirname(__file__)
 path = os.path.join(path, "..", "prolog_modules")
+
+def _host_str(s):
+    if isinstance(s, str):
+        return s
+    return s.decode('latin-1')
 
 def get_source(filename):
     try:
@@ -18,6 +24,11 @@ def get_source(filename):
         content = []
         while 1:
             s = os.read(fd, 4096)
+            if not we_are_translated():
+                # XXX: on a Python 3 host os.read() returns bytes, but an
+                # RPython string is a host str.  Decode as latin-1, one
+                # character per byte, we actually decide on what to do...
+                s = _host_str(s)
             if not s:
                 break
             content.append(s)
@@ -43,8 +54,8 @@ def get_filehandle(filename, stdlib=False):
     e = None
     for cand in candidates:
         try:
-            return os.open(cand, os.O_RDONLY, 0777), os.path.abspath(cand)
-        except OSError, e:
-            pass
+            return os.open(cand, os.O_RDONLY, 0o777), os.path.abspath(cand)
+        except OSError as exc:
+            e = exc
     assert e is not None
     raise e

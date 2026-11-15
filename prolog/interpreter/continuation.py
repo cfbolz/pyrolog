@@ -1,6 +1,7 @@
 import time
 from rpython.rlib import jit
 from rpython.rlib.objectmodel import we_are_translated, specialize
+from rpython.tool.twothree import with_metaclass
 from prolog.interpreter import error
 from prolog.interpreter import helper
 from prolog.interpreter.term import Term, Atom, BindingVar, Callable, Var
@@ -69,7 +70,7 @@ def driver(scont, fcont, heap):
                 if fcont.is_done():
                     raise
             scont, fcont, heap = fcont.fail(heap)
-        except error.CatchableError, exc:
+        except error.CatchableError as exc:
             scont, fcont, heap = scont.engine.throw(exc, scont, fcont, heap, rule)
         else:
             if heap.hook:
@@ -95,7 +96,7 @@ def _process_hooks(scont, fcont, heap):
                 query = Callable.build("attr_unify_hook", [val, attvar])
                 try:
                     mod = e.modulewrapper.get_module(module, query)
-                except error.CatchableError, err:
+                except error.CatchableError as err:
                     scont, fcont, heap = scont.engine.throw(err, scont, fcont, heap)
                     break
                 scont, fcont, heap = e.call_in_module(query, mod, scont, fcont, heap)
@@ -335,7 +336,7 @@ def _dot(self, seen):
         return
     seen.add(self)
     yield '%s [label="%s", shape=box]' % (id(self), repr(self)[:50])
-    for key, value in self.__dict__.iteritems():
+    for key, value in self.__dict__.items():
         if hasattr(value, "_dot"):
             yield "%s -> %s [label=%s]" % (id(self), id(value), key)
             for line in value._dot(seen):
@@ -346,11 +347,9 @@ class MetaCont(type):
         dct['cont_type_name'] = name
         return type.__new__(cls, name, bases, dct)
 
-class Continuation(object):
+class Continuation(with_metaclass(MetaCont, object)):
     """ Represents a continuation of the Prolog computation. This can be seen
     as an RPython-compatible way to express closures. """
-
-    __metaclass__ = MetaCont
 
     def __init__(self, engine, nextcont):
         self.engine = engine
